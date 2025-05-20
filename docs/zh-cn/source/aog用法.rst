@@ -142,7 +142,7 @@ AOG 有两个关键概念：**服务(Service)** 和 **服务提供商(Service Pr
     # AOG 将安装必要的 AI 堆栈（如 ollama）和 AOG 推荐的模型
     aog install chat
     aog install embed
-    aog install text_to_image
+    aog install text-to-image
 
     # 除了默认的模型之外，您可以在服务中安装更多的模型
     # 当前版本暂仅支持基于 ollama 及 openvino（https://modelscope.cn/collections/Image-Generation-eb38cde2fa3d46）范围内的模型

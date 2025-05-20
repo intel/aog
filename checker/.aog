@@ -7,9 +7,9 @@
                 "qwen2.5:7b"
             ]
         },
-        "text_to_image": {
+        "text-to-image": {
             "models": [
-                "stable-diffusion-1.5-int4"
+                "OpenVINO/stable-diffusion-v1-5-fp16-ov"
             ]
         }
     }

@@ -292,7 +292,7 @@ ______________
    * - model
      - string
      - 可选
-     - text_to_image模型
+     - text-to-image模型
 
 
 Response Schema
@@ -315,7 +315,7 @@ Response Schema
    * - data
      - array of object
      - 必填
-     - text_to_image结果
+     - text-to-image结果
 
 示例
 ----------------
@@ -325,7 +325,7 @@ Response Schema
 .. code-block:: json
     {
     "data": {
-        "url": "https://dashscope-result-wlcb-acdr-1.oss-cn-wulanchabu-acdr-1.aliyuncs.com/1d/4e/20250319/b0fe3396/018c4baa-9f42-4946-8750-14a9fa74e1af885741332.png?Expires=1742442524&OSSAccessKeyId=LTAI5tKPD3TMqf2Lna1fASuh&Signature=n6b1zvp3YX4nXfV8LA5dR7pIdD0%3D"
+        "url": "https://dashscope-result-wlcb-acdr-1.oss-cn-wulanchabu-acdr-1.aliyuncs.com/1d/4e/20250319/b0fe3396/018c4baa-9f42-4946-8750-14a9fa74e1af885741332.png?Expires=1742442524&OSSAccessKeyId=<Your Access Key Id>&Signature=<Your Signature>"
             },
     "id": "ab967cd8-392f-90d9-a2b2-92bf1792cd7f"
     }

@@ -9,7 +9,7 @@ In this section, we will introduce the key concepts / terminologies of ``AOG``.
 AOG Service and AOG Service Providers
 =========================================
 
-In ``AOG``, typical general AI services such as ``chat`` and ``text_to_image``
+In ``AOG``, typical general AI services such as ``chat`` and ``text-to-image``
 etc. are defined as ``AOG Service``, each with standardized API. 
 
 Currently, ``AOG`` supports RESTful API based on HTTP protocol. So the API here
@@ -49,7 +49,7 @@ And one ``AOG Service Provider`` can also provide multiple ``AOG Services``.
 
         chat[label="chat"]
         rag_summarize[label="rag/summarize"]
-        text_to_image[label="text_to_image"]
+        text-to-image[label="text-to-image"]
     }
 
     subgraph cluster_aog_service_provider {
@@ -68,7 +68,7 @@ And one ``AOG Service Provider`` can also provide multiple ``AOG Services``.
     edge[arrowhead=onormal]
     {provider_a, provider_b} -> chat
     {provider_a, provider_b} -> rag_summarize
-    provider_c -> text_to_image
+    provider_c -> text-to-image
 
    }
 
@@ -86,7 +86,7 @@ An ``AOG Service`` is defined by the following attributes:
 Name
     The name of the service. This serves as the string ID of the ``AOG
     Service``. Thus it should be unique among all services. Examples are
-    ``chat``, ``embed``, ``rag/query``, ``text_to_image``,
+    ``chat``, ``embed``, ``rag/query``, ``text-to-image``,
     ``audio/text_to_speech`` etc.
 
 Endpoints

@@ -36,7 +36,7 @@ namespace Core
     {
         private readonly HttpClient _httpClient;
         public string ModelName { get; set; } = "wanx2.1-t2i-turbo";
-        private const string ApiUrl = "https://127.0.0.1:16688/aog/v0.3/services/text_to_image";
+        private const string ApiUrl = "https://127.0.0.1:16688/aog/v0.3/services/text-to-image";
         private const string ApiKey = "your-api-key-here";
 
         public TextToImageClient()
