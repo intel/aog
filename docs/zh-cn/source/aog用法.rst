@@ -80,40 +80,192 @@ AOG 提供以下基本功能：
 
 
 
-构建 AOG 命令行工具
+构建 AOG
 ==================================
 
-作为开发者，为了构建 AOG，您需要在您的系统上安装 `golang <https://go.dev/>`_ 。
+AOG 包含前端 Control Panel 和后端命令行工具两个部分。为了确保完整的功能，需要按照以下顺序进行构建：
 
-如果您的开发环境是 Windows，您可能需要安装 `MSYS2 <https://www.msys2.org/>`_ ，以获得 Make 等命令。
+第一步：构建前端 Control Panel
+--------------------------------------------
 
-由于 AOG 需要开启 CGO 依赖，所以您可能需要安装[MinGW-W64](https://github.com/niXman/mingw-builds-binaries/releases)，以便开启CGO支持。
+在构建 AOG 命令行工具之前，**必须先构建前端 Control Panel**，因为 AOG 会将前端资源嵌入到可执行文件中。
 
-接着，将此项目下载或克隆到如 ``/path_to_aog`` 的目录中。
+前置要求
+~~~~~~~~~~~~
 
-然后运行以下命令：
+在构建前端页面之前，请确保您的系统已安装：
+
+* `Node.js <https://nodejs.org/>`_ (推荐版本 16.x 或更高)
+* `Yarn <https://yarnpkg.com/>`_ 包管理器
+
+可以通过以下命令检查是否已安装：
 
 .. code-block:: bash
 
-    cd /path_to_aog
+    node --version
+    yarn --version
 
-    # 根据情况设置 GOPROXY
-    go env -w GOPROXY=https://goproxy.cn,direct
+构建前端
+~~~~~~~~~~~~
 
-    # win
-    set CGO_ENABLED=1 && go build -o aog.exe -ldflags="-s -w"  cmd/cli/main.go
+**方法一：使用自动化脚本（推荐）**
 
+**Linux/macOS 用户：**
 
+.. code-block:: bash
 
-这将生成一个名为 ``aog`` 的可执行文件，它是 AOG 的命令行。
+    # 运行自动化构建脚本
+    ./build-frontend.sh
+
+**Windows 用户：**
+
+.. code-block:: bash
+
+    # 运行自动化构建脚本
+    build-frontend.bat
+
+该脚本会自动完成以下操作：
+
+* 检查必要的依赖（yarn）
+* 安装前端依赖
+* 构建前端页面
+* 清理现有的dist目录
+* 将构建产物部署到console目录
+
+**方法二：手动构建**
+
+如果需要手动构建，可以运行以下命令：
+
+.. code-block:: bash
+
+    cd frontend/control_panel
+
+    yarn install
+
+    yarn build
+
+    # 手动移动构建产物到console目录
+    mv dist ../console/
+
+第二步：构建 AOG 命令行工具
+--------------------------------------------
+
+前置要求
+~~~~~~~~~~~~
+
+作为开发者，为了构建 AOG，您需要在您的系统上安装：
+
+* `Go <https://go.dev/>`_ (推荐版本 1.19 或更高)
+* 如果是 Windows 环境：
+
+  * `MSYS2 <https://www.msys2.org/>`_ (用于 Make 等命令)
+  * `MinGW-W64 <https://github.com/niXman/mingw-builds-binaries/releases>`_ (用于 CGO 支持)
+
+构建步骤
+~~~~~~~~~~~~
+
+1. **克隆或下载项目**
+
+   .. code-block:: bash
+
+       git clone <repository-url>
+       cd aog_private
+
+2. **设置 Go 环境**
+
+   .. code-block:: bash
+
+       # 设置 GOPROXY (可选，用于加速依赖下载)
+       go env -w GOPROXY=https://goproxy.cn,direct
+
+3. **确认前端已构建**
+
+   .. code-block:: bash
+
+       # 检查 console/dist 目录是否存在且包含 index.html
+       ls console/dist/index.html
+
+4. **构建 AOG 可执行文件**
+
+   **Linux/macOS:**
+
+   .. code-block:: bash
+
+       CGO_ENABLED=1 go build -o aog -ldflags="-s -w" cmd/cli/main.go
+
+   **Windows:**
+
+   .. code-block:: bash
+
+       set CGO_ENABLED=1 && go build -o aog.exe -ldflags="-s -w" cmd/cli/main.go
+
+5. **验证构建结果**
+
+   .. code-block:: bash
+
+       # Linux/macOS
+       ./aog version
+
+       # Windows
+       aog.exe version
+
+完整构建脚本
+~~~~~~~~~~~~
+
+为了简化构建过程，您也可以使用完整的构建脚本：
+
+**Linux/macOS (build-all.sh):**
+
+.. code-block:: bash
+
+    #!/bin/bash
+    set -e
+
+    echo "Building AOG - Complete Build Process"
+
+    # Step 1: Build frontend
+    echo "Step 1: Building frontend Control Panel..."
+    ./build-frontend.sh
+
+    # Step 2: Build AOG
+    echo "Step 2: Building AOG command line tool..."
+    CGO_ENABLED=1 go build -o aog -ldflags="-s -w" cmd/cli/main.go
+
+    echo "Build completed successfully!"
+    echo "You can now run: ./aog server start"
+
+**Windows (build-all.bat):**
+
+.. code-block:: bash
+
+    @echo off
+    echo Building AOG - Complete Build Process
+
+    echo Step 1: Building frontend Control Panel...
+    call build-frontend.bat
+
+    echo Step 2: Building AOG command line tool...
+    set CGO_ENABLED=1 && go build -o aog.exe -ldflags="-s -w" cmd/cli/main.go
+
+    echo Build completed successfully!
+    echo You can now run: aog.exe server start
+    pause
+
+注意事项
+~~~~~~~~~~~~
+
+* **前端构建是必需的**：如果没有先构建前端，AOG 的 Control Panel 功能将无法正常工作
+* **CGO 依赖**：AOG 需要启用 CGO，确保您的环境支持 C 编译器
+* **路径配置**：建议将生成的可执行文件添加到系统 PATH 环境变量中，以便全局使用
 
 
 使用 AOG 命令行工具
 =================================
 
-您可以通过输入  ``aog -h`` 来查看命令行工具的帮助信息。
+构建完成后，您可以通过输入 ``aog -h`` 来查看命令行工具的帮助信息。
 
-使用以下命令启动和停止 AOG 服务
+启动和停止 AOG 服务
+--------------------------------------------
 
 .. code-block:: bash
 
@@ -123,11 +275,19 @@ AOG 提供以下基本功能：
     # 后台启动AOG
     aog server start -d
 
-    # Debug模式启动AOG
+    # Debug模式启动
     aog server start -v
 
     # 停止AOG
     aog server stop
+
+启动成功后，您可以：
+
+* 通过命令行使用 AOG 的各种功能
+* 访问 Control Panel：http://127.0.0.1:16688/dashboard
+
+AOG 服务和概念
+--------------------------------------------
 
 
 AOG 有两个关键概念：**服务(Service)** 和 **服务提供商(Service Provider)**：
@@ -149,11 +309,12 @@ AOG 有两个关键概念：**服务(Service)** 和 **服务提供商(Service Pr
     aog install chat
     aog install embed
     aog install text-to-image
+    aog install speech-to-text
 
     # 除了默认的模型之外，您可以在服务中安装更多的模型
-    # 当前版本暂仅支持基于 ollama 及 openvino（https://modelscope.cn/collections/Image-Generation-eb38cde2fa3d46）范围内的模型
+    # 当前版本暂仅支持基于 ollama 及 openvino（https://modelscope.cn/organization/OpenVINO）中的部分模型（文生图、语音识别）
     # v0.4 版本将支持更多的 AI 堆栈和模型，以及其他服务
-    aog pull <model_name> -for <service_name> --provider <provider_name>
+    aog pull <model_name> --for <service_name> --provider <provider_name>
 
     # 获取服务信息，可查看指定服务，未指定则输出全部服务信息
     aog get services <service_name>
@@ -176,7 +337,7 @@ AOG 有两个关键概念：**服务(Service)** 和 **服务提供商(Service Pr
     aog install service_provider -f xx/xxx.json
     # 文件名不作要求，内容需为json格式，示例：
     {
-        "provider_name": "local_ollama_chat"
+        "provider_name": "local_ollama_chat",
         "service_name": "chat",
         "service_source": "local",
         "desc": "Local ollama chat/completion",
@@ -195,7 +356,7 @@ AOG 有两个关键概念：**服务(Service)** 和 **服务提供商(Service Pr
     aog edit service_provider <provider_name> -f xxx/xxx.json
     # 示例：
     {
-        "provider_name": "local_ollama_chat"
+        "provider_name": "local_ollama_chat",
         "service_name": "chat",
         "service_source": "local",
         "desc": "Local ollama chat/completion",
@@ -203,15 +364,50 @@ AOG 有两个关键概念：**服务(Service)** 和 **服务提供商(Service Pr
         "method": "POST",
         "url": "http://localhost:11434/api/chat",
         "auth_type": "none",
-        "auth_key": "",
+        "auth_key": ""
     }
 
     # 删除服务提供商
     aog delete service_provider <provider_name>
 
-    # 删除模型 必选参数：--provider
-    aog delete model <model_name>  --provider <provider_name>
+    # 删除模型 必选参数：--for --provider
+    aog delete model <model_name> -f <service_name> --provider <provider_name>
 
+Control Panel 图形化界面
+=================================
+
+AOG 提供了一个基于 Web 的图形化控制面板，您可以通过浏览器访问它。Control Panel 提供了直观的界面来管理 AOG 的服务、模型和配置。
+
+访问 Control Panel
+--------------------------------------------
+
+确保 AOG 服务已启动后，打开浏览器访问：
+
+.. code-block:: text
+
+    http://127.0.0.1:16688/dashboard
+
+使用 Control Panel
+--------------------------------------------
+
+在 Dashboard 界面中，您可以：
+
+* **查看服务状态**：展示您现有的服务 (service) 和模型 (models) 信息
+* **添加服务和模型**：点击 "+" 来添加新的服务和模型
+* **调度策略管理**：点击 Hybrid Scheduling 中的选项来切换调度策略
+* **模型管理**：在安装完多个模型后，您可以进入模型详情页，勾选右上角的 "Set as default model" 把模型设置为默认模型
+
+在 About AOG 界面中，您可以：
+
+* **查看可用服务**：查看现有的服务及其支持的功能
+* **本地模型列表**：查看支持下载的本地模型列表
+* **远程模型列表**：查看支持认证的远程模型列表
+
+**注意事项：**
+
+* 确保端口 16688 未被其他程序占用
+* 首次访问可能需要等待几秒钟让服务完全启动
+* 每个服务的 local/remote 均可设置一个默认模型
 
 通过以下命令进行 AOG 服务的导入导出
 
@@ -236,7 +432,7 @@ AOG 有两个关键概念：**服务(Service)** 和 **服务提供商(Service Pr
 .. code-block:: json
 
     {
-        "version": "v0.3",
+        "version": "v0.4",
         "services": {
             "models": {
                 "service_providers": {
@@ -326,7 +522,7 @@ AOG API 是一个 Restful API。您可以通过与调用云 AI 服务（如 Open
 
 .. code-block:: bash
 
-    curl -X POST http://localhost:16688/aog/v0.3/services/chat  -X POST -H
+    curl -X POST http://localhost:16688/aog/v0.4/services/chat  -X POST -H
     "Content-Type: application/json" -d
     "{\"model\":\"deepseek-r1:7b\",\"messages\":[{\"role\":\"user\",\"content\":\"why is
     the sky blue?\"}],\"stream\":false}"
@@ -336,12 +532,12 @@ AOG API 是一个 Restful API。您可以通过与调用云 AI 服务（如 Open
 因为 AOG 能够自动转换这些流行风格的 API，因此您只需更改端点 URL，就可以轻松迁移应用程序。
 
 例如，如果您使用的是 OpenAI 的聊天完成服务，您只需将端点 URL 从 ``https://api.openai.com/v1/chat/completions`` 替换为
-``http://localhost:16688/aog/v0.3/api_flavors/openai/v1/chat/completions``。
+``http://localhost:16688/aog/v0.4/api_flavors/openai/v1/chat/completions``。
 
 **NOTE** 请注意，调用 AOG 的新 URL 位于 ``api_flavors/openai`` ，其余 URL 与原始 OpenAI API 相同，即 ``/v1/chat/completions`` 。
 
 如果您使用 ollama API，可以将端点 URL 从 ``https://localhost:11434/api/chat`` 替换为
-``http://localhost:16688/aog/v0.3/api_flavors/ollama/api/chat`` 。同样，它位于 ``api_flavors/ollama`` ，其余 URL 与原始 ollama API 相同，即 ``/api/chat`` 。
+``http://localhost:16688/aog/v0.4/api_flavors/ollama/api/chat`` 。同样，它位于 ``api_flavors/ollama`` ，其余 URL 与原始 ollama API 相同，即 ``/api/chat`` 。
 
 发布您的基于 AOG 的 AI 应用
 ==========================================
@@ -355,7 +551,7 @@ AOG API 是一个 Restful API。您可以通过与调用云 AI 服务（如 Open
 .. code-block:: json
 
     {
-        "version": "v0.3",
+        "version": "v0.4",
         "services": {
             "models": {
                 "service_providers": {

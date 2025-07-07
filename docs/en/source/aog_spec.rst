@@ -47,7 +47,7 @@ URL is formed by the hostname and port (by default is `localhost` and `16688`)
 service, i.e. ``http://localhost:{port_number}/aog/v{spec_version_number}/services/{service_name}``.
 
 For example, the ``Endpoint`` of the ``chat`` service is ``POST
-http://localhost:16688/aog/v0.3/services/chat``.
+http://localhost:16688/aog/v0.4/services/chat``.
 
 .. _`Metadata of AOG Service`:
 

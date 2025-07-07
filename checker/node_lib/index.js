@@ -1,3 +1,19 @@
+//*****************************************************************************
+// Copyright 2025 Intel Corporation
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//*****************************************************************************
+
 const express = require('express');
 const http = require('http');
 const fs = require('fs');
@@ -113,7 +129,7 @@ function AddToUserPath(destDir) {
         });
         const match = output.match(/Path\s+REG_(SZ|EXPAND_SZ)\s+(.*)/);
         currentPath = match ? match[2].trim() : '';
-      } catch {}
+      } catch { }
 
       // 检查路径是否已存在
       const paths = currentPath.split(';').filter(p => p);
@@ -162,7 +178,7 @@ function isAOGAvailable() {
 // 获取模型提供商
 async function getServiceProvider() {
   try {
-    const response = await axios.get('http://127.0.0.1:16688/aog/v0.3/service_provider');
+    const response = await axios.get('http://127.0.0.1:16688/aog/v0.4/service_provider');
     const providers = response.data.data;
     if (Array.isArray(providers) && providers.length === 0) {
       return false;
@@ -178,10 +194,10 @@ async function getServiceProvider() {
 function downloadAOG() {
   return new Promise((resolve) => {
     const isMacOS = process.platform === 'darwin';
-    const url = isMacOS 
-      ? 'http://120.232.136.73:31619/aogdev/aog.zip'
-      : 'http://120.232.136.73:31619/aogdev/aog.exe';
-    
+    const url = isMacOS
+      ? 'https://smartvision-aipc-open.oss-cn-hangzhou.aliyuncs.com/aog/windows/aog.zip'
+      : 'https://smartvision-aipc-open.oss-cn-hangzhou.aliyuncs.com/aog/windows/aog.exe';
+
     const userDir = os.homedir();
     const destDir = path.join(userDir, 'AOG');
     const destFileName = isMacOS ? 'aog.zip' : 'aog.exe';
@@ -195,12 +211,12 @@ function downloadAOG() {
 
       console.log('🔍 正在下载文件:', url);
       const file = fs.createWriteStream(dest);
-      
+
       const request = http.get(url, (res) => {
         if (res.statusCode !== 200) {
           console.error(`❌ 下载失败，HTTP 状态码: ${res.statusCode}`);
           file.close();
-          fs.unlink(dest, () => {});
+          fs.unlink(dest, () => { });
           return resolve(false);
         }
 
@@ -215,12 +231,12 @@ function downloadAOG() {
               const zip = new AdmZip(dest);
               zip.extractAllTo(destDir, true);
               console.log('✅ 解压完成');
-              
+
               // 删除原始ZIP文件
               fs.unlinkSync(dest);
-              
+
               // 设置可执行权限（根据需要）
-              const execPath = path.join(destDir, 'aog'); 
+              const execPath = path.join(destDir, 'aog');
               if (fs.existsSync(execPath)) {
                 fs.chmodSync(execPath, 0o755);
               }
@@ -239,7 +255,7 @@ function downloadAOG() {
       request.on('error', (err) => {
         console.error('❌ 下载失败:', err.message);
         file.close();
-        fs.unlink(dest, () => {});
+        fs.unlink(dest, () => { });
         resolve(false);
       });
     });
@@ -278,7 +294,7 @@ function installAOG() {
 
     child.stdout.on('data', (data) => {
       console.log(`stdout: ${data}`);
-      if (data.toString().includes('Byze server start successfully')) {
+      if (data.toString().includes('AOG server start successfully')) {
         resolve(true);
       }
     });
@@ -304,7 +320,7 @@ async function importConfig(filePath) {
     console.log('🔍 正在导入配置文件:', data);
 
     // 发送 POST 请求
-    const res = await axios.post('http://127.0.0.1:16688/aog/v0.3/service/import', data, {
+    const res = await axios.post('http://127.0.0.1:16688/aog/v0.4/service/import', data, {
       headers: {
         'Content-Type': 'application/json',
       },

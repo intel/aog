@@ -1,0 +1,54 @@
+AUDIO FILE REQUIREMENTS FOR AOG SPEECH-TO-TEXT DEMO
+==================================================
+
+This directory needs an audio file to run the demo.
+
+CRITICAL: AOG SERVER ONLY ACCEPTS PCM FORMAT
+The AOG Speech-to-Text server ONLY processes PCM audio data.
+
+SUPPORTED INPUT FORMATS (automatically converted to PCM):
+- PCM (.pcm) - Raw PCM audio data (used directly, no conversion needed)
+- WAV (.wav) - Uncompressed PCM WAV files (PCM data extracted from headers)
+- MP3 (.mp3) - MP3 files (decoded to PCM before transmission)
+
+IMPORTANT: AUTOMATIC PCM CONVERSION
+The client performs format validation and automatic PCM conversion:
+- WAV files: PCM data extracted after validating RIFF/WAVE structure
+- MP3 files: Decoded to PCM using go-mp3 library after validation
+- PCM files: Used directly without conversion
+- ALL formats are sent to the server as PCM data only
+
+PCM OUTPUT SPECIFICATIONS (after conversion):
+- Sample Rate: 16kHz (optimal for AOG server)
+- Channels: Mono (1 channel) recommended
+- Bit Depth: 16-bit
+- Encoding: Linear PCM, little-endian
+- Language: Should match the configured language (default is Chinese "zh")
+
+SETUP INSTRUCTIONS:
+1. Place your audio file in this directory
+2. Name it "output.mp3" (or modify the audioFile constant in client.go)
+3. Ensure the file contains clear speech content
+4. Run the demo: go run client.go
+5. The client will validate input format and convert to PCM automatically
+6. Only PCM data is sent to the AOG server
+
+FORMAT VALIDATION AND CONVERSION EXAMPLES:
+✓ Valid WAV: RIFF header + WAVE identifier + PCM format → PCM extraction
+✓ Valid MP3: ID3 tag or 0xFF frame sync pattern → PCM decoding
+✓ Valid PCM: .pcm extension → Direct use
+✗ Invalid: Compressed WAV, corrupted files, unsupported formats
+
+UNSUPPORTED INPUT FORMATS:
+- M4A, AAC, OGG, FLAC, WMA and other formats are NOT supported for PCM conversion
+- Compressed WAV formats (MP3-in-WAV, etc.) cannot be converted to PCM
+- If you have audio in other formats, convert to uncompressed PCM WAV or MP3 first
+
+TROUBLESHOOTING:
+- If validation fails, check the actual file format (not just extension)
+- Use audio conversion tools to ensure proper input format for PCM conversion
+- Test with a known-good audio file first
+- Remember: Only PCM data reaches the AOG server regardless of input format
+
+For testing, you can use any properly formatted audio file with speech content.
+The client will handle the PCM conversion automatically.

@@ -1,3 +1,19 @@
+//*****************************************************************************
+// Copyright 2025 Intel Corporation
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//*****************************************************************************
+
 package aogchecker
 
 /*
@@ -98,7 +114,7 @@ func isAOGAvailable() bool {
 
 func getServiceProvider() bool {
 	client := http.Client{Timeout: 3 * time.Second}
-	resp, err := client.Get("http://127.0.0.1:16688/aog/v0.3/service_provider")
+	resp, err := client.Get("http://127.0.0.1:16688/aog/v0.4/service_provider")
 	if err != nil {
 		return false
 	}
@@ -109,7 +125,7 @@ func getServiceProvider() bool {
 }
 
 func downloadAOG() bool {
-	url := "http://120.232.136.73:31619/aogdev/aog.exe"
+	url := "https://smartvision-aipc-open.oss-cn-hangzhou.aliyuncs.com/aog/windows/aog.exe"
 	userDir, _ := os.UserHomeDir()
 	dest := filepath.Join(userDir, "AOG", "aog.exe")
 
@@ -317,7 +333,7 @@ func addToUserPathUnix(destDir string) bool {
 	}
 
 	// 追加路径到配置文件
-	file, err := os.OpenFile(shellConfigPath, os.O_APPEND|os.O_WRONLY, 0644)
+	file, err := os.OpenFile(shellConfigPath, os.O_APPEND|os.O_WRONLY, 0o644)
 	if err != nil {
 		fmt.Println("❌ 无法打开配置文件:", err)
 		return false

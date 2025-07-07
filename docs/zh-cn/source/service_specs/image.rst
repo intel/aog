@@ -95,7 +95,7 @@ ______________
 
 .. code-block:: shell
 
-    curl https://localhost:16688/aog/v0.3/services/text-to-image\
+    curl https://localhost:16688/aog/v0.4/services/text-to-image\
     -H "Content-Type: application/json" \
     -d '{
             "model": "wanx2.1-t2i-turbo",

@@ -95,7 +95,7 @@ Endpoints
     prefix will be added according according to real deployment. For example,
     the endpoint for ``chat`` service is ``POST /chat``. In real deployment, the
     full URL path will have the site, port, and aog prefix etc. added, resulting
-    in something like ``http://localhost:16688/aog/v0.3/service/chat``.
+    in something like ``http://localhost:16688/aog/v0.4/service/chat``.
     
     It is possible to have multiple endpoints for one service while most
     services only have one. An example of multiple endpoints is the ``embed``

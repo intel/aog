@@ -32,12 +32,12 @@ AOG 服务名称和端口
 
 每个 ``AOG Service`` 都有一个独特的名称。该名称用于识别服务，并用于形成访问服务的端点 URL。
 
- ``AOG Service`` 的典型名称包括 ``chat``, ``audio/text-to-speech``, ``embed`` 等。
+ ``AOG Service`` 的典型名称包括 ``chat``, ``speech-to-text``, ``embed`` 等。
 
 ``AOG`` 截至目前支持 Restful 风格的 API。API 的 ``Endpoint`` 包括 HTTP 方法和访问服务的 URL。
 URL 由主机名和端口（默认为 localhost 和 16688） AOG 前缀、规范版本号以及服务名称组成，即 ``http://localhost:{port_number}/aog/v{spec_version_number}/services/{service_name}``.
 
-例如 ``chat`` 服务的 ``Endpoint`` 是 ``POST http://localhost:16688/aog/v0.3/services/chat`` 。
+例如 ``chat`` 服务的 ``Endpoint`` 是 ``POST http://localhost:16688/aog/v0.4/services/chat`` 。
 
 .. _`Metadata of AOG Service`:
 

@@ -165,7 +165,7 @@ For example, you may use curl to test the chat service on Windows.
 
 .. code-block:: bash
 
-    curl -X POST http://localhost:16688/aog/v0.3/services/chat  -X POST -H
+    curl -X POST http://localhost:16688/aog/v0.4/services/chat  -X POST -H
     "Content-Type: application/json" -d
     "{\"model\":\"glm4\",\"messages\":[{\"role\":\"user\",\"content\":\"why is
     the sky blue?\"}],\"options\":{\"seed\":12345,\"temperature\":0},
@@ -180,14 +180,14 @@ can easily migrate the app by simply changing the endpoint URL.
 For example, if you have an application using the chat completions service of
 OpenAI, you may simply replace the endpoint URL from
 ``https://api.openai.com/v1/chat/completions`` to
-``http://localhost:16688/aog/v0.3/api_flavors/openai/v1/chat/completions``.
+``http://localhost:16688/aog/v0.4/api_flavors/openai/v1/chat/completions``.
 
 NOTE that the new URL to invoke AOG is under ``api_flavors/openai`` and rest of 
 the URL is the same as the original OpenAI API, i.e. ``/v1/chat/completions``.
 
 If you are using ollama API, you may replace the endpoint URL from
 ``https://localhost:11434/api/chat`` to
-``http://localhost:16688/aog/v0.3/api_flavors/ollama/api/chat``. Similarly, it
+``http://localhost:16688/aog/v0.4/api_flavors/ollama/api/chat``. Similarly, it
 is under ``api_flavors/ollama`` and rest of the URL is the same as the original 
 ollama API, i.e. ``/api/chat``.
 

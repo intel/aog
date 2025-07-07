@@ -106,7 +106,7 @@ ______________
 
 .. code-block:: shell
 
-    curl https://localhost:16688/aog/v0.3/services/chat\
+    curl https://localhost:16688/aog/v0.4/services/chat\
     -H "Content-Type: application/json" \
     -d '{
         "model": "deepseek-r1:7b",
