@@ -1,0 +1,81 @@
+AOG (AIPC Open Gateway)
+Copyright 2025 Intel Corporation
+
+This product includes software developed by Intel Corporation and third parties.
+
+================================================================================
+
+THIRD-PARTY SOFTWARE NOTICES AND INFORMATION
+
+This product incorporates components from the projects listed below. The original
+copyright notices and the licenses under which Intel received such components are
+set forth below for informational purposes. Intel licenses these components to you
+under Intel's software license terms. Compliance with all copyright laws and
+software license agreements included in the notice below is the responsibility of
+the user.
+
+================================================================================
+
+1. KubeFlow gRPC Prediction Protocol v2
+
+   Copyright 2020 kubeflow.org
+   Licensed under the Apache License, Version 2.0
+
+   Source: https://github.com/kserve/kserve/tree/master/docs/predict-api/v2
+
+   The following files are derived from or include code from KubeFlow:
+   - internal/client/grpc/protobuf/grpc_predict_v2.proto
+   - internal/client/grpc/grpc_client/grpc_predict_v2.pb.go
+   - internal/client/grpc/grpc_client/grpc_predict_v2_grpc.pb.go
+
+================================================================================
+
+2. gRPC-Go
+
+   Copyright 2014 gRPC authors
+   Licensed under the Apache License, Version 2.0
+
+   Source: https://github.com/grpc/grpc-go
+
+   This product uses gRPC-Go library for remote procedure call functionality.
+
+================================================================================
+
+3. Protocol Buffers
+
+   Copyright 2008 Google Inc.
+   Licensed under the BSD 3-Clause License
+
+   Source: https://github.com/protocolbuffers/protobuf
+
+   This product uses Protocol Buffers for data serialization.
+
+================================================================================
+
+4. Go support for Protocol Buffers
+
+   Copyright 2010 The Go Authors
+   Licensed under the BSD 3-Clause License
+
+   Source: https://github.com/protocolbuffers/protobuf-go
+
+   This product uses Go bindings for Protocol Buffers.
+
+================================================================================
+
+LICENSE TEXTS
+
+Apache License, Version 2.0:
+Full text available at: http://www.apache.org/licenses/LICENSE-2.0
+
+BSD 3-Clause License:
+Full text available at: https://opensource.org/licenses/BSD-3-Clause
+
+================================================================================
+
+For a complete list of all third-party dependencies and their licenses,
+please refer to the go.mod file and run 'go mod graph' to see the full
+dependency tree.
+
+This NOTICE file is provided in compliance with open source license requirements
+and Open Atom Foundation guidelines for third-party component attribution.
