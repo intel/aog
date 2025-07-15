@@ -1,5 +1,5 @@
 AOG (AIPC Open Gateway)
-Copyright 2025 Intel Corporation
+Copyright 2024-2025 Intel Corporation
 
 This product includes software developed by Intel Corporation and third parties.
 

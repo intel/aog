@@ -1,5 +1,5 @@
 //*****************************************************************************
-// Copyright 2025 Intel Corporation
+// Copyright 2024-2025 Intel Corporation
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -444,7 +444,8 @@ func (j *JSONDatastore) matchesFilters(entity datastore.Entity, options *datasto
 
 // Helper function for fuzzy matching
 func (j *JSONDatastore) fuzzyMatch(value, query string, key string) bool {
-	if key == ModelQueryKey { // Fuzzy matching for ModelName only
+	// Fuzzy matching for ModelName only
+	if key == ModelQueryKey {
 		return strings.Contains(strings.ToLower(value), strings.ToLower(query))
 	}
 	return value == query // Simple exact match for now, can be enhanced with proper fuzzy matching

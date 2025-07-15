@@ -1,5 +1,5 @@
 //*****************************************************************************
-// Copyright 2025 Intel Corporation
+// Copyright 2024-2025 Intel Corporation
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,7 +22,7 @@ const MAC_AOG_PATH = '/usr/local/bin';
 const MAC_AOG_EXE = 'aog';
 //TODO: 把下载域名拆开
 const WIN_INSTALLER_URL = 'https://smartvision-aipc-open.oss-cn-hangzhou.aliyuncs.com/aog/windows/aog-installer-latest.exe';
-const MAC_INSTALLER_URL = 'https://smartvision-aipc-open.oss-cn-hangzhou.aliyuncs.com/aog/windows/aog-installer-latest.pkg';
+const MAC_INSTALLER_URL = 'https://smartvision-aipc-open.oss-cn-hangzhou.aliyuncs.com/aog/macos/aog-installer-latest.pkg';
 const WIN_INSTALLER_NAME = 'aog-installer-latest.exe';
 const MAC_INSTALLER_NAME = 'aog-installer-latest.pkg';
 const AOG_INSTALLER_DIR = 'AOGInstaller';
@@ -37,11 +37,13 @@ const PLATFORM_CONFIG = {
     userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
   },
   darwin: {
-    downloadUrl: 'https://smartvision-aipc-open.oss-cn-hangzhou.aliyuncs.com/aog/windows/aog-installer-latest.pkg',
+    downloadUrl: 'https://smartvision-aipc-open.oss-cn-hangzhou.aliyuncs.com/aog/macos/aog-installer-latest.pkg',
     installerFileName: 'aog-installer-latest.pkg',
     userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)'
   }
 };
+
+const WS_URL = `ws://localhost:16688/${AOG_VERSION}/services/speech-to-text-ws`
 
 module.exports = {
   AOG_VERSION,
@@ -58,4 +60,5 @@ module.exports = {
   AOG_HEALTH,
   AOG_ENGINE_PATH,
   PLATFORM_CONFIG,
+  WS_URL
 };

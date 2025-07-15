@@ -1,5 +1,5 @@
 //*****************************************************************************
-// Copyright 2025 Intel Corporation
+// Copyright 2024-2025 Intel Corporation
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -314,7 +314,7 @@ func (f *ConfigBasedAPIFlavor) InstallRoutes(gateway *gin.Engine) {
 				gateway.Handle(method, routerPath, handler)
 				logger.LogicLogger.Debug("[Flavor] Installed flavor route", "flavor", f.Name(), "service", service, "route", method+" "+routerPath)
 			} else if method == types.ExposeProtocolWEBSOCKET {
-				routerPath := fmt.Sprintf("/%s/%s/services/%s/ws", constants.AppName, vSpec, service)
+				routerPath := fmt.Sprintf("/%s/%s/services/%s", constants.AppName, vSpec, service)
 				gateway.Handle("GET", routerPath, makeWebSocketHandler(f, service))
 				logger.LogicLogger.Debug("[Flavor] Installed websocket route", "flavor", f.Name(), "service", service, "route", "GET "+routerPath)
 			} else {

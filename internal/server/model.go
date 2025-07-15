@@ -1,5 +1,5 @@
 //*****************************************************************************
-// Copyright 2025 Intel Corporation
+// Copyright 2024-2025 Intel Corporation
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -362,10 +362,12 @@ func CreateModelStream(ctx context.Context, request dto.CreateModelRequest) (cha
 							newErrorCh <- err
 							return
 						}
-						if request.ServiceName == "chat" {
+						if request.ServiceName == types.ServiceChat {
 							generateM := new(types.Model)
 							generateM.ModelName = m.ModelName
-							generateM.ProviderName = strings.Replace(m.ProviderName, "chat", "generate", -1)
+							generateM.ProviderName = strings.Replace(m.ProviderName, types.ServiceChat, types.ServiceGenerate, -1)
+							generateM.ServiceName = types.ServiceGenerate
+							generateM.ServiceSource = m.ServiceSource
 							generateM.Status = m.Status
 							err = ds.Get(ctx, generateM)
 							if err != nil && !errors.Is(err, datastore.ErrEntityInvalid) {

@@ -1,6 +1,6 @@
 @echo off
 REM *****************************************************************************
-REM Copyright 2025 Intel Corporation
+REM Copyright 2024-2025 Intel Corporation
 REM
 REM Licensed under the Apache License, Version 2.0 (the "License");
 REM you may not use this file except in compliance with the License.

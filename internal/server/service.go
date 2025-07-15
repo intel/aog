@@ -1,5 +1,5 @@
 //*****************************************************************************
-// Copyright 2025 Intel Corporation
+// Copyright 2024-2025 Intel Corporation
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -151,7 +151,14 @@ func (s *AIGCServiceImpl) CreateAIGCService(ctx context.Context, request *dto.Cr
 				logger.LogicLogger.Info("Model engine " + recommendConfig.ModelEngine + " not exist, start download...")
 				err := engineProvider.InstallEngine()
 				if err != nil {
-					logger.LogicLogger.Error("Install model "+recommendConfig.ModelEngine+" engine failed :", err.Error())
+					logger.LogicLogger.Error("Set service status as -1, "+"Install model "+recommendConfig.ModelEngine+" engine failed :", err.Error())
+					service := &types.Service{Name: request.ServiceName}
+					err := s.Ds.Get(ctx, service)
+					if err == nil {
+						service.Status = -1
+						_ = s.Ds.Put(ctx, service)
+						logger.LogicLogger.Error("Set service status as -1")
+					}
 					return nil, bcode.ErrAIGCServiceInstallEngine
 				}
 				logger.LogicLogger.Info("Model engine " + recommendConfig.ModelEngine + " download completed...")

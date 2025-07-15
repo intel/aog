@@ -280,11 +280,82 @@ aog.textToImage(data).then((result) => {
 // 语音识别服务
 const data = {
     model: "NamoLi/whisper-large-v3-ov",
-    audio: "C:/Users/Lenovo/Downloads/中.mp3",
+    audio: "PATH/TO/YOUR/AUDIO/FILE.wav",
     language: "zh"
 }
 
 aog.speechToText(data).then(response => {
     console.log( response);
+});
+
+// 实时语音识别服务
+const speechStream = oadin.SpeechToTextStream({
+  model: "NamoLi/whisper-large-v3-ov",
+  language: "<|zh|>",
+  sampleRate: 16000
+});
+
+speechStream.on('open', () => {
+  console.log('✅ WebSocket 连接已建立');
+});
+
+speechStream.on('taskStarted', ({ taskId }) => {
+  console.log(`🚀 任务已启动, ID: ${taskId}`);
+});
+
+speechStream.on('finished', ({ text, taskId }) => {
+  console.log(`🏁 任务完成 (ID: ${taskId}):`, text);
+});
+
+speechStream.on('error', (err) => {
+  console.error('❌ 错误:', err.message);
+});
+
+speechStream.on('close', () => {
+  console.log('🔌 连接已关闭');
+});
+
+const audioPath = "PATH/TO/YOUR/AUDIO/FILE.MP3";
+const CHUNK_SIZE = 32000; // 合适的块大小
+
+if (!fs.existsSync(audioPath)) {
+  console.error(`❌ 文件不存在: ${audioPath}`);
+  process.exit(1);
+}
+
+const readStream = fs.createReadStream(audioPath, { highWaterMark: CHUNK_SIZE });
+
+speechStream.on('taskStarted', () => {
+  console.log('📤 开始发送音频数据...');
+  
+  let sending = 0;
+  let ended = false;
+
+  readStream.on('data', (chunk) => {
+    sending++;
+    const canWrite = speechStream.write(chunk);
+    sending--;
+    if (!canWrite) {
+      readStream.pause();
+      speechStream.once('drain', () => {
+        readStream.resume();
+      });
+    }
+    if (ended && sending === 0) {
+      speechStream.end();
+    }
+  });
+
+  readStream.on('end', () => {
+    ended = true;
+    if (sending === 0) {
+      console.log('📭 音频发送完毕');
+      speechStream.end();
+    }
+  });
+});
+
+speechStream.on('error', () => {
+  readStream.destroy();
 });
 ```

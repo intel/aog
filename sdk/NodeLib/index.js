@@ -1,5 +1,5 @@
 //*****************************************************************************
-// Copyright 2025 Intel Corporation
+// Copyright 2024-2025 Intel Corporation
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -29,7 +29,7 @@ const schemas = require('./schema.js');
 const tools = require('./tools.js');
 const { logAndConsole, downloadFile, getAOGExecutablePath, runInstallerByPlatform, isHealthy } = require('./tools.js');
 const { instance, createAxiosInstance, requestWithSchema } = require('./axiosInstance.js')
-const { PLATFORM_CONFIG, AOG_HEALTH, AOG_ENGINE_PATH, } = require('./constants.js');
+const { PLATFORM_CONFIG, AOG_HEALTH, AOG_ENGINE_PATH, AOG_VERSION, WS_URL, } = require('./constants.js');
 
 class AOG {
   constructor(version) {
@@ -485,6 +485,150 @@ class AOG {
       data,
       schema: { request: schemas.speechToTextRequest, response: schemas.speechToTextResponse}
     })
+  }
+
+  SpeechToTextStream(options = {}) {
+    if (!options.model) {
+      throw new Error('model is required');
+    }
+
+    // 默认配置
+    const config = {
+      language: 'zh',
+      sampleRate: 16000,
+      channels: 1,
+      useVad: true,
+      returnFormat: 'text',
+      ...options
+    };
+    const emitter = new EventEmitter();
+    const wsUrl = WS_URL;
+    const ws = new WebSocket(wsUrl);
+
+    let taskId = null;
+    let isConnected = false;
+    let isTaskStarted = false;
+    
+    const queue = [];
+    
+    ws.on('open', () => {
+      isConnected = true;
+      console.log('✅ WebSocket 连接已建立');
+      
+      // 发送 run-task 指令
+      ws.send(JSON.stringify({
+        task: "speech-to-text-ws",
+        action: "run-task",
+        model: config.model,
+        parameters: {
+          format: "pcm",
+          sample_rate: config.sampleRate,
+          language: config.language,
+          use_vad: config.useVad,
+          return_format: config.returnFormat,
+          channels: config.channels
+        }
+      }));
+      
+      emitter.emit('open');
+    });
+    
+    // 接收消息
+    ws.on('message', (data) => {
+      try {
+        const message = JSON.parse(data);
+        const event = message.header?.event
+        
+        switch (event) {
+          case 'task-started':
+            console.log(`task started`, message);
+            taskId = message.header.task_id;
+            isTaskStarted = true;
+
+            while (queue.length > 0) {
+              const chunk = queue.shift();
+              ws.send(chunk);
+            }
+            
+            emitter.emit('taskStarted', { taskId });
+            break;
+            
+          case 'task-finished':
+            console.log("task finished:", message)
+            emitter.emit('finished', { 
+              text: message.text,
+              taskId: message.task_id
+            });
+            ws.close();
+            break;
+            
+          case 'error':
+            console.log("error", message)
+            emitter.emit('error', new Error(message.message || '服务器返回错误'));
+            break;
+            
+          default:
+            console.warn('message:', message);
+            emitter.emit('message', message);
+        }
+      } catch (err) {
+        emitter.emit('error', new Error(`消息解析失败: ${err.message}`));
+      }
+    });
+    
+    // 错误处理
+    ws.on('error', (err) => {
+      console.error('WebSocket 错误:', err);
+      emitter.emit('error', new Error(`WebSocket 错误: ${err.message}`));
+    });
+    
+    // 连接关闭
+    ws.on('close', () => {
+      isConnected = false;
+      isTaskStarted = false;
+      console.log('🔌 WebSocket 连接已关闭');
+      emitter.emit('close');
+    });
+    
+    emitter.write = (chunk) => {
+      if (isConnected && isTaskStarted) {
+        ws.send(chunk);
+      } else if (isConnected) {
+        // 连接已建立但任务尚未启动，加入队列
+        queue.push(chunk);
+        console.log('📦 音频数据已加入队列，等待任务启动后发送');
+      } else {
+        // 连接未就绪，加入队列并等待连接建立
+        queue.push(chunk);
+        console.warn('⚠️ 音频数据已加入队列，等待连接建立后发送');
+      }
+    };
+    
+    emitter.end = () => {
+      if (isConnected && isTaskStarted) {
+        console.log(`⏹️ 发送结束任务指令`);
+        ws.send(JSON.stringify({
+          task: "speech-to-text-ws",
+          action: "finish-task",
+          task_id: taskId,
+          model: config.model
+        }));
+      } else if (isConnected && !isTaskStarted) {
+        const error = new Error('无法结束任务: 任务尚未启动');
+        console.error(error.message);
+        emitter.emit('error', error);
+      } else if (!isConnected) {
+        const error = new Error('无法结束任务: 连接未建立');
+        console.error(error.message);
+        emitter.emit('error', error);
+      } else if (!taskId) {
+        const error = new Error('无法结束任务: 任务ID未分配');
+        console.error(error.message);
+        emitter.emit('error', error);
+      }
+    };
+    
+    return emitter;
   }
 
   // 用于一键安装 AOG 和 导入配置

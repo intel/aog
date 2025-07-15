@@ -1,5 +1,5 @@
 //*****************************************************************************
-// Copyright 2025 Intel Corporation
+// Copyright 2024-2025 Intel Corporation
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -264,6 +264,20 @@ func GetSupportModelListCombine(ctx context.Context, request *dto.GetSupportMode
 	// mine 过滤
 	if request.Mine {
 		myModelFilter(&allModels)
+	}
+
+	// 如果是单个模型查询，则严格匹配
+	if pageSize == 1 && request.SearchName != "" {
+		var strictList []dto.RecommendModelData
+		for _, m := range allModels {
+			if m.Name == request.SearchName {
+				strictList = append(strictList, m)
+				break
+			}
+		}
+		if len(strictList) > 0 {
+			allModels = strictList
+		}
 	}
 
 	// 分页
