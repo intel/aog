@@ -17,6 +17,7 @@
 package schedule
 
 import (
+	"bufio"
 	"bytes"
 	"compress/gzip"
 	"context"
@@ -25,6 +26,7 @@ import (
 	"fmt"
 	"io"
 	"math/rand"
+	"mime/multipart"
 	"net/http"
 	"os"
 	"regexp"
@@ -32,12 +34,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gorilla/websocket"
+	"github.com/intel/aog/internal/client"
+	"github.com/intel/aog/internal/client/grpc/grpc_client"
+	"github.com/intel/aog/internal/logger"
+	"github.com/intel/aog/internal/types"
+	"github.com/intel/aog/internal/utils"
+	"github.com/intel/aog/internal/utils/bcode"
 	"google.golang.org/grpc"
-	"intel.com/aog/internal/client"
-	"intel.com/aog/internal/client/grpc/grpc_client"
-	"intel.com/aog/internal/logger"
-	"intel.com/aog/internal/types"
-	"intel.com/aog/internal/utils"
 )
 
 // Invoker defines the interface for service invocation
@@ -53,6 +57,67 @@ type GRPCInvoker struct {
 // HTTPInvoker implements the invocation of HTTP services
 type HTTPInvoker struct {
 	task *ServiceTask
+}
+
+// 定义结构体来表示JSON数据
+type Header struct {
+	Action       string                 `json:"action"`
+	TaskID       string                 `json:"task_id"`
+	Streaming    string                 `json:"streaming"`
+	Event        string                 `json:"event"`
+	ErrorCode    string                 `json:"error_code,omitempty"`
+	ErrorMessage string                 `json:"error_message,omitempty"`
+	Attributes   map[string]interface{} `json:"attributes"`
+}
+
+type Output struct {
+	Sentence struct {
+		BeginTime int64  `json:"begin_time"`
+		EndTime   *int64 `json:"end_time"`
+		Text      string `json:"text"`
+		Words     []struct {
+			BeginTime   int64  `json:"begin_time"`
+			EndTime     *int64 `json:"end_time"`
+			Text        string `json:"text"`
+			Punctuation string `json:"punctuation"`
+		} `json:"words"`
+	} `json:"sentence"`
+	Usage interface{} `json:"usage"`
+}
+
+type Payload struct {
+	TaskGroup  string `json:"task_group"`
+	Task       string `json:"task"`
+	Function   string `json:"function"`
+	Model      string `json:"model"`
+	Parameters Params `json:"parameters"`
+	// Resources  []Resource `json:"resources"`
+	Input  Input  `json:"input"`
+	Output Output `json:"output,omitempty"`
+}
+
+type Params struct {
+	Format                   string   `json:"format"`
+	SampleRate               int      `json:"sample_rate"`
+	VocabularyID             string   `json:"vocabulary_id"`
+	DisfluencyRemovalEnabled bool     `json:"disfluency_removal_enabled"`
+	LanguageHints            []string `json:"language_hints"`
+}
+
+type Input struct{}
+
+type Event struct {
+	Header  Header  `json:"header"`
+	Payload Payload `json:"payload"`
+}
+
+// connect WebSocket service
+func connectWebSocket(wsURL, apiKey string) (*websocket.Conn, error) {
+	header := make(http.Header)
+	header.Add("X-DashScope-DataInspection", "enable")
+	header.Add("Authorization", fmt.Sprintf("bearer %s", apiKey))
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL, header)
+	return conn, err
 }
 
 // NewInvoker creates the corresponding invoker
@@ -75,7 +140,7 @@ func (g *GRPCInvoker) Invoke(sp *types.ServiceProvider, content types.HTTPConten
 		return nil, fmt.Errorf("unsupported service type: %s", sp.ServiceName)
 	}
 
-	// 检查是否为流式服务
+	// Check if it is a streaming service
 	if g.task.Target.Protocol == types.ProtocolGRPC_STREAM {
 		logger.LogicLogger.Debug("[Service] Invoking GRPC streaming service",
 			"service", sp.ServiceName,
@@ -84,7 +149,7 @@ func (g *GRPCInvoker) Invoke(sp *types.ServiceProvider, content types.HTTPConten
 		return g.invokeStreamService(handler, content)
 	}
 
-	// 非流式服务处理
+	// non-streaming service processing
 	logger.LogicLogger.Debug("[Service] Invoking GRPC non-streaming service",
 		"service", sp.ServiceName,
 		"model", g.task.Target.Model,
@@ -103,7 +168,7 @@ func (g *GRPCInvoker) invokeNonStreamService(handler GRPCServiceHandler, content
 	defer conn.Close()
 
 	// Create a gRPC client
-	client := grpc_client.NewGRPCInferenceServiceClient(conn)
+	grpcClient := grpc_client.NewGRPCInferenceServiceClient(conn)
 
 	// Prepare the request
 	grpcReq, err := handler.PrepareRequest(content, g.task.Target)
@@ -112,7 +177,7 @@ func (g *GRPCInvoker) invokeNonStreamService(handler GRPCServiceHandler, content
 	}
 
 	// Send the request
-	inferResponse, err := client.ModelInfer(context.Background(), grpcReq)
+	inferResponse, err := grpcClient.ModelInfer(context.Background(), grpcReq)
 	if err != nil {
 		logger.LogicLogger.Error("[Service] Error processing InferRequest", "taskid", g.task.Schedule.Id, "error", err)
 		return nil, err
@@ -132,7 +197,7 @@ func (g *GRPCInvoker) invokeNonStreamService(handler GRPCServiceHandler, content
 
 // 处理流式服务
 func (g *GRPCInvoker) invokeStreamService(handler GRPCServiceHandler, content types.HTTPContent) (*http.Response, error) {
-	// 1. 解析WebSocket连接ID和任务类型
+	// 1. Parsing WebSocket Connection ID and Task Type
 	wsConnID := content.Header.Get("X-WebSocket-ConnID")
 	if wsConnID == "" {
 		return nil, fmt.Errorf("missing WebSocket connection ID")
@@ -142,35 +207,35 @@ func (g *GRPCInvoker) invokeStreamService(handler GRPCServiceHandler, content ty
 	wsConn, _ := wsManager.GetConnection(wsConnID)
 	taskType := wsConn.GetTaskType(g.task.Schedule.Id)
 
-	// 2. 根据任务类型分别处理
+	// 2. Handle separately according to task type
 	switch taskType {
 	case types.WSActionFinishTask:
-		// 处理结束任务请求
+		// Processing end-of-task requests
 		return g.handleFinishTask(handler, content, wsConnID)
 
 	case types.WSActionRunTask:
-		// 处理开始任务请求
+		// Processing start task requests
 		return g.handleRunTask(handler, content, wsConnID)
 
 	default:
-		// 处理音频数据或其他请求
+		// Processing audio data or other requests
 		return g.handleStreamData(handler, content, wsConnID)
 	}
 }
 
-// handleFinishTask 处理结束任务请求
+// handleFinishTask Processing end-of-task requests
 func (g *GRPCInvoker) handleFinishTask(handler GRPCServiceHandler, content types.HTTPContent, wsConnID string) (*http.Response, error) {
-	// 关闭与该WebSocket连接关联的gRPC流会话
+	// Close the gRPC stream session associated with the WebSocket connection
 	grpcStreamManager := client.GetGlobalGRPCStreamManager()
 	session := grpcStreamManager.GetSessionByWSConnID(wsConnID)
 
-	// 通知WebSocket管理器关闭流式会话
+	// Notify the WebSocket Manager to close the streaming session
 	wsManager := client.GetGlobalWebSocketManager()
 	if wsConn, exists := wsManager.GetConnection(wsConnID); exists {
 		wsConn.SetTaskFinished(g.task.Schedule.Id)
 	}
 
-	// 向ovms 发送空audio数据 代表发送完成
+	// Send empty audio data to ovms, which means the sending is complete.
 	grpcReq, err := handler.PrepareStreamRequest(content, g.task)
 	if err != nil {
 		return nil, fmt.Errorf("failed to prepare stream request: %w", err)
@@ -181,7 +246,7 @@ func (g *GRPCInvoker) handleFinishTask(handler GRPCServiceHandler, content types
 		return nil, fmt.Errorf("failed to send empty audio data: %w", err)
 	}
 
-	// 成功发送数据，立即返回确认
+	// Successfully sent data, return confirmation immediately
 	ackResponse := &http.Response{
 		StatusCode: 200,
 		Body:       io.NopCloser(bytes.NewReader([]byte(`{"status":"processing"}`))),
@@ -192,26 +257,26 @@ func (g *GRPCInvoker) handleFinishTask(handler GRPCServiceHandler, content types
 	return ackResponse, nil
 }
 
-// handleRunTask 处理开始任务请求
+// handleRunTask Processing start task requests
 func (g *GRPCInvoker) handleRunTask(handler GRPCServiceHandler, content types.HTTPContent, wsConnID string) (*http.Response, error) {
-	// 创建新的gRPC流会话
+	// Create a new gRPC stream session
 	_, err := g.createStreamSession(handler, content, wsConnID)
 	if err != nil {
 		return nil, err
 	}
 
-	// 创建任务开始事件响应
+	// Create Task Start Incident Response
 	startedEvent := types.NewTaskStartedEvent(wsConnID)
 	return createWebSocketEventResponse(startedEvent), nil
 }
 
-// handleStreamData 处理音频数据或其他流式请求
+// handleStreamData Processing audio data or other streaming requests
 func (g *GRPCInvoker) handleStreamData(handler GRPCServiceHandler, content types.HTTPContent, wsConnID string) (*http.Response, error) {
-	// 尝试获取现有gRPC流会话
+	// Attempt to fetch an existing gRPC streaming session
 	grpcStreamManager := client.GetGlobalGRPCStreamManager()
 	session := grpcStreamManager.GetSessionByWSConnID(wsConnID)
 
-	// 如果没有找到会话，创建新会话
+	// If no session is found, create a new session
 	if session == nil {
 		var err error
 		session, err = g.createStreamSession(handler, content, wsConnID)
@@ -219,17 +284,17 @@ func (g *GRPCInvoker) handleStreamData(handler GRPCServiceHandler, content types
 			return nil, err
 		}
 
-		// 立即返回一个启动成功响应
+		// Immediately returns a startup success response
 		startEvent := types.NewTaskStartedEvent(wsConnID)
 		return createWebSocketEventResponse(startEvent), nil
 	} else {
-		// 准备现有会话的请求
+		// Prepare a request for an existing session
 		grpcReq, err := handler.PrepareStreamRequest(content, g.task)
 		if err != nil {
 			return nil, fmt.Errorf("failed to prepare stream request: %w", err)
 		}
 
-		// 发送到现有流
+		// Send to an existing stream
 		if err := session.Stream.Send(grpcReq); err != nil {
 			grpcStreamManager.CloseSessionByWSConnID(wsConnID)
 			logger.LogicLogger.Error("[Service] Error sending to existing stream",
@@ -239,7 +304,7 @@ func (g *GRPCInvoker) handleStreamData(handler GRPCServiceHandler, content types
 			return nil, err
 		}
 
-		// 成功发送数据，立即返回确认
+		// Successfully sent data, return confirmation immediately
 		ackResponse := &http.Response{
 			StatusCode: 200,
 			Body:       io.NopCloser(bytes.NewReader([]byte(`{"status":"processing"}`))),
@@ -251,13 +316,13 @@ func (g *GRPCInvoker) handleStreamData(handler GRPCServiceHandler, content types
 	}
 }
 
-// createStreamSession 创建新的gRPC流会话
+// createStreamSession Create a new gRPC stream session
 func (g *GRPCInvoker) createStreamSession(handler GRPCServiceHandler, content types.HTTPContent, wsConnID string) (*client.GRPCStreamSession, error) {
 	logger.LogicLogger.Info("[Service] Creating new GRPC stream for WebSocket connection",
 		"wsConnID", wsConnID,
 		"taskID", g.task.Schedule.Id)
 
-	// 建立gRPC连接
+	// Establish a gRPC connection
 	conn, err := grpc.Dial(g.task.Target.ServiceProvider.URL, grpc.WithInsecure())
 	if err != nil {
 		logger.LogicLogger.Error("[Service] Couldn't connect to endpoint",
@@ -266,19 +331,19 @@ func (g *GRPCInvoker) createStreamSession(handler GRPCServiceHandler, content ty
 		return nil, err
 	}
 
-	// 创建gRPC客户端
+	// Creating the gRPC client side
 	gClient := grpc_client.NewGRPCInferenceServiceClient(conn)
 
-	// 准备流式请求
+	// Prepare a streaming request
 	grpcReq, err := handler.PrepareStreamRequest(content, g.task)
 	if err != nil {
 		return nil, fmt.Errorf("failed to prepare stream request: %w", err)
 	}
 
-	// 创建上下文和取消函数
+	// Create context and cancel functions
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Minute)
 
-	// 创建双向流
+	// Create a two-way flow
 	stream, err := gClient.ModelStreamInfer(ctx)
 	if err != nil {
 		cancel()
@@ -289,7 +354,7 @@ func (g *GRPCInvoker) createStreamSession(handler GRPCServiceHandler, content ty
 		return nil, err
 	}
 
-	// 创建新会话
+	// Create a new session
 	grpcStreamManager := client.GetGlobalGRPCStreamManager()
 	session := grpcStreamManager.CreateSession(
 		wsConnID,
@@ -301,7 +366,7 @@ func (g *GRPCInvoker) createStreamSession(handler GRPCServiceHandler, content ty
 		g.task.Target.Model,
 	)
 
-	// 发送初始请求
+	// Send initial request
 	if err := stream.Send(grpcReq); err != nil {
 		grpcStreamManager.CloseSessionByWSConnID(wsConnID)
 		logger.LogicLogger.Error("[Service] Error sending stream request",
@@ -314,7 +379,7 @@ func (g *GRPCInvoker) createStreamSession(handler GRPCServiceHandler, content ty
 	return session, nil
 }
 
-// createWebSocketEventResponse 创建一个WebSocket事件响应
+// createWebSocketEventResponse Create a WebSocket event response
 func createWebSocketEventResponse(event types.WebSocketEventMessage) *http.Response {
 	jsonData, _ := json.Marshal(event)
 	header := make(http.Header)
@@ -330,6 +395,199 @@ func createWebSocketEventResponse(event types.WebSocketEventMessage) *http.Respo
 // Invoke implements HTTP service invocation
 func (h *HTTPInvoker) Invoke(sp *types.ServiceProvider, content types.HTTPContent) (*http.Response, error) {
 	// 1. Build the invocation URL
+	var err error
+	var resp *http.Response
+	if h.task.Target.ExposeProtocol == types.ExposeProtocolWEBSOCKET {
+		resp, err = h.invokeWSService(sp, content)
+	} else {
+		resp, err = h.invokeNonWSService(sp, content)
+	}
+	return resp, err
+}
+
+func (h *HTTPInvoker) invokeWSService(sp *types.ServiceProvider, content types.HTTPContent) (*http.Response, error) {
+	// 1. Parsing WebSocket Connection ID and Task Type
+	wsConnID := content.Header.Get("X-WebSocket-ConnID")
+	if wsConnID == "" {
+		return nil, fmt.Errorf("missing WebSocket connection ID")
+	}
+
+	wsManager := client.GetGlobalWebSocketManager()
+	wsConn, exists := wsManager.GetConnection(wsConnID)
+	if !exists {
+		return nil, fmt.Errorf("WebSocket connection not found: %s", wsConnID)
+	}
+
+	taskType := wsConn.GetTaskType(h.task.Schedule.Id)
+	if taskType == "" {
+		return nil, fmt.Errorf("task type not found for task ID: %d", h.task.Schedule.Id)
+	}
+
+	// 2. Obtain or create a WebSocket connection
+	var conn *websocket.Conn
+	var err error
+
+	conn, exists = types.GetWSRemoteConnection(wsConnID)
+	if !exists {
+		// Create a new WebSocket connection
+		invokeURL := sp.URL
+		var authInfoData ApiKeyAuthInfo
+		err = json.Unmarshal([]byte(sp.AuthKey), &authInfoData)
+		if err != nil {
+			return nil, bcode.WrapError(bcode.ErrAuthInfoParsing, err)
+		}
+		apiKey := authInfoData.ApiKey
+
+		conn, err = connectWebSocket(invokeURL, apiKey)
+		if err != nil {
+			logger.LogicLogger.Error("[Service] Failed to connect to WebSocket",
+				"url", invokeURL,
+				"wsConnID", wsConnID,
+				"error", err)
+			return nil, fmt.Errorf("failed to connect to WebSocket: %w", err)
+		}
+
+		// restore remote connection
+		types.SetWSRemoteConnection(wsConnID, conn)
+	} else {
+		logger.LogicLogger.Debug("[Service] Using existing WebSocket connection",
+			"wsConnID", wsConnID)
+	}
+
+	// 3. Processing requests based on task type
+	switch taskType {
+	case types.WSActionFinishTask:
+		return h.handleFinishTaskWS(sp, content, wsConnID, conn)
+	case types.WSActionRunTask:
+		return h.handleRunTaskWS(conn, wsConnID)
+	default:
+		return h.handleStreamDataWS(content, conn, wsConnID)
+	}
+}
+
+// handleRunTaskWS Handling WebSocket run-task requests
+func (h *HTTPInvoker) handleRunTaskWS(conn *websocket.Conn, wsConnID string) (*http.Response, error) {
+	// Building run-task messages in Alibaba Cloud format
+	runTaskCmd := Event{
+		Header: Header{
+			Action:    "run-task",
+			TaskID:    wsConnID,
+			Streaming: "duplex",
+		},
+		Payload: Payload{
+			TaskGroup: "audio",
+			Task:      "asr",
+			Function:  "recognition",
+			Model:     h.task.Target.Model,
+			Parameters: Params{
+				Format:     "wav",
+				SampleRate: 16000,
+			},
+			Input: Input{},
+		},
+	}
+
+	runTaskCmdJSON, err := json.Marshal(runTaskCmd)
+	if err != nil {
+		logger.LogicLogger.Error("[Service] Failed to marshal run-task command",
+			"wsConnID", wsConnID,
+			"error", err)
+		return nil, fmt.Errorf("failed to marshal run-task command: %w", err)
+	}
+
+	// Send a run-task command to a remote service
+	if err := conn.WriteMessage(websocket.TextMessage, runTaskCmdJSON); err != nil {
+		logger.LogicLogger.Error("[Service] Failed to send run-task command",
+			"wsConnID", wsConnID,
+			"model", h.task.Target.Model,
+			"error", err)
+		return nil, fmt.Errorf("failed to send run-task command: %w", err)
+	}
+
+	logger.LogicLogger.Info("[Service] Successfully sent run-task command",
+		"wsConnID", wsConnID,
+		"model", h.task.Target.Model,
+		"command", string(runTaskCmdJSON))
+
+	// Returns a response that a task has been started
+	resp := &http.Response{
+		StatusCode: 200,
+		Header:     make(http.Header),
+		Body:       io.NopCloser(bytes.NewReader([]byte(fmt.Sprintf(`{"status":"started","task_id":"%s"}`, wsConnID)))),
+	}
+	resp.Header.Set("Content-Type", "application/json")
+	return resp, nil
+}
+
+// handleStreamDataWS Processing WebSocket audio stream data
+func (h *HTTPInvoker) handleStreamDataWS(content types.HTTPContent, conn *websocket.Conn, wsConnID string) (*http.Response, error) {
+	// Direct forwarding of audio data to remote services
+	if err := conn.WriteMessage(websocket.BinaryMessage, content.Body); err != nil {
+		logger.LogicLogger.Error("[Service] Failed to send audio data to WebSocket",
+			"wsConnID", wsConnID,
+			"dataSize", len(content.Body),
+			"error", err)
+		return nil, fmt.Errorf("failed to send audio data: %w", err)
+	}
+
+	logger.LogicLogger.Debug("[Service] Successfully sent audio data to WebSocket",
+		"wsConnID", wsConnID,
+		"dataSize", len(content.Body))
+
+	resp := &http.Response{
+		StatusCode: 200,
+		Header:     make(http.Header),
+		Body:       io.NopCloser(bytes.NewReader([]byte(`{"status":"processing"}`))),
+	}
+	resp.Header.Set("Content-Type", "application/json")
+	return resp, nil
+}
+
+// handleFinishTaskWS Handling WebSocket find-task requests
+func (h *HTTPInvoker) handleFinishTaskWS(sp *types.ServiceProvider, content types.HTTPContent, wsConnID string, conn *websocket.Conn) (*http.Response, error) {
+	// prepare finish-task message
+	finishTaskCmd := Event{
+		Header: Header{
+			Action:    "finish-task",
+			TaskID:    wsConnID,
+			Streaming: "duplex",
+		},
+		Payload: Payload{
+			Input: Input{},
+		},
+	}
+
+	finishTaskCmdJSON, err := json.Marshal(finishTaskCmd)
+	if err != nil {
+		logger.LogicLogger.Error("[Service] Failed to marshal finish-task command",
+			"wsConnID", wsConnID,
+			"error", err)
+		return nil, fmt.Errorf("failed to marshal finish-task command: %w", err)
+	}
+
+	// Send finish-task action
+	if err := conn.WriteMessage(websocket.TextMessage, finishTaskCmdJSON); err != nil {
+		logger.LogicLogger.Error("[Service] Failed to send finish-task command",
+			"wsConnID", wsConnID,
+			"error", err)
+		return nil, fmt.Errorf("failed to send finish-task command: %w", err)
+	}
+
+	logger.LogicLogger.Info("[Service] Successfully sent finish-task command",
+		"wsConnID", wsConnID,
+		"command", string(finishTaskCmdJSON))
+
+	// Return a completed response
+	resp := &http.Response{
+		StatusCode: 200,
+		Header:     make(http.Header),
+		Body:       io.NopCloser(bytes.NewReader([]byte(`{"status":"finished"}`))),
+	}
+	resp.Header.Set("Content-Type", "application/json")
+	return resp, nil
+}
+
+func (h *HTTPInvoker) invokeNonWSService(sp *types.ServiceProvider, content types.HTTPContent) (*http.Response, error) {
 	invokeURL := sp.URL
 	if strings.ToUpper(sp.Method) == http.MethodGet && len(content.Body) > 0 {
 		u, err := utils.BuildGetRequestURL(sp.URL, content.Body)
@@ -351,6 +609,25 @@ func (h *HTTPInvoker) Invoke(sp *types.ServiceProvider, content types.HTTPConten
 		return nil, fmt.Errorf("failed to set request headers: %w", err)
 	}
 
+	if req.Header.Get("Content-Type") == "application/x-www-form-urlencoded" {
+		var jsonData map[string]string
+		err := json.NewDecoder(req.Body).Decode(&jsonData)
+		if err != nil {
+			return nil, err
+		}
+
+		// 2. Build multipart/form-data request body
+		var buf bytes.Buffer
+		writer := multipart.NewWriter(&buf)
+
+		for key, val := range jsonData {
+			_ = writer.WriteField(key, val)
+		}
+
+		writer.Close()
+		req.Body = io.NopCloser(&buf)
+	}
+
 	// 4. Handle authentication
 	if sp.AuthType != types.AuthTypeNone {
 		if err := h.handleAuthentication(req, sp, content); err != nil {
@@ -359,13 +636,13 @@ func (h *HTTPInvoker) Invoke(sp *types.ServiceProvider, content types.HTTPConten
 	}
 
 	// 5. Create HTTP client and send request
-	client := h.createHTTPClient()
+	httpClient := h.createHTTPClient()
 
 	// 6. Log the request
 	h.logRequest(req, content)
 
 	// 7. Send the request
-	resp, err := client.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
@@ -378,9 +655,13 @@ func (h *HTTPInvoker) Invoke(sp *types.ServiceProvider, content types.HTTPConten
 	// 9. Handle segmented request
 	serviceDefaultInfo := GetProviderServiceDefaultInfo(h.task.Target.ToFavor, h.task.Request.Service)
 	if serviceDefaultInfo.RequestSegments > 1 {
-		return h.handleSegmentedRequest(client, resp, sp, serviceDefaultInfo)
+		return h.handleSegmentedRequest(httpClient, resp, sp, serviceDefaultInfo)
 	}
-
+	newBody, err := h.readResponseBody(resp)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
+	}
+	resp.Body = io.NopCloser(bytes.NewReader(newBody))
 	// 10. Log the response
 	logger.LogicLogger.Debug("[Service] Response Receiving",
 		"taskid", h.task.Schedule.Id,
@@ -388,6 +669,68 @@ func (h *HTTPInvoker) Invoke(sp *types.ServiceProvider, content types.HTTPConten
 		"task", h.task)
 
 	return resp, nil
+}
+
+func (h *HTTPInvoker) invokeStreamService(sp *types.ServiceProvider, content types.HTTPContent, wsConnID string) (*http.Response, error) {
+	wsManager := client.GetGlobalWebSocketManager()
+	wsConn, exists := wsManager.GetConnection(wsConnID)
+	if !exists {
+		return nil, fmt.Errorf("WebSocket connection not found: %s", wsConnID)
+	}
+
+	invokeURL := sp.URL
+	if strings.ToUpper(sp.Method) == http.MethodGet && len(content.Body) > 0 {
+		u, err := utils.BuildGetRequestURL(sp.URL, content.Body)
+		if err != nil {
+			return nil, fmt.Errorf("failed to build GET request URL: %w", err)
+		}
+		invokeURL = u
+		content.Body = nil
+	}
+
+	req, err := http.NewRequest(sp.Method, invokeURL, bytes.NewReader(content.Body))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create HTTP request: %w", err)
+	}
+
+	if err := h.setRequestHeaders(req, sp, content); err != nil {
+		return nil, fmt.Errorf("failed to set request headers: %w", err)
+	}
+
+	if sp.AuthType != types.AuthTypeNone {
+		if err := h.handleAuthentication(req, sp, content); err != nil {
+			return nil, fmt.Errorf("failed to handle authentication: %w", err)
+		}
+	}
+
+	httpClient := h.createHTTPClient()
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to send request: %w", err)
+	}
+
+	defer resp.Body.Close()
+
+	reader := bufio.NewReader(resp.Body)
+	for {
+		line, err := reader.ReadBytes('\n')
+		if len(line) > 0 {
+			// Push to WebSocket client side
+			if err := wsConn.WriteMessage(1, line); err != nil {
+				logger.LogicLogger.Error("[HTTP WS] Failed to send message to WebSocket", "error", err, "connID", wsConnID)
+				break
+			}
+		}
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			logger.LogicLogger.Error("[HTTP WS] Error reading HTTP stream", "error", err, "connID", wsConnID)
+			break
+		}
+	}
+
+	return nil, nil
 }
 
 // handleAuthentication Handle authentication
@@ -595,9 +938,10 @@ func (h *HTTPInvoker) logRequest(req *http.Request, content types.HTTPContent) {
 
 func (h *HTTPInvoker) handleErrorResponse(resp *http.Response) (*http.Response, error) {
 	var sbody string
-	b, err := io.ReadAll(resp.Body)
+	newBody, err := h.readResponseBody(resp)
+	// b, err := io.ReadAll(resp.Body)
 	if err != nil {
-		sbody = string(b)
+		sbody = string(newBody)
 	}
 	logger.LogicLogger.Warn("[Service] Service Provider returns Error", "taskid", h.task.Schedule.Id,
 		"status_code", resp.StatusCode, "body", sbody)
@@ -646,20 +990,16 @@ type GRPCServiceHandler interface {
 	PrepareRequest(content types.HTTPContent, target *types.ServiceTarget) (*grpc_client.ModelInferRequest, error)
 	ProcessResponse(inferResponse *grpc_client.ModelInferResponse) (*http.Response, error)
 
-	// 流式请求处理方法
 	PrepareStreamRequest(content types.HTTPContent, st *ServiceTask) (*grpc_client.ModelInferRequest, error)
 	ProcessStreamResponse(streamResponse *grpc_client.ModelStreamInferResponse, wsConnID string) (*http.Response, bool, error)
 }
 
 type BaseGRPCHandler struct{}
 
-// 默认的流式请求处理方法，返回未实现错误
 func (h *BaseGRPCHandler) PrepareStreamRequest(content types.HTTPContent, st *ServiceTask) (*grpc_client.ModelInferRequest, error) {
 	return nil, fmt.Errorf("streaming not implemented")
 }
 
-// 默认的流式响应处理方法，返回未实现错误
-// 返回值：HTTP响应，是否继续处理流，错误
 func (h *BaseGRPCHandler) ProcessStreamResponse(streamResponse *grpc_client.ModelStreamInferResponse, wsConnID string) (*http.Response, bool, error) {
 	return nil, true, fmt.Errorf("streaming not implemented")
 }
@@ -696,23 +1036,31 @@ func NewSpeechToTextWSHandler() *SpeechToTextWSHandler {
 	}
 }
 
-// PrepareRequest 实现非流式请求准备
+type SpeechToTextWSRemoteHandler struct {
+	BaseGRPCHandler
+}
+
+func NewSpeechToTextWSRemoteHandler() *SpeechToTextWSRemoteHandler {
+	return &SpeechToTextWSRemoteHandler{
+		BaseGRPCHandler: BaseGRPCHandler{},
+	}
+}
+
+// PrepareRequest Implementing non-streaming request preparation
 func (h *SpeechToTextWSHandler) PrepareRequest(content types.HTTPContent, target *types.ServiceTarget) (*grpc_client.ModelInferRequest, error) {
-	// 流式处理器不支持非流式请求
 	return nil, fmt.Errorf("speech-to-text stream handler only supports streaming")
 }
 
-// ProcessResponse 实现非流式响应处理
+// ProcessResponse Implementing non-streaming response processing
 func (h *SpeechToTextWSHandler) ProcessResponse(inferResponse *grpc_client.ModelInferResponse) (*http.Response, error) {
-	// 流式处理器不支持非流式响应
 	return nil, fmt.Errorf("speech-to-text stream handler only supports streaming")
 }
 
-// PrepareStreamRequest 准备流式请求
+// PrepareStreamRequest Prepare a streaming request
 func (h *SpeechToTextWSHandler) PrepareStreamRequest(content types.HTTPContent, st *ServiceTask) (*grpc_client.ModelInferRequest, error) {
 	var actionMessage types.WebSocketActionMessage
 
-	// 首先尝试从WebSocket连接中获取任务类型
+	// First try to get the task type from the WebSocket connection
 	wsConnID := content.Header.Get("X-WebSocket-ConnID")
 	wsManager := client.GetGlobalWebSocketManager()
 	wsConn, _ := wsManager.GetConnection(wsConnID)
@@ -732,15 +1080,15 @@ func (h *SpeechToTextWSHandler) PrepareStreamRequest(content types.HTTPContent, 
 	actionMessage.Task = st.Request.Service
 	actionMessage.TaskID = wsConnID
 
-	// 准备参数对象
+	// Prepare parameter object
 	params := h.prepareParams(content, isBinary, taskType, actionMessage)
-	// 获取音频数据
+	// Get audio data
 	audioBytes := h.getAudioData(content, isBinary, taskType, actionMessage)
-	// 构建并返回模型推理请求
+	// Build and return model inference requests
 	return h.buildModelInferRequest(st.Target.Model, audioBytes, params), nil
 }
 
-// prepareParams 准备所有参数
+// prepareParams Prepare all parameters
 func (h *SpeechToTextWSHandler) prepareParams(content types.HTTPContent, isBinary bool, taskType string, actionMessage types.WebSocketActionMessage) *types.SpeechToTextParams {
 	params := types.NewSpeechToTextParams()
 	if actionMessage.Parameters.Format != "" {
@@ -752,7 +1100,6 @@ func (h *SpeechToTextWSHandler) prepareParams(content types.HTTPContent, isBinar
 	if actionMessage.Parameters.Language != "" {
 		params.Language = actionMessage.Parameters.Language
 	}
-	params.UseVAD = actionMessage.Parameters.UseVAD
 	if actionMessage.Parameters.ReturnFormat != "" {
 		params.ReturnFormat = actionMessage.Parameters.ReturnFormat
 	}
@@ -765,46 +1112,48 @@ func (h *SpeechToTextWSHandler) prepareParams(content types.HTTPContent, isBinar
 	if actionMessage.Parameters.Service != "" {
 		params.Service = actionMessage.Parameters.Service
 	}
+	params.UseVAD = actionMessage.Parameters.UseVAD
+	params.Action = actionMessage.Action
 
 	return params
 }
 
 func (h *SpeechToTextWSHandler) ProcessStreamResponse(streamResponse *grpc_client.ModelStreamInferResponse, wsConnID string) (*http.Response, bool, error) {
-	// 检查响应是否包含错误信息
+	// Check if the response contains error messages
 	if streamResponse.ErrorMessage != "" {
 		return nil, false, fmt.Errorf("stream error from model: %s", streamResponse.ErrorMessage)
 	}
 
-	// 检查是否有推理响应
+	// Check if there is an inference response
 	inferResponse := streamResponse.GetInferResponse()
 	if inferResponse == nil || len(inferResponse.RawOutputContents) == 0 {
-		return nil, true, nil // 返回nil响应，但继续接收流
+		return nil, true, nil // Returns a nil response, but continues to receive the stream
 	}
 
-	// 解析SRT格式的文本
+	// Parsing text in SRT format
 	srtText := string(inferResponse.RawOutputContents[0])
 	lines := strings.Split(strings.TrimSpace(srtText), "\n")
 
-	// 确保有足够的行来获取有效数据
+	// Make sure there are enough rows to obtain valid data
 	if len(lines) < 3 {
-		return nil, true, nil // 数据不完整，继续接收流
+		return nil, true, nil // Incomplete data, continue to receive stream
 	}
 
-	// 解析ID
+	// parse ID
 	id := 0
 	fmt.Sscanf(lines[0], "%d", &id)
 
-	// 解析时间戳
+	// Parse timestamp
 	timeRegex := regexp.MustCompile(`(\d{2}:\d{2}:\d{2},\d{3}) --> (\d{2}:\d{2}:\d{2},\d{3})`)
 	matches := timeRegex.FindStringSubmatch(lines[1])
 	if len(matches) != 3 {
-		return nil, true, nil // 时间戳格式不正确，继续接收流
+		return nil, true, nil // Timestamp format is incorrect, continue receiving stream
 	}
 
-	// 获取文本内容
+	// Get text content
 	text := strings.Join(lines[2:], " ")
 
-	// 构建单个段落响应（非数组）
+	// Building a single paragraph response (not an array)
 	segment := map[string]interface{}{
 		"id":    id,
 		"start": matches[1],
@@ -812,7 +1161,7 @@ func (h *SpeechToTextWSHandler) ProcessStreamResponse(streamResponse *grpc_clien
 		"text":  text,
 	}
 
-	// 创建自定义响应消息
+	// Create a custom response message
 	resultMsg := map[string]interface{}{
 		"header": map[string]string{
 			"task_id": wsConnID,
@@ -821,17 +1170,17 @@ func (h *SpeechToTextWSHandler) ProcessStreamResponse(streamResponse *grpc_clien
 		"payload": segment,
 	}
 
-	// 序列化响应
+	// serialized response
 	jsonData, err := json.Marshal(resultMsg)
 	if err != nil {
 		return nil, false, fmt.Errorf("failed to marshal response to JSON: %v", err)
 	}
 
-	// 创建HTTP响应
+	// Create an HTTP response
 	header := make(http.Header)
 	header.Set("Content-Type", "application/json")
 
-	// 确定是否继续接收流（根据是否有EOS标记）
+	// Determine whether to continue receiving the stream (depending on whether there is an EOS flag)
 	continueStream := true
 	if inferResponse.Parameters != nil {
 		if eosParam, exists := inferResponse.Parameters["eos"]; exists {
@@ -848,9 +1197,9 @@ func (h *SpeechToTextWSHandler) ProcessStreamResponse(streamResponse *grpc_clien
 	}, continueStream, nil
 }
 
-// getAudioData 获取音频数据
+// getAudioData Get audio data
 func (h *SpeechToTextWSHandler) getAudioData(content types.HTTPContent, isBinary bool, taskType string, actionMessage types.WebSocketActionMessage) []byte {
-	// 处理二进制音频数据
+	// Processing binary audio data
 	if isBinary {
 		logger.LogicLogger.Debug("[Service] Processing binary audio data",
 			"contentType", content.Header.Get("Content-Type"),
@@ -863,20 +1212,17 @@ func (h *SpeechToTextWSHandler) getAudioData(content types.HTTPContent, isBinary
 
 // buildModelInferRequest 构建模型推理请求
 func (h *SpeechToTextWSHandler) buildModelInferRequest(modelName string, audioBytes []byte, params *types.SpeechToTextParams) *grpc_client.ModelInferRequest {
-	// 将参数序列化为JSON字符串
 	paramsJSON, err := params.ToJSON()
 	if err != nil {
 		logger.LogicLogger.Error("[Service] Failed to marshal params to JSON", "error", err)
 		paramsJSON = []byte("{}")
 	}
 
-	// 准备输入数据
 	rawContents := [][]byte{
 		audioBytes,
 		paramsJSON,
 	}
 
-	// 准备输入张量
 	inferTensorInputs := []*grpc_client.ModelInferRequest_InferInputTensor{
 		{
 			Name:     "audio",
@@ -890,7 +1236,6 @@ func (h *SpeechToTextWSHandler) buildModelInferRequest(modelName string, audioBy
 		},
 	}
 
-	// 准备输出张量
 	inferOutputs := []*grpc_client.ModelInferRequest_InferRequestedOutputTensor{
 		{
 			Name: "result",
@@ -976,7 +1321,7 @@ func (h *TextToImageHandler) parseImageParams(requestMap map[string]interface{})
 	}
 
 	if size, ok := requestMap["size"].(string); ok {
-		sizeStr := strings.Split(size, "x")
+		sizeStr := strings.Split(size, "*")
 		if len(sizeStr) == 2 {
 			if num, err := strconv.Atoi(sizeStr[0]); err == nil {
 				height = num
@@ -1039,8 +1384,9 @@ func (h *TextToImageHandler) createResponse(outputList []string) (*http.Response
 	}
 
 	return &http.Response{
-		Header: respHeader,
-		Body:   io.NopCloser(strings.NewReader(string(respBodyBytes))),
+		StatusCode: http.StatusOK,
+		Header:     respHeader,
+		Body:       io.NopCloser(strings.NewReader(string(respBodyBytes))),
 	}, nil
 }
 
@@ -1058,8 +1404,8 @@ func (h *SpeechToTextHandler) PrepareRequest(content types.HTTPContent, target *
 		return nil, fmt.Errorf("failed to get audio path from request body")
 	}
 
-	// 解析语言参数（可选）
-	language := "<|zh|>" // 默认中文
+	// Parsing language parameters (optional)
+	language := "<|zh|>"
 	if lang, ok := requestMap["language"].(string); ok {
 		language = fmt.Sprintf("<|%s|>", lang)
 	}
@@ -1070,27 +1416,27 @@ func (h *SpeechToTextHandler) PrepareRequest(content types.HTTPContent, target *
 		ReturnFormat: "text",
 	}
 
-	// 将参数序列化为JSON字符串
+	// Serialize parameters as JSON strings
 	paramsJSON, err := params.ToJSON()
 	if err != nil {
 		logger.LogicLogger.Error("[Service] Failed to marshal params to JSON", "error", err)
 		paramsJSON = []byte("{}")
 	}
 
-	// 读取音频文件
+	// Read audio files
 	audioBytes, err := os.ReadFile(audioPath)
 	if err != nil {
 		logger.LogicLogger.Error("[Service] Failed to read audio file", "error", err)
 		return nil, err
 	}
 
-	// 准备输入数据
+	// Ready to enter data
 	rawContents := [][]byte{
 		audioBytes,
 		paramsJSON,
 	}
 
-	// 准备输入张量
+	// prepare input tensor
 	inferTensorInputs := []*grpc_client.ModelInferRequest_InferInputTensor{
 		{
 			Name:     "audio",
@@ -1104,7 +1450,7 @@ func (h *SpeechToTextHandler) PrepareRequest(content types.HTTPContent, target *
 		},
 	}
 
-	// 准备输出张量
+	// prepare output tensor
 	inferOutputs := []*grpc_client.ModelInferRequest_InferRequestedOutputTensor{
 		{
 			Name: "result",
@@ -1124,12 +1470,12 @@ func (h *SpeechToTextHandler) ProcessResponse(inferResponse *grpc_client.ModelIn
 		return nil, fmt.Errorf("empty response from model")
 	}
 
-	// 解析时间戳格式的文本
+	// Parsing text in timestamp format
 	srtText := string(inferResponse.RawOutputContents[0])
 	lines := strings.Split(strings.TrimSpace(srtText), "\n")
 
 	segments := make([]map[string]interface{}, 0, len(lines))
-	// 匹配格式: [开始时间, 结束时间] 文本内容
+	// Match format: [start time, end time] Text content
 	timeRegex := regexp.MustCompile(`^\[(\d+\.\d+),\s*(\d+\.\d+)\]\s*(.+)$`)
 
 	for i, line := range lines {
@@ -1138,7 +1484,7 @@ func (h *SpeechToTextHandler) ProcessResponse(inferResponse *grpc_client.ModelIn
 			continue
 		}
 
-		// 解析时间戳和文本
+		// Parsing timestamps and text
 		matches := timeRegex.FindStringSubmatch(line)
 		if len(matches) != 4 {
 			continue
@@ -1148,7 +1494,7 @@ func (h *SpeechToTextHandler) ProcessResponse(inferResponse *grpc_client.ModelIn
 		endTime := matches[2]
 		text := strings.TrimSpace(matches[3])
 
-		// 将秒数转换为时:分:秒,毫秒格式
+		// Convert seconds to hours: minutes: seconds, milliseconds format
 		startTimeFormatted := utils.FormatSecondsToSRT(startTime)
 		endTimeFormatted := utils.FormatSecondsToSRT(endTime)
 
@@ -1162,18 +1508,18 @@ func (h *SpeechToTextHandler) ProcessResponse(inferResponse *grpc_client.ModelIn
 		segments = append(segments, segment)
 	}
 
-	// 构建JSON响应
+	// Building JSON responses
 	response := map[string]interface{}{
 		"segments": segments,
 	}
 
-	// 转换为JSON
+	// Convert to JSON
 	jsonData, err := json.MarshalIndent(response, "", "    ")
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal response to JSON: %v", err)
 	}
 
-	// 创建HTTP响应
+	// Create an HTTP response
 	header := make(http.Header)
 	header.Set("Content-Type", "application/json")
 
@@ -1192,7 +1538,136 @@ func NewGRPCServiceHandler(serviceType string) GRPCServiceHandler {
 		return NewSpeechToTextHandler()
 	case types.ServiceSpeechToTextWS:
 		return NewSpeechToTextWSHandler()
+	case types.ServiceTextToSpeech:
+		return NewTextToSpeechHandler()
 	default:
 		return nil
 	}
+}
+
+// TextToSpeechHandler handles text-to-speech service
+type TextToSpeechHandler struct {
+	BaseGRPCHandler
+}
+
+func NewTextToSpeechHandler() *TextToSpeechHandler {
+	return &TextToSpeechHandler{
+		BaseGRPCHandler: BaseGRPCHandler{},
+	}
+}
+
+func (h *TextToSpeechHandler) PrepareRequest(content types.HTTPContent, target *types.ServiceTarget) (*grpc_client.ModelInferRequest, error) {
+	var requestMap map[string]interface{}
+	if err := json.Unmarshal(content.Body, &requestMap); err != nil {
+		logger.LogicLogger.Error("[Service] Failed to unmarshal request body", "error", err)
+		return nil, err
+	}
+
+	// Parse input text
+	text, ok := requestMap["text"].(string)
+	if !ok {
+		logger.LogicLogger.Error("[Service] Failed to get text from request body")
+		return nil, fmt.Errorf("failed to get text from request body")
+	}
+
+	// parse timbre
+	voice := types.VoiceMale // 默认男声
+	if _, ok := requestMap["voice"].(string); ok {
+		voice = requestMap["voice"].(string)
+	}
+
+	params := []byte("{}")
+
+	// Ready to enter data
+	rawContents := [][]byte{
+		[]byte(text),
+		[]byte(voice),
+		params,
+	}
+
+	// prepare input tensor
+	inferTensorInputs := []*grpc_client.ModelInferRequest_InferInputTensor{
+		{
+			Name:     "text",
+			Datatype: "BYTES",
+			Shape:    []int64{1},
+		},
+		{
+			Name:     "voice",
+			Datatype: "BYTES",
+			Shape:    []int64{1},
+		},
+		{
+			Name:     "params",
+			Datatype: "BYTES",
+			Shape:    []int64{1},
+		},
+	}
+
+	// prepare output tensor
+	inferOutputs := []*grpc_client.ModelInferRequest_InferRequestedOutputTensor{
+		{
+			Name: "audio",
+		},
+	}
+
+	return &grpc_client.ModelInferRequest{
+		ModelName:        target.Model,
+		Inputs:           inferTensorInputs,
+		Outputs:          inferOutputs,
+		RawInputContents: rawContents,
+	}, nil
+}
+
+func (h *TextToSpeechHandler) ProcessResponse(inferResponse *grpc_client.ModelInferResponse) (*http.Response, error) {
+	if len(inferResponse.RawOutputContents) == 0 {
+		return nil, fmt.Errorf("empty response from model")
+	}
+
+	audioData := inferResponse.RawOutputContents[0]
+	// Write audioData to wav file
+	if len(inferResponse.RawOutputContents) == 0 {
+		return nil, fmt.Errorf("empty response from model")
+	}
+
+	now := time.Now()
+	randNum := rand.Intn(10000)
+	DownloadPath, _ := utils.GetDownloadDir()
+	audioName := fmt.Sprintf("%d%02d%02d%02d%02d%02d%04d.wav", now.Year(), now.Month(), now.Day(), now.Hour(), now.Minute(), now.Second(), randNum)
+	audioPath := fmt.Sprintf("%s/%s", DownloadPath, audioName)
+	err := os.WriteFile(audioPath, audioData, 0o644)
+	if err != nil {
+		return nil, fmt.Errorf("write file failed")
+	}
+
+	// Building JSON responses
+	response := map[string]interface{}{
+		"url": audioPath,
+	}
+
+	// Convert to JSON
+	jsonData, err := json.MarshalIndent(response, "", "    ")
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal response to JSON: %v", err)
+	}
+
+	// Create an HTTP response
+	header := make(http.Header)
+	header.Set("Content-Type", "application/json")
+
+	return &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     header,
+		Body:       io.NopCloser(bytes.NewReader(jsonData)),
+	}, nil
+}
+
+func (h *TextToSpeechHandler) PrepareStreamRequest(content types.HTTPContent, st *ServiceTask) (*grpc_client.ModelInferRequest, error) {
+	// Here you can implement text-to-speech streaming request preparation logic
+	return nil, fmt.Errorf("text-to-speech streaming request preparation not implemented")
+}
+
+func (h *TextToSpeechHandler) ProcessStreamResponse(streamResponse *grpc_client.ModelStreamInferResponse, wsConnID string) (*http.Response, bool, error) {
+	// Here you can implement text-to-speech streaming response processing logic
+	return nil, false, fmt.Errorf("text-to-speech streaming response  not implemented")
 }

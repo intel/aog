@@ -1,0 +1,13 @@
+--extra-index-url https://download.pytorch.org/whl/cpu
+--extra-index-url https://storage.openvinotoolkit.org/simple/wheels/nightly
+--pre
+openvino-tokenizers[transformers]==2025.2.0
+openvino==2025.2.0
+openvino-genai==2025.2.0
+pillow
+librosa
+ffmpeg-python
+webrtcvad-wheels
+setuptools
+soundcard
+python-multipart

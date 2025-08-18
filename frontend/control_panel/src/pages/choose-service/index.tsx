@@ -54,7 +54,10 @@ export default function ChooseService() {
       >
         <div className={styles.commonTitle}>Choose Service</div>
         {installedServices.length ? (
-          <Flex gap={20}>
+          <Flex
+            gap={20}
+            wrap
+          >
             {installedServices.map((service) => (
               <NavLink
                 key={service.service_name}

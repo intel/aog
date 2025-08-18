@@ -23,9 +23,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"intel.com/aog/internal/api/dto"
-	"intel.com/aog/internal/logger"
-	"intel.com/aog/internal/utils/bcode"
+	"github.com/intel/aog/internal/api/dto"
+	"github.com/intel/aog/internal/logger"
+	"github.com/intel/aog/internal/utils/bcode"
 )
 
 func (t *AOGCoreServer) CreateServiceProvider(c *gin.Context) {

@@ -1,0 +1,114 @@
+{
+  "version": "v0.5",
+  "services": {
+    "models": {
+      "service_providers": {
+        "local": "local_ollama_models"
+      },
+      "hybrid_policy": "default"
+    },
+    "chat": {
+      "service_providers": {
+        "local": "local_ollama_chat"
+      },
+      "hybrid_policy": "default"
+    },
+    "text-to-image": {
+      "service_providers": {
+        "local": "local_openvino_text_to_image",
+        "remote": "remote_aliyun_text_to_image"
+      },
+      "hybrid_policy": "default"
+    },
+    "speech-to-text": {
+      "service_providers": {
+        "local": "local_openvino_speech_to_text"
+      },
+      "hybrid_policy": "always_local"
+    },
+    "speech-to-text-ws": {
+      "service_providers": {
+        "local": "local_openvino_speech_to_text_ws"
+      },
+      "hybrid_policy": "always_local"
+    },
+    "text-to-speech": {
+      "service_providers": {
+        "local": "local_openvino_text_to_speech"
+      },
+      "hybrid_policy": "always_local"
+    }
+  },
+  "service_providers": {
+    "local_ollama_models": {
+      "service_name": "models",
+      "service_source": "local",
+      "desc": "Local ollama models",
+      "api_flavor": "ollama",
+      "method": "GET",
+      "auth_type": "none",
+      "auth_key": "",
+      "models": []
+    },
+    "local_ollama_chat": {
+      "service_name": "chat",
+      "service_source": "local",
+      "desc": "Local ollama chat/completion",
+      "api_flavor": "ollama",
+      "method": "POST",
+      "auth_type": "none",
+      "auth_key": "",
+      "models": []
+    },
+    "local_openvino_text_to_image": {
+      "service_name": "text-to-image",
+      "service_source": "local",
+      "desc": "Local OpenVINO text-to-image",
+      "api_flavor": "openvino",
+      "method": "POST",
+      "auth_type": "none",
+      "auth_key": "",
+      "models": []
+    },
+    "remote_aliyun_text_to_image": {
+      "service_name": "text-to-image",
+      "service_source": "remote",
+      "desc": "Remote Aliyun text-to-image",
+      "api_flavor": "aliyun",
+      "method": "POST",
+      "auth_type": "apikey",
+      "auth_key": "",
+      "models": []
+    },
+    "local_openvino_speech_to_text": {
+      "service_name": "speech-to-text",
+      "service_source": "local",
+      "desc": "Local OpenVINO speech-to-text",
+      "api_flavor": "openvino",
+      "method": "POST",
+      "auth_type": "none",
+      "auth_key": "",
+      "models": []
+    },
+    "local_openvino_speech_to_text_ws": {
+      "service_name": "speech-to-text-ws",
+      "service_source": "local",
+      "desc": "Local OpenVINO speech-to-text WebSocket",
+      "api_flavor": "openvino",
+      "method": "WEBSOCKET",
+      "auth_type": "none",
+      "auth_key": "",
+      "models": []
+    },
+    "local_openvino_text_to_speech": {
+      "service_name": "text-to-speech",
+      "service_source": "local",
+      "desc": "Local OpenVINO text-to-speech",
+      "api_flavor": "openvino",
+      "method": "POST",
+      "auth_type": "none",
+      "auth_key": "",
+      "models": []
+    }
+  }
+}

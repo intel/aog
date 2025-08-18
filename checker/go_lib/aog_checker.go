@@ -114,7 +114,7 @@ func isAOGAvailable() bool {
 
 func getServiceProvider() bool {
 	client := http.Client{Timeout: 3 * time.Second}
-	resp, err := client.Get("http://127.0.0.1:16688/aog/v0.4/service_provider")
+	resp, err := client.Get("http://127.0.0.1:16688/aog/v0.2/service_provider")
 	if err != nil {
 		return false
 	}

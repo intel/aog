@@ -20,7 +20,7 @@ import { NavLink } from 'react-router-dom';
 import styles from './index.module.scss';
 import RightIcon from '@/components/icons/right.svg?react';
 export type Model = {
-  Avatar: string;
+  avatar: string;
   model_name: string;
   provider_name: string;
   status: string;
@@ -64,7 +64,7 @@ export const Models: React.FC<ModelsProps> = (props: ModelsProps) => {
           >
             <div className={styles.modelImage}>
               <img
-                src={model.Avatar}
+                src={model.avatar}
                 alt=""
               />
             </div>

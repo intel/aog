@@ -15,10 +15,10 @@
 //*****************************************************************************
 
 // 常量定义
-const AOG_VERSION = 'aog/v0.4';
+const AOG_VERSION = 'aog/v0.2';
 const WIN_AOG_PATH = 'AOG';
 const WIN_AOG_EXE = 'aog.exe';
-const MAC_AOG_PATH = '/usr/local/bin';
+const MAC_AOG_PATH = '/usr/local/bin/aog';
 const MAC_AOG_EXE = 'aog';
 //TODO: 把下载域名拆开
 const WIN_INSTALLER_URL = 'https://smartvision-aipc-open.oss-cn-hangzhou.aliyuncs.com/aog/windows/aog-installer-latest.exe';
@@ -32,13 +32,13 @@ const AOG_ENGINE_PATH = "http://localhost:16688/engine/health";
 
 const PLATFORM_CONFIG = {
   win32: {
-    downloadUrl: 'https://smartvision-aipc-open.oss-cn-hangzhou.aliyuncs.com/aog/windows/aog-installer-latest.exe',
-    installerFileName: 'aog-installer-latest.exe',
+    downloadUrl: WIN_INSTALLER_URL,
+    installerFileName: WIN_INSTALLER_NAME,
     userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
   },
   darwin: {
-    downloadUrl: 'https://smartvision-aipc-open.oss-cn-hangzhou.aliyuncs.com/aog/macos/aog-installer-latest.pkg',
-    installerFileName: 'aog-installer-latest.pkg',
+    downloadUrl: MAC_INSTALLER_URL,
+    installerFileName: MAC_INSTALLER_NAME,
     userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)'
   }
 };

@@ -106,7 +106,7 @@ ______________
 
 .. code-block:: shell
 
-    curl https://localhost:16688/aog/v0.4/services/chat\
+    curl https://localhost:16688/aog/v0.2/services/chat\
     -H "Content-Type: application/json" \
     -d '{
         "model": "deepseek-r1:7b",
@@ -135,6 +135,180 @@ ______________
         "model": "deepseek-r1:7b"
     }
 
+
+Generate 服务
+=====================
+
+.. _`custom_properties_generate`:
+
+Custom Properties of its Service Providers
+--------------------------------------------
+
+除了在 :ref:`Metadata of AOG Service Provider` 中定义的常见属性外，生成服务提供商还可以将以下属性放入服务提供商元数据的 ``custom_properties`` 字段中。
+
+.. list-table::
+   :header-rows: 1
+
+   * - 自定义属性
+     - 值
+     - 描述
+   * - max_input_tokens
+     - integer
+     - 上下文窗口宽度或允许输入的最大token数
+
+请求格式
+--------------------------------------------
+
+.. _`header_generate`:
+
+请求头
+___________
+
+参见 :ref:`Common Fields in Header of Request`
+
+.. _`request_generate`:
+
+请求
+______________
+
+除了在 :ref:`Common Fields in Request Body` 中定义的字段外，服务在其请求 JSON 体中也可能包含以下字段：
+
+.. list-table::
+   :header-rows: 1
+   :widths: 10 35 10 45
+
+   * - 附加 JSON 字段
+     - 值
+     - 是否必需
+     - 描述
+   * - prompt
+     - string
+     - 必填
+     - 需要生成内容的提示词
+   * - stream
+     - boolean
+     - 可选
+     - 是否流式返回
+   * - think
+     - boolean
+     - 可选
+     - 是否返回思考内容
+   * - images
+     - Array
+     - 可选
+     - 图片的 base64 编码
+
+响应格式
+--------------------------------------------
+
+除了在 :ref:`Common Fields in Response Body` 中定义的字段外，该服务在其响应 JSON 体中可能还有以下字段：
+
+.. list-table::
+   :header-rows: 1
+   :widths: 10 35 10 45
+
+   * - 附加 JSON 字段
+     - 值
+     - 是否必需
+     - 描述
+   * - success
+     - boolean
+     - 必填
+     - 请求是否成功
+   * - message
+     - object
+     - 必填
+     - 生成的内容及相关信息
+   * - model
+     - string
+     - 必填
+     - 使用的生成模型
+   * - created_at
+     - string
+     - 必填
+     - 响应生成时间
+   * - finish_reason
+     - string
+     - 必填
+     - 结束原因
+   * - aog_info
+     - object
+     - 可选
+     - 服务端信息
+
+.. list-table::
+   :header-rows: 1
+   :widths: 10 35 10 45
+
+   * - message 字段
+     - 类型
+     - 是否必需
+     - 描述
+   * - created_at
+     - string
+     - 必填
+     - 消息生成时间
+   * - finish_reason
+     - string
+     - 必填
+     - 结束原因
+   * - finished
+     - boolean
+     - 必填
+     - 是否完成
+   * - id
+     - string
+     - 必填
+     - 消息ID
+   * - model
+     - string
+     - 必填
+     - 使用的模型
+   * - response
+     - string
+     - 必填
+     - 生成的文本内容
+
+示例
+--------------
+
+发送请求
+
+.. code-block:: shell
+
+    curl https://localhost:16688/aog/v0.4/services/generate\
+    -H "Content-Type: application/json" \
+    -d '{
+        "model": "gemma3:4b",
+        "stream": false,
+        "think": false,
+        "prompt": "根据图片内容，生成一首短诗",
+        "images": ['iVBORw0KGgoAAAANSUhEUgAAAgAAAAIACAIAA...']
+    }'
+
+返回响应
+
+.. code-block:: json
+
+    {
+      "success": true,
+      "message": {
+        "created_at": "2025-08-14T08:12:24.4963364Z",
+        "finish_reason": "stop",
+        "finished": true,
+        "id": "115177740913632811435",
+        "model": "gemma3:4b",
+        "response": "绿衣孩童笑\n轮盘映夕阳\n静物伴光照"
+      },
+      "model": "gemma3:4b",
+      "created_at": "2025-08-14T08:12:24.4963364Z",
+      "finish_reason": "stop",
+      "aog_info": {
+        "served_by": null,
+        "served_by_api_flavor": null,
+        "response_time": null
+      }
+    }
 
 
 Embed 服务

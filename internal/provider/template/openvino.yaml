@@ -1,4 +1,4 @@
-version: "0.2"
+version: "0.5"
 name: openvino # the name should be aligned with file name
 services:
     text-to-image:
@@ -21,7 +21,7 @@ services:
                          "model": $model,
                          "prompt": prompt,
                          "batch":$exists(n) ? n : 1,
-                         "size": $exists(size) ? size : "1024x1024"
+                         "size": $exists(size) ? size : "1024*1024"
                       }
 
                 - converter: header
@@ -36,7 +36,7 @@ services:
                          "model": $model,
                          "prompt": prompt,
                          "batch":$exists(n) ? n : 1,
-                         "size": $exists(size) ? size : "1024x1024"
+                         "size": $exists(size) ? size : "1024*1024"
                       }
 
                 - converter: header
@@ -48,9 +48,7 @@ services:
                 - converter: jsonata
                   config: |
                       {
-                          "data": {
-                              "url": local_path
-                                  }
+                          "url": local_path
                       }
         response_from_aog:
             conversion:
@@ -106,9 +104,7 @@ services:
                 - converter: jsonata
                   config: |
                       {
-                          "data": {
-                              "segments": segments
-                                  }
+                          "segments": segments
                       }
         response_from_aog:
             conversion:
@@ -164,9 +160,7 @@ services:
                 - converter: jsonata
                   config: |
                       {
-                          "data": {
-                              "segments": segments
-                                  }
+                          "segments": segments
                       }
         response_from_aog:
             conversion:
@@ -177,4 +171,52 @@ services:
                            "data": {
                               "url": output.results[0].url
                                   }
+                      }
+
+    text-to-speech:
+        task_type: "text-to-speech"
+        protocol: "GRPC"
+        expose_protocol: "HTTP"
+        url: "127.0.0.1:9000"
+        endpoints: [""]
+        extra_url: ""
+        auth_type: ""
+        install_raw_routes: # also install routes without aog prefix in url path
+        default_model: "NamoLi/speecht5-tts"
+        request_segments: 1 # request
+        extra_headers: ""
+        request_to_aog:
+            conversion:
+                - converter: jsonata
+                  config: |
+                      {
+                         "model": $model,
+                         "text": text,
+                         "voice":$exists(voice) ? voice : "male"
+                      }
+
+                - converter: header
+                  config:
+                      set:
+                          Content-Type: application/json
+        request_from_aog:
+            conversion:
+                - converter: jsonata
+                  config: |
+                      {
+                         "model": $model,
+                         "text": text,
+                         "voice":$exists(voice) ? voice : "male"
+                      }
+
+                - converter: header
+                  config:
+                      set:
+                          Content-Type: application/json
+        response_to_aog:
+            conversion:
+                - converter: jsonata
+                  config: |
+                      {
+                          "url": url
                       }

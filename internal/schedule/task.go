@@ -29,10 +29,11 @@ import (
 	"strings"
 	"time"
 
-	"intel.com/aog/internal/convert"
-	"intel.com/aog/internal/datastore"
-	"intel.com/aog/internal/logger"
-	"intel.com/aog/internal/types"
+	"github.com/intel/aog/internal/convert"
+	"github.com/intel/aog/internal/datastore"
+	"github.com/intel/aog/internal/logger"
+	"github.com/intel/aog/internal/manager"
+	"github.com/intel/aog/internal/types"
 )
 
 type TaskMiddleware interface {
@@ -120,6 +121,23 @@ func NewServiceContext(task *ServiceTask) *ServiceContext {
 func (st *ServiceTask) Run() error {
 	logger.LogicLogger.Debug("[Service] ServiceTask start run......")
 
+	// Get model name for subsequent cleanup
+	var modelName string
+	if st.Target != nil && st.Target.Model != "" && st.Target.Location == types.ServiceSourceLocal {
+		modelName = st.Target.Model
+		// Note: For requests that need queuing, the model has already been marked as in use in queue processing
+		// For requests that don't need queuing, still need to mark here
+		if !manager.NeedsQueuing(st.Target.Location, st.Request.Service) {
+			mmm := manager.GetModelManager()
+			if err := mmm.MarkModelInUse(modelName); err != nil {
+				logger.LogicLogger.Warn("[Service] Failed to mark model as in use",
+					"model", modelName, "error", err)
+			} else {
+				logger.LogicLogger.Debug("[Service] Model marked as in use", "model", modelName)
+			}
+		}
+	}
+
 	ctx := NewServiceContext(st)
 
 	// Build the processing chain
@@ -132,7 +150,32 @@ func (st *ServiceTask) Run() error {
 	reqConverter.SetNext(serviceInvoker)
 	serviceInvoker.SetNext(respHandler)
 
-	return middleware.Handle(ctx)
+	// Execute processing chain
+	err := middleware.Handle(ctx)
+
+	// Model state tracking: mark model as idle after task completion
+	if modelName != "" {
+		mmm := manager.GetModelManager()
+
+		// Check if it's a local non-embed request that needs to complete queuing processing
+		if st.Target != nil && manager.NeedsQueuing(st.Target.Location, st.Request.Service) {
+			// Local non-embed request: complete queuing processing
+			logger.LogicLogger.Debug("[Service] Completing local model request",
+				"model", modelName, "taskID", st.Schedule.Id, "service", st.Request.Service)
+
+			mmm.CompleteLocalModelRequest(st.Schedule.Id)
+		} else {
+			// Other requests: normally mark as idle
+			if markErr := mmm.MarkModelIdle(modelName); markErr != nil {
+				logger.LogicLogger.Warn("[Service] Failed to mark model as idle",
+					"model", modelName, "error", markErr)
+			} else {
+				logger.LogicLogger.Debug("[Service] Model marked as idle", "model", modelName)
+			}
+		}
+	}
+
+	return err
 }
 
 func (st *ServiceTask) invokeGRPCServiceProvider(sp *types.ServiceProvider, content types.HTTPContent) (*http.Response, error) {
@@ -210,7 +253,7 @@ func (h *RequestConversionHandler) Handle(ctx *ServiceContext) error {
 		return fmt.Errorf("service Provider not found for %s of Service %s", ctx.Task.Target.Location, ctx.Task.Request.Service)
 	}
 
-	// 判断请求头是否为二进制数据，若是则跳过转换
+	// Check if request header is binary data, skip conversion if so
 	if ctx.Request.Header.Get("Content-Type") != "application/octet-stream" ||
 		ctx.Request.Header.Get("Content-Type") != "application/x-binary" {
 		requestFlavor, targetFlavor, err := h.getFlavors(ctx.Task)
@@ -293,7 +336,7 @@ func (h *ServiceInvokerHandler) Handle(ctx *ServiceContext) error {
 			"max_retries", ctx.MaxRetries,
 			"error", err)
 
-		// 指数退避
+		// Exponential backoff
 		time.Sleep(time.Duration(1<<uint(ctx.RetryCount)) * time.Second)
 	}
 
@@ -309,7 +352,7 @@ func (h *ServiceInvokerHandler) tryInvoke(ctx *ServiceContext) error {
 	}
 
 	if err != nil {
-		// 判断是否是可重试的错误
+		// Check if it's a retryable error
 		if isTemporaryError(err) {
 			return &RetryableError{Err: err}
 		}
@@ -325,7 +368,7 @@ func isTemporaryError(err error) bool {
 		return false
 	}
 
-	// 网络超时、连接重置等错误可以重试
+	// Network timeout, connection reset and other errors can be retried
 	if netErr, ok := err.(net.Error); ok {
 		return netErr.Temporary()
 	}
@@ -468,7 +511,14 @@ func (sp *StreamProcessor) processChunk(reader *bufio.Reader) ([]byte, error) {
 	if len(bytes.TrimSpace(chunk)) == 0 {
 		return nil, &types.DropAction{}
 	}
-
+	// handle abnormal chunk
+	if sp.ctx.Task.Target.ToFavor == types.FlavorAliYun && sp.ctx.Task.Target.ServiceProvider.ServiceName == types.ServiceTextToSpeech {
+		i := strings.Index(string(chunk), "data:")
+		if i != -1 {
+			data := strings.TrimSpace(string(chunk)[i+5:])
+			chunk = []byte(data)
+		}
+	}
 	// 需要转换
 	if sp.targetFlavor.Name() != sp.requestFlavor.Name() {
 		content := types.HTTPContent{

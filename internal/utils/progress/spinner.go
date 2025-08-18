@@ -17,19 +17,19 @@ func ShowLoadingAnimation(stopChan chan struct{}, wg *sync.WaitGroup, msg string
 	for {
 		select {
 		case <-stopChan:
-			// 接收到停止信号，退出动画循环
+			// Received stop signal, exit animation loop
 			fmt.Printf("\r%s completed!            \n", msg)
 			return
 		default:
-			// 打印当前动画字符
+			// Print current animation character
 			fmt.Printf("\r%s...  %c", msg, animations[animationIndex][charIndex])
-			// 移动到下一个动画字符
+			// Move to next animation character
 			charIndex = (charIndex + 1) % len(animations[animationIndex])
-			// 每隔一段时间切换动画样式
+			// Switch animation style after a period of time
 			if charIndex == 0 {
 				animationIndex = (animationIndex + 1) % len(animations)
 			}
-			// 暂停一段时间，控制动画速度
+			// Pause for a while to control animation speed
 			time.Sleep(150 * time.Millisecond)
 		}
 	}

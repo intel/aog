@@ -30,12 +30,12 @@ import (
 
 	"github.com/MatusOllah/slogcolor"
 	"github.com/fatih/color"
+	"github.com/intel/aog/internal/client"
+	"github.com/intel/aog/internal/constants"
+	"github.com/intel/aog/internal/types"
+	"github.com/intel/aog/internal/utils"
+	"github.com/intel/aog/version"
 	"github.com/spf13/pflag"
-	"intel.com/aog/internal/client"
-	"intel.com/aog/internal/constants"
-	"intel.com/aog/internal/types"
-	"intel.com/aog/internal/utils"
-	"intel.com/aog/version"
 )
 
 const (
@@ -69,24 +69,32 @@ const (
 	DefaultLogExpireDays = 7
 
 	// Environment variable keys
-	EnvAOGHost = "AOG_HOST"
+	EnvAOGHost                = "AOG_HOST"
+	EnvModelIdleTimeout       = "AOG_MODEL_IDLE_TIMEOUT"
+	EnvModelCleanupInterval   = "AOG_MODEL_CLEANUP_INTERVAL"
+	EnvLocalModelQueueSize    = "AOG_LOCAL_MODEL_QUEUE_SIZE"
+	EnvLocalModelQueueTimeout = "AOG_LOCAL_MODEL_QUEUE_TIMEOUT"
 )
 
-var GlobalAOGEnvironment *AOGEnvironment
+var GlobalEnvironment *AOGEnvironment
 
 type AOGEnvironment struct {
-	ApiHost           string // host
-	Datastore         string // path to the datastore
-	DatastoreType     string // type of the datastore
-	Verbose           string // debug, info or warn
-	RootDir           string // root directory for all assets such as config files
-	APIVersion        string // version of this core app layer (gateway etc.)
-	SpecVersion       string // version of the core specification this app layer supports
-	LogDir            string // logs dir
-	LogHTTP           string // path to the http log
-	LogLevel          string // log level
-	LogFileExpireDays int    // log file expiration time
-	ConsoleLog        string // aog server console log path
+	ApiHost                string        // host
+	Datastore              string        // path to the datastore
+	DatastoreType          string        // type of the datastore
+	Verbose                string        // debug, info or warn
+	RootDir                string        // root directory for all assets such as config files
+	APIVersion             string        // version of this core app layer (gateway etc.)
+	SpecVersion            string        // version of the core specification this app layer supports
+	LogDir                 string        // logs dir
+	LogHTTP                string        // path to the http log
+	LogLevel               string        // log level
+	LogFileExpireDays      int           // log file expiration time
+	ConsoleLog             string        // aog server console log path
+	ModelIdleTimeout       time.Duration // model idle timeout duration
+	ModelCleanupInterval   time.Duration // model cleanup check interval
+	LocalModelQueueSize    int           // local model queue size
+	LocalModelQueueTimeout time.Duration // local model queue timeout
 }
 
 var (
@@ -123,7 +131,6 @@ func Host() *url.URL {
 	hostport, path, _ := strings.Cut(hostport, "/")
 	host, port, err := net.SplitHostPort(hostport)
 	if err != nil {
-		// host, port = "127.0.0.1", defaultPort
 		host, port = constants.DefaultHost, defaultPort
 		if ip := net.ParseIP(strings.Trim(hostport, "[]")); ip != nil {
 			host = ip.String()
@@ -152,18 +159,90 @@ func Var(key string) string {
 func NewAOGEnvironment() *AOGEnvironment {
 	once.Do(func() {
 		env := AOGEnvironment{
-			ApiHost:           constants.DefaultHost + ":" + constants.DefaultHTTPPort,
-			Datastore:         DefaultDatabaseFile,
-			DatastoreType:     DatastoreSQLite,
-			LogDir:            LogsDirectory,
-			LogHTTP:           ServerLogFile,
-			LogLevel:          DefaultLogLevel,
-			LogFileExpireDays: DefaultLogExpireDays,
-			Verbose:           DefaultVerbose,
-			RootDir:           DefaultRootDir,
-			APIVersion:        version.AOGVersion,
-			SpecVersion:       version.AOGVersion,
-			ConsoleLog:        ConsoleLogFile,
+			ApiHost:                constants.DefaultHost + ":" + constants.DefaultHTTPPort,
+			Datastore:              DefaultDatabaseFile,
+			DatastoreType:          DatastoreSQLite,
+			LogDir:                 LogsDirectory,
+			LogHTTP:                ServerLogFile,
+			LogLevel:               DefaultLogLevel,
+			LogFileExpireDays:      DefaultLogExpireDays,
+			Verbose:                DefaultVerbose,
+			RootDir:                DefaultRootDir,
+			APIVersion:             version.AOGVersion,
+			SpecVersion:            version.AOGVersion,
+			ConsoleLog:             ConsoleLogFile,
+			ModelIdleTimeout:       5 * time.Minute,  // Default 5 minutes
+			ModelCleanupInterval:   1 * time.Minute,  // Default 1 minute
+			LocalModelQueueSize:    10,               // Default queue size 10
+			LocalModelQueueTimeout: 30 * time.Second, // Default queue timeout 30 seconds
+		}
+
+		// Read model management configuration from environment variables
+		if idleTimeoutStr := Var(EnvModelIdleTimeout); idleTimeoutStr != "" {
+			if duration, err := time.ParseDuration(idleTimeoutStr); err == nil {
+				env.ModelIdleTimeout = duration
+			} else {
+				slog.Warn("Invalid model idle timeout, using default", "value", idleTimeoutStr, "default", env.ModelIdleTimeout)
+			}
+		}
+
+		if cleanupIntervalStr := Var(EnvModelCleanupInterval); cleanupIntervalStr != "" {
+			if duration, err := time.ParseDuration(cleanupIntervalStr); err == nil {
+				env.ModelCleanupInterval = duration
+			} else {
+				slog.Warn("Invalid model cleanup interval, using default", "value", cleanupIntervalStr, "default", env.ModelCleanupInterval)
+			}
+		}
+
+		// Read local model queue configuration from environment variables
+		if queueSizeStr := Var(EnvLocalModelQueueSize); queueSizeStr != "" {
+			if size, err := strconv.Atoi(queueSizeStr); err == nil && size > 0 {
+				env.LocalModelQueueSize = size
+			} else {
+				slog.Warn("Invalid local model queue size, using default", "value", queueSizeStr, "default", env.LocalModelQueueSize)
+			}
+		}
+
+		if queueTimeoutStr := Var(EnvLocalModelQueueTimeout); queueTimeoutStr != "" {
+			if duration, err := time.ParseDuration(queueTimeoutStr); err == nil {
+				env.LocalModelQueueTimeout = duration
+			} else {
+				slog.Warn("Invalid local model queue timeout, using default", "value", queueTimeoutStr, "default", env.LocalModelQueueTimeout)
+			}
+		}
+
+		// Read model management configuration from environment variables
+		if idleTimeoutStr := Var(EnvModelIdleTimeout); idleTimeoutStr != "" {
+			if duration, err := time.ParseDuration(idleTimeoutStr); err == nil {
+				env.ModelIdleTimeout = duration
+			} else {
+				slog.Warn("Invalid model idle timeout, using default", "value", idleTimeoutStr, "default", env.ModelIdleTimeout)
+			}
+		}
+
+		if cleanupIntervalStr := Var(EnvModelCleanupInterval); cleanupIntervalStr != "" {
+			if duration, err := time.ParseDuration(cleanupIntervalStr); err == nil {
+				env.ModelCleanupInterval = duration
+			} else {
+				slog.Warn("Invalid model cleanup interval, using default", "value", cleanupIntervalStr, "default", env.ModelCleanupInterval)
+			}
+		}
+
+		// Read local model queue configuration from environment variables
+		if queueSizeStr := Var(EnvLocalModelQueueSize); queueSizeStr != "" {
+			if size, err := strconv.Atoi(queueSizeStr); err == nil && size > 0 {
+				env.LocalModelQueueSize = size
+			} else {
+				slog.Warn("Invalid local model queue size, using default", "value", queueSizeStr, "default", env.LocalModelQueueSize)
+			}
+		}
+
+		if queueTimeoutStr := Var(EnvLocalModelQueueTimeout); queueTimeoutStr != "" {
+			if duration, err := time.ParseDuration(queueTimeoutStr); err == nil {
+				env.LocalModelQueueTimeout = duration
+			} else {
+				slog.Warn("Invalid local model queue timeout, using default", "value", queueTimeoutStr, "default", env.LocalModelQueueTimeout)
+			}
 		}
 
 		var err error

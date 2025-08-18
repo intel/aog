@@ -34,4 +34,6 @@ var (
 	ErrEngineDeleteModel = NewBcode(http.StatusInternalServerError, 30006, "engine delete model failed")
 
 	ErrNoRecommendModel = NewBcode(http.StatusNotFound, 30007, "No Recommend Model")
+
+	ErrModelServiceNotAvailable = NewBcode(http.StatusInternalServerError, 30008, "Model service not available")
 )

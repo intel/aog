@@ -28,11 +28,11 @@ import (
 	"runtime"
 	"strconv"
 
-	"intel.com/aog/internal/client"
-	"intel.com/aog/internal/constants"
-	"intel.com/aog/internal/logger"
-	"intel.com/aog/internal/types"
-	"intel.com/aog/internal/utils"
+	"github.com/intel/aog/internal/client"
+	"github.com/intel/aog/internal/constants"
+	"github.com/intel/aog/internal/logger"
+	"github.com/intel/aog/internal/types"
+	"github.com/intel/aog/internal/utils"
 )
 
 const (
@@ -349,13 +349,13 @@ func (o *OllamaProvider) InstallEngine() error {
 
 	} else {
 		if utils.IpexOllamaSupportGPUStatus() {
-			// 解压文件
+			// Extract files
 			userDir, err := os.UserHomeDir()
 			if err != nil {
 				slog.Error("Get user home dir failed: ", err.Error())
 				return err
 			}
-			ipexPath := fmt.Sprintf("%s/%s", userDir)
+			ipexPath := userDir
 			if _, err = os.Stat(ipexPath); os.IsNotExist(err) {
 				os.MkdirAll(ipexPath, 0o755)
 				if runtime.GOOS == "windows" {
@@ -456,4 +456,43 @@ func (o *OllamaProvider) ListModels(ctx context.Context) (*types.ListResponse, e
 	}
 
 	return &lr, nil
+}
+
+func (o *OllamaProvider) GetRunningModels(ctx context.Context) (*types.ListResponse, error) {
+	c := o.GetDefaultClient()
+	var lr types.ListResponse
+	if err := c.Do(ctx, http.MethodGet, "/api/ps", nil, &lr); err != nil {
+		logger.EngineLogger.Error("[Ollama] Get run model list failed :" + err.Error())
+		return nil, err
+	}
+	return &lr, nil
+}
+
+func (o *OllamaProvider) UnloadModel(ctx context.Context, req *types.UnloadModelRequest) error {
+	c := o.GetDefaultClient()
+	for _, model := range req.Models {
+		reqBody := &types.OllamaUnloadModelRequest{
+			Model:     model,
+			KeepAlive: 0,
+		}
+		if err := c.Do(ctx, http.MethodPost, "/api/generate", reqBody, nil); err != nil {
+			logger.EngineLogger.Error("[Ollama] Unload model failed: " + model + " , error: " + err.Error())
+			return err
+		}
+		logger.EngineLogger.Info("[Ollama] Unload model success: " + model)
+	}
+	return nil
+}
+
+func (o *OllamaProvider) LoadModel(ctx context.Context, req *types.LoadRequest) error {
+	// Since ollama automatically loads on request, loading by oadin would make one more API request, which would be slower, so ignore it here
+	// c := o.GetDefaultClient()
+	// lr := &types.OllamaLoadModelRequest{
+	// 	Model: req.Model,
+	// }
+	// if err := c.Do(ctx, http.MethodPost, "/api/generate", lr, nil); err != nil {
+	// 	logger.EngineLogger.Error("[Ollama] Load model failed: " + req.Model + " , error: " + err.Error())
+	// 	return err
+	// }
+	return nil
 }

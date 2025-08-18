@@ -21,13 +21,18 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"mime"
+	"net/http"
 	"os"
+	"path/filepath"
+	"regexp"
 	"time"
 
-	"intel.com/aog/internal/client"
-	"intel.com/aog/internal/logger"
-	"intel.com/aog/internal/types"
-	"intel.com/aog/internal/utils"
+	"github.com/google/uuid"
+	"github.com/intel/aog/internal/client"
+	"github.com/intel/aog/internal/logger"
+	"github.com/intel/aog/internal/types"
+	"github.com/intel/aog/internal/utils"
 )
 
 type BaseMiddleware struct {
@@ -45,6 +50,12 @@ func GetMiddleware(serviceName string) []TaskMiddleware {
 		return []TaskMiddleware{NewSpeechToTextWSMiddleware()}
 	case types.ServiceChat:
 		return []TaskMiddleware{NewChatMiddleware()}
+	case types.ServiceTextToSpeech:
+		return []TaskMiddleware{NewTextToSpeechMiddleware()}
+	case types.ServiceImageToVideo:
+		return []TaskMiddleware{NewImageToVideoMiddleware()}
+	case types.ServiceImageToImage:
+		return []TaskMiddleware{NewImageToImageMiddleware()}
 	default:
 		return []TaskMiddleware{}
 	}
@@ -65,81 +76,41 @@ func (m *TextToImageMiddleware) Handle(st *ServiceTask) error {
 		return fmt.Errorf("parse request body: %w", err)
 	}
 
-	// Skip if no image-related fields
-	if !m.hasImageFields(body) {
-		return nil
-	}
-
 	if err := m.validateImageParams(body); err != nil {
 		return err
 	}
 
-	if err := m.processImage(body, st.Target.Location); err != nil {
-		return err
-	}
-
-	newReqBody, err := json.Marshal(body)
-	if err != nil {
-		return fmt.Errorf("marshal new request body: %w", err)
-	}
-	st.Request.HTTP.Body = newReqBody
 	return nil
-}
-
-func (m *TextToImageMiddleware) hasImageFields(body map[string]interface{}) bool {
-	_, typeExists := body["image_type"]
-	_, imageExists := body["image"]
-	return typeExists || imageExists
 }
 
 func (m *TextToImageMiddleware) validateImageParams(body map[string]interface{}) error {
-	imageType, typeOk := body["image_type"].(string)
-	_, imageOk := body["image"].(string)
+	size, sizeOk := body["size"].(string)
+	batch, batchOk := body["n"].(float64)
 
-	switch {
-	case !typeOk && imageOk:
-		return errors.New("image_type request param lost")
-	case typeOk && !imageOk:
-		return errors.New("image request param lost")
-	case !utils.Contains(types.SupportImageType, imageType):
-		return errors.New("unsupported image type")
+	if sizeOk {
+		matched, err := regexp.MatchString(`^\d+\*\d+$`, size)
+		if err != nil {
+			return fmt.Errorf("size parameter format validation error: %w", err)
+		}
+		if !matched {
+			return fmt.Errorf("size parameter format error, should be like 512*512")
+		}
+		var w, h int
+		_, err = fmt.Sscanf(size, "%d*%d", &w, &h)
+		if err != nil {
+			return fmt.Errorf("size parameter parsing failed: %w", err)
+		}
+		if w > 4096 || h > 4096 {
+			return fmt.Errorf("size parameter cannot exceed 4096*4096")
+		}
 	}
-	return nil
-}
 
-func (m *TextToImageMiddleware) processImage(body map[string]interface{}, location string) error {
-	imageType := body["image_type"].(string)
-	image := body["image"].(string)
+	if batchOk {
+		if batch < 1 || batch > 4 {
+			return fmt.Errorf("image generation count must be between 1-4")
+		}
+	}
 
-	switch {
-	case imageType == types.ImageTypePath && location == types.ServiceSourceRemote:
-		return m.handleLocalToRemote(body, image)
-	case imageType == types.ImageTypeUrl && location == types.ServiceSourceLocal:
-		return m.handleRemoteToLocal(body, image)
-	}
-	return nil
-}
-
-func (m *TextToImageMiddleware) handleLocalToRemote(body map[string]interface{}, imagePath string) error {
-	imgData, err := os.ReadFile(imagePath)
-	if err != nil {
-		logger.LogicLogger.Error("[Middleware] Failed to read image file", "error", err)
-		return fmt.Errorf("read image file: %w", err)
-	}
-	body["image"] = base64.StdEncoding.EncodeToString(imgData)
-	return nil
-}
-
-func (m *TextToImageMiddleware) handleRemoteToLocal(body map[string]interface{}, imageUrl string) error {
-	downLoadPath, err := utils.GetDownloadDir()
-	if err != nil {
-		return fmt.Errorf("get download directory: %w", err)
-	}
-	savePath, err := utils.DownloadFile(imageUrl, downLoadPath)
-	if err != nil {
-		return fmt.Errorf("download file: %w", err)
-	}
-	body["image"] = savePath
 	return nil
 }
 
@@ -161,12 +132,95 @@ func (m *SpeechToTextMiddleware) Handle(st *ServiceTask) error {
 		return nil
 	}
 
-	// TODO: Implement audio processing logic
-	//
-	// 1. Audio format conversion
-	// 2. Sample rate adjustment
-	// 3. Audio encoding conversion, etc.
+	body, err := utils.ParseRequestBody(st.Request.HTTP.Body)
+	if err != nil {
+		return fmt.Errorf("parse request body: %w", err)
+	}
+
+	// Skip if no image-related fields
+	if !m.hasFileFields(body) {
+		return nil
+	}
+
+	if err := m.validateFileParams(body); err != nil {
+		return err
+	}
+
+	if err := m.processFile(body, st.Target.Location); err != nil {
+		return err
+	}
+	var newReqBody []byte
+	if st.Request.Service == types.ServiceSpeechToText && st.Target.ServiceProvider.Flavor == types.FlavorAliYun {
+		fileData := body["speech"].(string)
+		newReqBody, err = base64.StdEncoding.DecodeString(fileData)
+		st.Request.HTTP.Header.Set("Content-Type", "application/octet-stream")
+	} else {
+		newReqBody, err = json.Marshal(body)
+	}
+	if err != nil {
+		return fmt.Errorf("marshal new request body: %w", err)
+	}
+	st.Request.HTTP.Body = newReqBody
+	return nil
 	logger.LogicLogger.Debug("[Middleware] Processing audio request")
+	return nil
+}
+
+func (m *SpeechToTextMiddleware) hasFileFields(body map[string]interface{}) bool {
+	_, typeExists := body["file_type"]
+	_, imageExists := body["file"]
+	return typeExists || imageExists
+}
+
+func (m *SpeechToTextMiddleware) validateFileParams(body map[string]interface{}) error {
+	imageType, typeOk := body["file_type"].(string)
+	_, imageOk := body["file"].(string)
+
+	switch {
+	case !typeOk && imageOk:
+		return errors.New("image_type request param lost")
+	case typeOk && !imageOk:
+		return errors.New("image request param lost")
+	case !utils.Contains(types.SupportImageType, imageType):
+		return errors.New("unsupported image type")
+	}
+	return nil
+}
+
+func (m *SpeechToTextMiddleware) processFile(body map[string]interface{}, location string) error {
+	imageType := body["file_type"].(string)
+	image := body["file"].(string)
+
+	switch {
+	case imageType == types.ImageTypePath && location == types.ServiceSourceRemote:
+		return m.handleLocalToRemote(body, image)
+	case imageType == types.ImageTypeUrl && location == types.ServiceSourceLocal:
+		return m.handleRemoteToLocal(body, image)
+	}
+	return nil
+}
+
+func (m *SpeechToTextMiddleware) handleLocalToRemote(body map[string]interface{}, filePath string) error {
+	fileData, err := os.ReadFile(filePath)
+	if err != nil {
+		logger.LogicLogger.Error("[Middleware] Failed to read image file", "error", err)
+		return fmt.Errorf("read image file: %w", err)
+	}
+	body["speech"] = base64.StdEncoding.EncodeToString(fileData)
+	body["len"] = len(fileData)
+	return nil
+}
+
+func (m *SpeechToTextMiddleware) handleRemoteToLocal(body map[string]interface{}, imageUrl string) error {
+	downLoadPath, err := utils.GetDownloadDir()
+	if err != nil {
+		return fmt.Errorf("get download directory: %w", err)
+	}
+	savePath, err := utils.DownloadFile(imageUrl, downLoadPath)
+	if err != nil {
+		return fmt.Errorf("download file: %w", err)
+	}
+	body["image"] = savePath
 	return nil
 }
 
@@ -178,18 +232,18 @@ func NewSpeechToTextMiddleware() *SpeechToTextMiddleware {
 	}
 }
 
-// SpeechToTextWSMiddleware 处理WebSocket的语音识别请求
+// SpeechToTextWSMiddleware handles WebSocket speech recognition requests
 type SpeechToTextWSMiddleware struct {
 	BaseMiddleware
 }
 
 func (m *SpeechToTextWSMiddleware) Handle(st *ServiceTask) error {
-	// 检查是否是目标服务类型
+	// Check if it's the target service type
 	if st.Request.Service != m.ServiceName {
 		return nil
 	}
 
-	// 获取WebSocket连接ID
+	// Get WebSocket connection ID
 	connID := st.Request.WebSocketConnID
 	if connID == "" {
 		return fmt.Errorf("missing WebSocket connection ID")
@@ -199,7 +253,7 @@ func (m *SpeechToTextWSMiddleware) Handle(st *ServiceTask) error {
 		"connID", connID,
 		"taskID", st.Schedule.Id)
 
-	// 从WebSocketManager获取连接 - 添加更多调试信息
+	// Get connection from WebSocketManager - add more debug information
 	wsManager := client.GetGlobalWebSocketManager()
 	logger.LogicLogger.Debug("[SpeechToTextWS] Attempting to get WebSocket connection",
 		"connID", connID,
@@ -215,7 +269,7 @@ func (m *SpeechToTextWSMiddleware) Handle(st *ServiceTask) error {
 		return fmt.Errorf("WebSocket connection not found: %s", connID)
 	}
 
-	// 获取并记录STT参数
+	// Get and log STT parameters
 	sttParams := wsConn.GetSTTParams()
 	logger.LogicLogger.Debug("[SpeechToTextWS] Retrieved connection parameters",
 		"connID", connID,
@@ -225,13 +279,13 @@ func (m *SpeechToTextWSMiddleware) Handle(st *ServiceTask) error {
 		"totalBytes", sttParams.TotalAudioBytes,
 		"taskStarted", wsConn.IsTaskStarted(st.Schedule.Id))
 
-	// 获取任务类型
+	// Get task type
 	taskType := wsConn.GetTaskType(st.Schedule.Id)
 	logger.LogicLogger.Debug("[SpeechToTextWS] Task type",
 		"connID", connID,
 		"taskType", taskType)
 
-	// 根据任务类型执行不同的参数校验和处理
+	// Execute different parameter validation and processing based on task type
 	switch taskType {
 	case types.WSSTTTaskTypeAudio:
 		return m.validateAudioData(st, wsConn)
@@ -247,7 +301,7 @@ func (m *SpeechToTextWSMiddleware) Handle(st *ServiceTask) error {
 	}
 }
 
-// 验证和处理启动任务命令
+// Validate and process start task command
 func (m *SpeechToTextWSMiddleware) validateRunTask(st *ServiceTask, session *client.WebSocketConnection) error {
 	sttParams := session.GetSTTParams()
 
@@ -256,15 +310,15 @@ func (m *SpeechToTextWSMiddleware) validateRunTask(st *ServiceTask, session *cli
 		"language", sttParams.Language,
 		"sampleRate", sttParams.SampleRate)
 
-	// 验证语言参数
+	// Validate language parameter
 	if sttParams.Language == "" {
-		sttParams.Language = "<|zh|>" // 默认使用中文
+		sttParams.Language = types.LanguageZh // Default to Chinese
 		logger.LogicLogger.Info("[SpeechToTextWS] Using default language",
 			"language", sttParams.Language,
 			"connID", session.ID)
 	}
 
-	// 验证采样率参数
+	// Validate sample rate parameter
 	validSampleRates := []int{8000, 16000, 22050, 44100, 48000}
 	validRate := false
 	for _, rate := range validSampleRates {
@@ -282,7 +336,7 @@ func (m *SpeechToTextWSMiddleware) validateRunTask(st *ServiceTask, session *cli
 		sttParams.SampleRate = 16000
 	}
 
-	// 验证返回格式
+	// Validate return format
 	validFormats := []string{"text", "json", "srt", "vtt"}
 	if !utils.Contains(validFormats, sttParams.ReturnFormat) {
 		logger.LogicLogger.Warn("[SpeechToTextWS] Invalid return format, using default",
@@ -298,26 +352,26 @@ func (m *SpeechToTextWSMiddleware) validateRunTask(st *ServiceTask, session *cli
 	return nil
 }
 
-// 验证和处理音频数据
+// Validate and process audio data
 func (m *SpeechToTextWSMiddleware) validateAudioData(st *ServiceTask, session *client.WebSocketConnection) error {
 	sttParams := session.GetSTTParams()
 
-	// 检查连接ID是否有效
+	// Check if connection ID is valid
 	if session.ID == "" {
 		return fmt.Errorf("invalid WebSocket connection ID")
 	}
 
-	// 检查音频数据大小
+	// Check audio data size
 	dataSize := len(st.Request.HTTP.Body)
 	if dataSize == 0 {
 		return fmt.Errorf("empty audio data received")
 	}
 
-	if dataSize > 10*1024*1024 { // 10MB限制
+	if dataSize > 10*1024*1024 { // 10MB limit
 		return fmt.Errorf("audio data too large: %d bytes (max 10MB)", dataSize)
 	}
 
-	// 更新会话中的音频处理状态
+	// Update audio processing status in session
 	sttParams.TotalAudioBytes += dataSize
 	sttParams.LastAudioTime = time.Now().Unix()
 
@@ -329,14 +383,14 @@ func (m *SpeechToTextWSMiddleware) validateAudioData(st *ServiceTask, session *c
 	return nil
 }
 
-// 验证和处理结束任务命令
+// Validate and process finish task command
 func (m *SpeechToTextWSMiddleware) validateFinishTask(st *ServiceTask, session *client.WebSocketConnection) error {
-	// 检查连接ID是否存在
+	// Check if connection ID exists
 	if session.ID == "" {
 		return fmt.Errorf("invalid WebSocket connection ID")
 	}
 
-	// 任务完成状态日志记录
+	// Log task completion status
 	startTime, endTime := session.GetTaskTimes(st.Schedule.Id)
 	duration := endTime - startTime
 	sttParams := session.GetSTTParams()
@@ -391,5 +445,281 @@ func ExecuteMiddleware(st *ServiceTask) error {
 			return fmt.Errorf("middleware execution failed: %w", err)
 		}
 	}
+	return nil
+}
+
+func NewTextToSpeechMiddleware() *TextToSpeechMiddleware {
+	return &TextToSpeechMiddleware{
+		BaseMiddleware: BaseMiddleware{
+			ServiceName: types.ServiceTextToSpeech,
+		},
+	}
+}
+
+type TextToSpeechMiddleware struct {
+	BaseMiddleware
+}
+
+func (m *TextToSpeechMiddleware) Handle(st *ServiceTask) error {
+	if st.Request.Service != m.ServiceName {
+		return nil
+	}
+
+	if st.Request.HTTP.Body == nil {
+		return fmt.Errorf("request body is missing for %s service", m.ServiceName)
+	}
+
+	req := new(types.TextToSpeechRequest)
+
+	err := json.Unmarshal(st.Request.HTTP.Body, req)
+	if err != nil {
+		return err
+	}
+
+	if req.Text == "" {
+		return fmt.Errorf("text field is required for %s service", m.ServiceName)
+	}
+	if st.Target.Location == types.ServiceSourceLocal {
+		if !utils.Contains(types.SupportVoiceType, req.Voice) {
+			return fmt.Errorf("invalid voice type: %s, must be one of %v", req.Voice, types.SupportVoiceType)
+		}
+
+		matched, err := regexp.MatchString("\\p{Han}", req.Text)
+		if err != nil {
+			return fmt.Errorf("an error occurred while verifying the text: %w", err)
+		}
+		if matched {
+			return fmt.Errorf("currently, only English speech generation is supported")
+		}
+	} else {
+		uuid := uuid.New().String()
+		var reqData map[string]interface{}
+		err = json.Unmarshal(st.Request.HTTP.Body, &reqData)
+		if err != nil {
+			return err
+		}
+		reqData["uuid"] = uuid
+		reqBody, err := json.Marshal(reqData)
+		if err != nil {
+			return err
+		}
+		st.Request.HTTP.Body = reqBody
+	}
+
+	logger.LogicLogger.Debug("[Middleware] Processing audio request")
+	return nil
+}
+
+func NewImageToVideoMiddleware() *ImageToVideoMiddleware {
+	return &ImageToVideoMiddleware{
+		BaseMiddleware: BaseMiddleware{
+			ServiceName: types.ServiceImageToVideo,
+		},
+	}
+}
+
+type ImageToVideoMiddleware struct {
+	BaseMiddleware
+}
+
+func (m *ImageToVideoMiddleware) Handle(st *ServiceTask) error {
+	if st.Request.Service != m.ServiceName {
+		return nil
+	}
+
+	body, err := utils.ParseRequestBody(st.Request.HTTP.Body)
+	if err != nil {
+		return fmt.Errorf("parse request body: %w", err)
+	}
+
+	// Skip if no image-related fields
+	if !m.hasImageFields(body) {
+		return nil
+	}
+
+	if err := m.validateImageParams(body); err != nil {
+		return err
+	}
+
+	if err := m.processImage(body, st.Target.Location); err != nil {
+		return err
+	}
+
+	newReqBody, err := json.Marshal(body)
+	if err != nil {
+		return fmt.Errorf("marshal new request body: %w", err)
+	}
+	st.Request.HTTP.Body = newReqBody
+	return nil
+}
+
+func (m *ImageToVideoMiddleware) hasImageFields(body map[string]interface{}) bool {
+	_, typeExists := body["image_type"]
+	_, imageExists := body["image"]
+	return typeExists || imageExists
+}
+
+func (m *ImageToVideoMiddleware) validateImageParams(body map[string]interface{}) error {
+	imageType, typeOk := body["image_type"].(string)
+	_, imageOk := body["image"].(string)
+
+	switch {
+	case !typeOk && imageOk:
+		return errors.New("image_type request param lost")
+	case typeOk && !imageOk:
+		return errors.New("image request param lost")
+	case !utils.Contains(types.SupportImageType, imageType):
+		return errors.New("unsupported image type")
+	}
+	return nil
+}
+
+func (m *ImageToVideoMiddleware) processImage(body map[string]interface{}, location string) error {
+	imageType := body["image_type"].(string)
+	image := body["image"].(string)
+
+	switch {
+	case imageType == types.ImageTypePath && location == types.ServiceSourceRemote:
+		return m.handleLocalToRemote(body, image)
+	case imageType == types.ImageTypeUrl && location == types.ServiceSourceLocal:
+		return m.handleRemoteToLocal(body, image)
+	}
+	return nil
+}
+
+func (m *ImageToVideoMiddleware) handleLocalToRemote(body map[string]interface{}, imagePath string) error {
+	imgData, err := os.ReadFile(imagePath)
+	if err != nil {
+		logger.LogicLogger.Error("[Middleware] Failed to read image file", "error", err)
+		return fmt.Errorf("read image file: %w", err)
+	}
+	ext := filepath.Ext(imagePath) // .jpg
+	mimeType := mime.TypeByExtension(ext)
+	if mimeType == "" {
+		mimeType = http.DetectContentType(imgData) // 更保险的 MIME 检测方式
+	}
+	encoded := base64.StdEncoding.EncodeToString(imgData)
+	dataURI := fmt.Sprintf("data:%s;base64,%s", mimeType, encoded)
+	body["image"] = dataURI
+	return nil
+}
+
+func (m *ImageToVideoMiddleware) handleRemoteToLocal(body map[string]interface{}, imageUrl string) error {
+	downLoadPath, err := utils.GetDownloadDir()
+	if err != nil {
+		return fmt.Errorf("get download directory: %w", err)
+	}
+	savePath, err := utils.DownloadFile(imageUrl, downLoadPath)
+	if err != nil {
+		return fmt.Errorf("download file: %w", err)
+	}
+	body["image"] = savePath
+	return nil
+}
+
+func NewImageToImageMiddleware() *ImageToImageMiddleware {
+	return &ImageToImageMiddleware{
+		BaseMiddleware: BaseMiddleware{
+			ServiceName: types.ServiceImageToImage,
+		},
+	}
+}
+
+type ImageToImageMiddleware struct {
+	BaseMiddleware
+}
+
+func (m *ImageToImageMiddleware) Handle(st *ServiceTask) error {
+	if st.Request.Service != m.ServiceName {
+		return nil
+	}
+
+	body, err := utils.ParseRequestBody(st.Request.HTTP.Body)
+	if err != nil {
+		return fmt.Errorf("parse request body: %w", err)
+	}
+
+	// Skip if no image-related fields
+	if !m.hasImageFields(body) {
+		return nil
+	}
+
+	if err := m.validateImageParams(body); err != nil {
+		return err
+	}
+
+	if err := m.processImage(body, st.Target.Location); err != nil {
+		return err
+	}
+
+	newReqBody, err := json.Marshal(body)
+	if err != nil {
+		return fmt.Errorf("marshal new request body: %w", err)
+	}
+	st.Request.HTTP.Body = newReqBody
+	return nil
+}
+
+func (m *ImageToImageMiddleware) hasImageFields(body map[string]interface{}) bool {
+	_, typeExists := body["image_type"]
+	_, imageExists := body["image"]
+	return typeExists || imageExists
+}
+
+func (m *ImageToImageMiddleware) validateImageParams(body map[string]interface{}) error {
+	imageType, typeOk := body["image_type"].(string)
+	_, imageOk := body["image"].(string)
+
+	switch {
+	case !typeOk && imageOk:
+		return errors.New("image_type request param lost")
+	case typeOk && !imageOk:
+		return errors.New("image request param lost")
+	case !utils.Contains(types.SupportImageType, imageType):
+		return errors.New("unsupported image type")
+	}
+	return nil
+}
+
+func (m *ImageToImageMiddleware) processImage(body map[string]interface{}, location string) error {
+	imageType := body["image_type"].(string)
+	image := body["image"].(string)
+
+	switch {
+	case imageType == types.ImageTypePath && location == types.ServiceSourceRemote:
+		return m.handleLocalToRemote(body, image)
+	case imageType == types.ImageTypeUrl && location == types.ServiceSourceLocal:
+		return m.handleRemoteToLocal(body, image)
+	}
+	return nil
+}
+
+func (m *ImageToImageMiddleware) handleLocalToRemote(body map[string]interface{}, imagePath string) error {
+	imgData, err := os.ReadFile(imagePath)
+	if err != nil {
+		logger.LogicLogger.Error("[Middleware] Failed to read image file", "error", err)
+		return fmt.Errorf("read image file: %w", err)
+	}
+	ext := filepath.Ext(imagePath) // .jpg
+	mimeType := mime.TypeByExtension(ext)
+	if mimeType == "" {
+		mimeType = http.DetectContentType(imgData) // 更保险的 MIME 检测方式
+	}
+	encoded := base64.StdEncoding.EncodeToString(imgData)
+	dataURI := fmt.Sprintf("data:%s;base64,%s", mimeType, encoded)
+	body["image"] = dataURI
+	return nil
+}
+
+func (m *ImageToImageMiddleware) handleRemoteToLocal(body map[string]interface{}, imageUrl string) error {
+	downLoadPath, err := utils.GetDownloadDir()
+	if err != nil {
+		return fmt.Errorf("get download directory: %w", err)
+	}
+	savePath, err := utils.DownloadFile(imageUrl, downLoadPath)
+	if err != nil {
+		return fmt.Errorf("download file: %w", err)
+	}
+	body["image"] = savePath
 	return nil
 }

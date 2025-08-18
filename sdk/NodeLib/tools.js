@@ -17,6 +17,33 @@
 const fs = require('fs');
 const path = require('path');
 const winston = require('winston');
+const { MAC_AOG_PATH, AOG_HEALTH, AOG_ENGINE_PATH, } = require('./constants.js');
+const axios = require('axios');
+
+
+async function isAOGAvailable(retries = 5, interval = 1000) {
+  logAndConsole('info', '检测AOG服务可用性...');
+  const fibArr = fibonacci(retries, interval);
+  for (let attempt = 0; attempt < retries; attempt++) {
+    try {
+      const [healthRes, engineHealthRes] = await Promise.all([
+        axios.get(AOG_HEALTH),
+        axios.get(AOG_ENGINE_PATH)
+      ]);
+      const healthOk = isHealthy(healthRes.status);
+      const engineOk = isHealthy(engineHealthRes.status);
+      logAndConsole('info', `/health: ${healthOk ? '正常' : '异常'}, /engine/health: ${engineOk ? '正常' : '异常'}`);
+      if (healthOk && engineOk) return true;
+    } catch (err) {
+      logAndConsole('warn', `健康检查失败: ${err.message}`);
+    }
+    if (attempt < retries - 1) {
+      await new Promise(r => setTimeout(r, fibArr[attempt]));
+    }
+  }
+  logAndConsole('warn', 'AOG服务不可用');
+  return false;
+}
 
 // 判断平台
 function getPlatform() {
@@ -143,9 +170,9 @@ function getAOGExecutablePath() {
   const userDir = require('os').homedir();
   const platform = getPlatform();
   if (platform === 'win32') {
-    return path.join(userDir, 'AOG', 'aog.exe');
+    return WIN_AOG_PATH;
   } else if (platform === 'darwin') {
-    return '/usr/local/bin/aog';
+    return MAC_AOG_PATH;
   }
   return null;
 }
@@ -165,8 +192,26 @@ function runInstallerByPlatform(installerPath) {
     return new Promise((resolve, reject) => {
       const child = require('child_process').spawn('open', [installerPath], { stdio: 'ignore', detached: true });
       child.on('error', reject);
-      // 可扩展轮询检测逻辑
-      resolve();
+      // 轮询检测安装目录生成
+      const expectedPath = MAC_AOG_PATH;
+      const maxRetries = 100;
+      let retries = 0;
+
+      const interval = setInterval(async () => {
+        if (fs.existsSync(expectedPath)) {
+          console.log("aog 已添加到 /usr/local/bin ");
+          // 检查服务是否可用
+          const available = await isAOGAvailable(2, 1000);
+          if (available) {
+            clearInterval(interval);
+            resolve();
+          }
+        } else if (++retries >= maxRetries) {
+          clearInterval(interval);
+          reject(new Error('安装器未在超时前完成安装'));
+        }
+      }, 1000);
+
     });
   }
   return Promise.reject(new Error('不支持的平台'));

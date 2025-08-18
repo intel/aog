@@ -21,16 +21,15 @@ import (
 	// "io"
 	"net/http"
 
-	"intel.com/aog/internal/api/dto"
-	"intel.com/aog/internal/server"
-	"intel.com/aog/internal/utils/bcode"
+	"github.com/intel/aog/internal/api/dto"
+	"github.com/intel/aog/internal/utils/bcode"
 
 	"github.com/gin-gonic/gin"
 )
 
 func (t *AOGCoreServer) GetDashBoardHandler(c *gin.Context) {
 	ctx := c.Request.Context()
-	data, err := server.GetDashboard(ctx)
+	data, err := t.ControlPanel.GetDashboard(ctx)
 	if err != nil {
 		bcode.ReturnError(c, err)
 		return
@@ -51,7 +50,7 @@ func (t *AOGCoreServer) GetSupportModelListCombine(c *gin.Context) {
 	}
 
 	ctx := c.Request.Context()
-	data, err := server.GetSupportModelListCombine(ctx, request)
+	data, err := t.ControlPanel.GetSupportModelListCombine(ctx, request)
 	if err != nil {
 		bcode.ReturnError(c, err)
 		return
@@ -70,7 +69,7 @@ func (t *AOGCoreServer) SetDefaultModelHandler(c *gin.Context) {
 		return
 	}
 	ctx := c.Request.Context()
-	err := server.SetDefaultModel(ctx, request)
+	err := t.ControlPanel.SetDefaultModel(ctx, request)
 	if err != nil {
 		bcode.ReturnError(c, err)
 		return
@@ -79,7 +78,7 @@ func (t *AOGCoreServer) SetDefaultModelHandler(c *gin.Context) {
 }
 
 func (t *AOGCoreServer) GetProductInfoHandler(c *gin.Context) {
-	resp, err := server.GetProductInfo(c.Request.Context())
+	resp, err := t.ControlPanel.GetProductInfo(c.Request.Context())
 	if err != nil {
 		bcode.ReturnError(c, err)
 		return
@@ -100,7 +99,7 @@ func (t *AOGCoreServer) GetModelkeyHandler(c *gin.Context) {
 	}
 
 	ctx := c.Request.Context()
-	resp, err := server.GetModelkey(ctx, request)
+	resp, err := t.ControlPanel.GetModelkey(ctx, request)
 	if err != nil {
 		bcode.ReturnError(c, err)
 		return

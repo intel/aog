@@ -1,0 +1,9 @@
+{
+  "name": "female",
+  "description": "Speaker embedding extracted ",
+  "shape": [
+    512
+  ],
+  "dtype": "float32",
+  "norm": 1.0
+}

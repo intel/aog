@@ -30,16 +30,16 @@ async function generateImage(prompt, location) {
     const data = {
         model: "OpenVINO/stable-diffusion-v1-5-fp16-ov",
         prompt: prompt,
-        size: "512x512",
+        size: "512*512",
         n: 4
     };
 
-    const result = await aog.TextToImage(data);
-    if (result.code !== 200 || !result.data || !result.data.data || !result.data.data.url) {
+    const result = await aog.textToImage(data);
+    if (result.code !== 200 || !result.data) {
         throw new Error('生成图片失败，API 返回无效数据');
     }
 
-    const downloadedPaths = result.data.data.url; // 获取下载路径数组
+    const downloadedPaths = result.data.url; // 获取下载路径数组
     const localImageUrls = [];
 
     // 确保目标文件夹存在
@@ -77,21 +77,21 @@ async function upscaleImage(imageUrl, location, description) {
     }
 
     const data = {
-        model: "irag-1.0",
+        model: "wanx2.0-t2i-turbo",
         prompt: description,
         image: localImagePath, // 使用本地图片的 URL
         image_type: "path",
-        size: "1024x1024",
+        size: "1024*1024",
         n: 1
     };
     console.log(data);
 
-    const result = await aog.TextToImage(data);
-    if (result.code !== 200 || !result.data || !result.data.data || !result.data.data.url) {
+    const result = await aog.textToImage(data);
+    if (result.code !== 200 || !result.data) {
         throw new Error('高清化图片失败，API 返回无效数据');
     }
 
-    const downloadedUrl = result.data.data.url[0]; // 获取返回的高清图片远程 URL
+    const downloadedUrl = result.data.url[0]; // 获取返回的高清图片远程 URL
     const imagesDir = path.join(__dirname, 'images'); // 本地存储目录
 
     // 确保目标文件夹存在

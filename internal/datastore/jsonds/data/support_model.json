@@ -500,6 +500,22 @@
   },
   {
     "api_flavor": "ollama",
+    "avatar": "http://smartvision-aipc-open.oss-cn-hangzhou.aliyuncs.com/aog/icon/gemma3.png",
+    "class": [
+      "文本生成"
+    ],
+    "description": "Gemma is a lightweight, family of models from Google built on Gemini technology. The Gemma 3 models are multimodal—processing text and images—and feature a 128K context window with support for over 140 languages. ",
+    "flavor": "google",
+    "id": "aeda25e6-3ebd-698f-ab86-38ffb778e68bed908b960d39",
+    "name": "gemma3:4b",
+    "ollama_id": "a2af6cc3eb7f",
+    "params_size": 4,
+    "service_name": "chat",
+    "service_source": "local",
+    "size": "3.3GB"
+  },
+  {
+    "api_flavor": "ollama",
     "avatar": "http://smartvision-aipc-open.oss-cn-hangzhou.aliyuncs.com/aog/icon/Nomic.png",
     "class": [
       "嵌入模型"
@@ -1042,25 +1058,88 @@
     "max_input": 0,
     "max_output": 0,
     "name": "NamoLi/whisper-large-v3-ov",
-    "service_name": "speech-to-text",
-    "service_source": "local",
-    "size": "5.75GB"
-  }
-,
-  {
-    "api_flavor": "openvino",
-    "avatar": "http://smartvision-aipc-open.oss-cn-hangzhou.aliyuncs.com/aog/icon/openvino_logo.png",
-    "class": [
-      "语音识别"
-    ],
-    "description": "a speech-to-text model",
-    "flavor": "openvino",
-    "id": "0b39a78b",
-    "max_input": 0,
-    "max_output": 0,
-    "name": "NamoLi/whisper-large-v3-ov",
     "service_name": "speech-to-text-ws",
     "service_source": "local",
     "size": "5.75GB"
+  },
+  {
+    "api_flavor":"openvino",
+    "avatar": "http://smartvision-aipc-open.oss-cn-hangzhou.aliyuncs.com/aog/icon/openvino_logo.png",
+    "class":[
+      "文本转语音"
+    ],
+    "description": "A Text To Speech model open-sourced by Microsoft, supporting English only. ",
+    "flavor": "openvino",
+    "id": "e722a6ef",
+    "max_input": 0,
+    "max_output": 0,
+    "name":"NamoLi/speecht5-tts",
+    "service_name":"text-to-speech",
+    "service_source":"local",
+    "size": "608MB"
+  },
+  {
+    "api_flavor":"aliyun",
+    "avatar": "http://smartvision-aipc-open.oss-cn-hangzhou.aliyuncs.com/aog/icon/aliyun.png",
+    "class":[
+      "实时语音识别"
+    ],
+    "description": "A model for Real-Time Speech Recognition",
+    "flavor": "aliyun",
+    "id": "084e31a8-9e18-4223-8cf0-633031303339363037353232",
+    "max_input": 0,
+    "max_output": 0,
+    "name":"paraformer-realtime-v2",
+    "service_name":"speech-to-text-ws",
+    "service_source":"remote",
+    "size": "0"
+  },
+  {
+    "api_flavor":"aliyun",
+    "avatar": "http://smartvision-aipc-open.oss-cn-hangzhou.aliyuncs.com/aog/icon/aliyun.png",
+    "class":[
+      "文本转语音"
+    ],
+    "description": "A model for Text to Speech",
+    "flavor": "aliyun",
+    "id": "084e31a8-9e18-4223-8cf0-633031303339363037353123",
+    "max_input": 0,
+    "max_output": 0,
+    "name":"qwen-tts",
+    "service_name":"text-to-speech",
+    "service_source":"remote",
+    "size": "0"
+  },
+  {
+    "api_flavor":"aliyun",
+    "avatar": "http://smartvision-aipc-open.oss-cn-hangzhou.aliyuncs.com/aog/icon/aliyun.png",
+    "class":[
+      "图片转视频"
+    ],
+    "description": "A model for image to video",
+    "flavor": "aliyun",
+    "id": "084e31a8-9e18-4223-8cf0-633031303339363037354331",
+    "max_input": 0,
+    "max_output": 0,
+    "name":"wan2.2-i2v-plus",
+    "service_name":"image-to-video",
+    "service_source":"remote",
+    "size": "0"
+  },
+  {
+    "api_flavor":"aliyun",
+    "avatar": "http://smartvision-aipc-open.oss-cn-hangzhou.aliyuncs.com/aog/icon/aliyun.png",
+    "class":[
+      "图片编辑"
+    ],
+    "description": "A model for image to video",
+    "flavor": "aliyun",
+    "id": "084e31a8-9e18-4223-8cf0-633031303339363037351267",
+    "max_input": 0,
+    "max_output": 0,
+    "name":"wanx2.1-imageedit",
+    "service_name":"image-to-image",
+    "service_source":"remote",
+    "size": "0"
   }
 ]

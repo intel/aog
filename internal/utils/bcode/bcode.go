@@ -23,8 +23,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
-	"intel.com/aog/internal/datastore"
-	"intel.com/aog/internal/logger"
+	"github.com/intel/aog/internal/datastore"
+	"github.com/intel/aog/internal/logger"
 )
 
 const (

@@ -21,6 +21,9 @@ const (
 	AppName           = "aog"
 	BaseDownloadURL   = "https://smartvision-aipc-open.oss-cn-hangzhou.aliyuncs.com/aog"
 	UrlDirPathWindows = "/windows"
+	UrlDirPathLinux   = "/linux"
+	UrlDirPathMacOS   = "/mac"
+	URLDirPathIcon    = "/icon"
 )
 
 // model related
@@ -30,6 +33,9 @@ const (
 	DefaultEmbedModelName    = "bge-m3"
 	DefaultTextToImageModel  = "OpenVINO/stable-diffusion-v1-5-fp16-ov"
 	DefaultSpeechToTextModel = "NamoLi/whisper-large-v3-ov"
+	DefaultTextToSpeechModel = "NamoLi/speecht5-tts"
+	DefaultImageToImageModel = "wanx2.1-imageedit"
+	DefaultImageToVideoModel = "wan2.2-i2v-plus"
 )
 
 // Network related

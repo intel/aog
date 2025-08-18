@@ -310,10 +310,14 @@ AOG 有两个关键概念：**服务(Service)** 和 **服务提供商(Service Pr
     aog install embed
     aog install text-to-image
     aog install speech-to-text
+    aog install image-to-image
+    aog install image-to-video
+    aog install speech-to-text-ws
+    aog install text-to-speech
 
     # 除了默认的模型之外，您可以在服务中安装更多的模型
     # 当前版本暂仅支持基于 ollama 及 openvino（https://modelscope.cn/organization/OpenVINO）中的部分模型（文生图、语音识别）
-    # v0.4 版本将支持更多的 AI 堆栈和模型，以及其他服务
+    # v0.6 版本将支持更多的 AI 堆栈和模型，以及其他服务
     aog pull <model_name> --for <service_name> --provider <provider_name>
 
     # 获取服务信息，可查看指定服务，未指定则输出全部服务信息
@@ -432,7 +436,7 @@ AOG 提供了一个基于 Web 的图形化控制面板，您可以通过浏览�
 .. code-block:: json
 
     {
-        "version": "v0.4",
+        "version": "v0.5",
         "services": {
             "models": {
                 "service_providers": {
@@ -522,7 +526,7 @@ AOG API 是一个 Restful API。您可以通过与调用云 AI 服务（如 Open
 
 .. code-block:: bash
 
-    curl -X POST http://localhost:16688/aog/v0.4/services/chat  -X POST -H
+    curl -X POST http://localhost:16688/aog/v0.2/services/chat  -X POST -H
     "Content-Type: application/json" -d
     "{\"model\":\"deepseek-r1:7b\",\"messages\":[{\"role\":\"user\",\"content\":\"why is
     the sky blue?\"}],\"stream\":false}"
@@ -532,12 +536,12 @@ AOG API 是一个 Restful API。您可以通过与调用云 AI 服务（如 Open
 因为 AOG 能够自动转换这些流行风格的 API，因此您只需更改端点 URL，就可以轻松迁移应用程序。
 
 例如，如果您使用的是 OpenAI 的聊天完成服务，您只需将端点 URL 从 ``https://api.openai.com/v1/chat/completions`` 替换为
-``http://localhost:16688/aog/v0.4/api_flavors/openai/v1/chat/completions``。
+``http://localhost:16688/aog/v0.2/api_flavors/openai/v1/chat/completions``。
 
 **NOTE** 请注意，调用 AOG 的新 URL 位于 ``api_flavors/openai`` ，其余 URL 与原始 OpenAI API 相同，即 ``/v1/chat/completions`` 。
 
 如果您使用 ollama API，可以将端点 URL 从 ``https://localhost:11434/api/chat`` 替换为
-``http://localhost:16688/aog/v0.4/api_flavors/ollama/api/chat`` 。同样，它位于 ``api_flavors/ollama`` ，其余 URL 与原始 ollama API 相同，即 ``/api/chat`` 。
+``http://localhost:16688/aog/v0.2/api_flavors/ollama/api/chat`` 。同样，它位于 ``api_flavors/ollama`` ，其余 URL 与原始 ollama API 相同，即 ``/api/chat`` 。
 
 发布您的基于 AOG 的 AI 应用
 ==========================================
@@ -551,7 +555,7 @@ AOG API 是一个 Restful API。您可以通过与调用云 AI 服务（如 Open
 .. code-block:: json
 
     {
-        "version": "v0.4",
+        "version": "v0.5",
         "services": {
             "models": {
                 "service_providers": {

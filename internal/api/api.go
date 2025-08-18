@@ -22,7 +22,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"intel.com/aog/internal/server"
+	"github.com/intel/aog/internal/server"
 )
 
 type AOGCoreServer struct {
@@ -30,6 +30,7 @@ type AOGCoreServer struct {
 	AIGCService     server.AIGCService
 	Model           server.Model
 	ServiceProvider server.ServiceProvider
+	ControlPanel    server.ControlPanel
 }
 
 // NewAOGCoreServer is the constructor of the server structure
@@ -54,4 +55,5 @@ func (t *AOGCoreServer) Register() {
 	t.AIGCService = server.NewAIGCService()
 	t.ServiceProvider = server.NewServiceProvider()
 	t.Model = server.NewModel()
+	t.ControlPanel = server.NewControlPanel()
 }

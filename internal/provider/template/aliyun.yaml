@@ -268,7 +268,7 @@ services:
                                   },
                          "parameters": {
                                   "n":$exists(n) ? n : 1,
-                                  "size": $exists(size) ? size : "1024x1024"
+                                  "size": $exists(size) ? size : "1024*1024"
                                   }
                       }
 
@@ -282,8 +282,196 @@ services:
                   config: |
                       {
                           "id": request_id,
+                          "message": output.message,
+                          "url": [$map(output.results, function($v){$v.url})]
+                      }
+        response_from_aog:
+            conversion:
+                - converter: jsonata
+                  config: |
+                      {
+                           "id": request_id,
+                           "message": output.message,
+                           "url": [$map(output.results, function($v){$v.url})]
+                      }
+
+
+    image-to-image:
+        task_type: "image-to-image"
+        protocol: "HTTP"
+        expose_protocol: "HTTP"
+        url: "https://dashscope.aliyuncs.com/api/v1/services/aigc/image2image/image-synthesis"
+        endpoints: [ "POST /v1/image-to-image" ] # request to this will use this flavor
+        extra_url: "https://dashscope.aliyuncs.com/api/v1/tasks"
+        auth_type: "apikey"
+        auth_apply_url: https://help.aliyun.com/zh/model-studio/developer-reference/get-api-key?spm=a2c4g.11186623.0.0.110f4d4dZvW4Ml
+        install_raw_routes: false # also install routes without aog prefix in url path
+        default_model: wanx2.1-imageedit
+        request_segments: 2 # request
+        extra_headers: '{"X-DashScope-Async": "enable"}'
+        support_models: ["wanx2.1-imageedit"]
+        request_to_aog:
+            conversion:
+                - converter: jsonata
+                  config: |
+                      {
+                        "model": $model,
+                         "input": {
+                                  "prompt": prompt,
+                                  "function": "stylization_all",
+                                  "base_image_url": image
+                                  },
+                        "parameters": {
+                                  "n":$exists(n) ? n : 1
+                                  }
+                      }
+
+                - converter: header
+                  config:
+                      set:
+                          Content-Type: application/json
+        request_from_aog:
+            conversion:
+                - converter: jsonata
+                  config: |
+                      {
+                        "model": $model,
+                         "input": {
+                                  "prompt": prompt,
+                                  "function": "stylization_all",
+                                  "base_image_url": image
+                                  },
+                        "parameters": {
+                                  "n":$exists(n) ? n : 1
+                                  }
+                      }
+
+                - converter: header
+                  config:
+                      set:
+                          Content-Type: application/json
+        response_to_aog:
+            conversion:
+                - converter: jsonata
+                  config: |
+                      {
+                          "id": request_id,
+                          "message": output.message,
+                          "url": [$map(output.results, function($v){$v.url})]
+                      }
+        response_from_aog:
+            conversion:
+                - converter: jsonata
+                  config: |
+                      {
+                           "id": request_id,
+                           "message": output.message,
+                           "url": [$map(output.results, function($v){$v.url})]
+                      }
+
+    speech-to-text:
+        task_type: "text-to-image"
+        protocol: "HTTP"
+        expose_protocol: "HTTP"
+        url: "https://nls-gateway-cn-shanghai.aliyuncs.com/stream/v1/asr"
+        endpoints: [ "POST /v1/speech-to-text" ] # request to this will use this flavor
+        extra_url: ""
+        auth_type: "token"
+        auth_fileds: [ "app_key", "access_key_id", "access_key_secret" ]
+        install_raw_routes: false # also install routes without aog prefix in url path
+        default_model: irag-1.0
+        request_segments: 1 # request
+        extra_headers: '{}'
+        support_models: [ "asr" ]
+        request_to_aog:
+                    conversion:
+                        - converter: jsonata
+                          config: |
+                              {
+                                 "speech": speech
+                              }
+
+                        - converter: header
+                          config:
+                              set:
+                                  Content-Type: application/json
+        request_from_aog:
+                    conversion:
+                        - converter: jsonata
+                          config: |
+                              {
+                                 "speech": speech
+                              }
+                        - converter: header
+                          config:
+                              set:
+                                  Content-Type: application/json
+        response_to_aog:
+            conversion:
+                - converter: jsonata
+                  config: |
+                      {
+                          "id": task_id,
+                          "msg": message,
+                          "text": result
+                      }
+        response_from_aog:
+            conversion:
+                - converter: jsonata
+                  config: |
+                      {
+                          "id": task_id,
+                          "msg": message,
+                          "text": result
+                      }
+
+    speech-to-text-ws:
+        task_type: "speech-to-text-ws"
+        protocol: "HTTP"
+        expose_protocol: "WEBSOCKET"
+        url: "wss://dashscope.aliyuncs.com/api-ws/v1/inference"
+        endpoints: [ "POST /v1/speech-to-text-ws" ]
+        extra_url: ""
+        auth_type: "apikey"
+        install_raw_routes: # also install routes without aog prefix in url path
+        default_model: "paraformer-realtime-v2"
+        request_segments: 1 # request
+        extra_headers: '{"X-DashScope-DataInspection": "enable"}'
+        support_model: ["paraformer-realtime-v2", "paraformer-realtime-v1", "paraformer-realtime-8k-v2", "paraformer-realtime-8k-v1"]
+        request_to_aog:
+            conversion:
+                - converter: jsonata
+                  config: |
+                      {
+                         "model": $model,
+                         "audio": audio,
+                         "params":params
+                      }
+
+                - converter: header
+                  config:
+                      set:
+                          Content-Type: application/json
+        request_from_aog:
+            conversion:
+                - converter: jsonata
+                  config: |
+                      {
+                         "model": $model,
+                         "audio": audio,
+                         "params":params
+                      }
+                - converter: header
+                  config:
+                      set:
+                          Content-Type: application/json
+        response_to_aog:
+            conversion:
+                - converter: jsonata
+                  config: |
+                      {
                           "data": {
-                              "url": [$map(output.results, function($v){$v.url})]
+                              "segments": segments
                                   }
                       }
         response_from_aog:
@@ -293,6 +481,159 @@ services:
                       {
                            "id": request_id,
                            "data": {
-                              "url": [$map(output.results, function($v){$v.url})]
+                              "url": output.results[0].url
                                   }
+                      }
+    text-to-speech:
+        task_type: "text-to-speech"
+        protocol: "HTTP"
+        expose_protocol: "HTTP"
+        url: "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation"
+        endpoints: [ "POST /v1/text-to-speech" ]
+        extra_url: ""
+        auth_type: "apikey"
+        install_raw_routes: # also install routes without aog prefix in url path
+        default_model: "qwen-tts"
+        request_segments: 1 # request
+        extra_headers: '{}'
+        support_model: [ "qwen-tts" ]
+        request_to_aog:
+            conversion:
+                - converter: jsonata
+                  config: |
+                      {
+                         "model": $model,
+                         "input": {
+                             "text": text,
+                             "voice":voice
+                                },
+                        "stream": false
+                      }
+
+                - converter: header
+                  config:
+                      set:
+                          Content-Type: application/json
+        request_from_aog:
+            conversion:
+                - converter: jsonata
+                  config: |
+                      {
+                          "model": $model,
+                          "input": {
+                             "text": text,
+                             "voice":voice
+                                  },
+                          "stream": stream
+                      }
+                - converter: header
+                  config:
+                      set:
+                          Content-Type: application/json
+        response_to_aog:
+            conversion:
+                - converter: jsonata
+                  config: |
+                      {
+                        "id": output.audio.id,
+                        "data": output.audio.url
+                      }
+        stream_response_to_aog:
+            conversion:
+                - converter: action_if
+                  config:
+                      trim: true
+                      pattern: "[DONE]" # ignore if the content is [DONE]
+                      action: drop
+                - converter: jsonata
+                  config: |
+                      {
+                         "id": request_id,
+                         "data":output.audio.data,
+                         "finished": output.finish_reason = "stop" ? true : false,
+                         "finish_reason": output.finish_reason
+                      }
+        response_from_aog:
+            conversion:
+                - converter: jsonata
+                  config: |
+                      {
+                           "id": output.audio.id,
+                           "data": output.audio.url
+                      }
+        stream_response_from_aog:
+            epilogue: [ "[DONE]" ] # openai adds a data: [DONE] at the end
+            conversion:
+                - converter: jsonata
+                  config: |
+                      {
+                         "id": id,
+                         "data": output.audio.data
+                      }
+    image-to-video:
+        task_type: "image-to-video"
+        protocol: "HTTP"
+        expose_protocol: "HTTP"
+        url: "https://dashscope.aliyuncs.com/api/v1/services/aigc/video-generation/video-synthesis"
+        endpoints: [ "POST /v1/image-to-video" ]
+        extra_url: "https://dashscope.aliyuncs.com/api/v1/tasks"
+        auth_type: "apikey"
+        install_raw_routes: # also install routes without aog prefix in url path
+        default_model: "wan2.2-i2v-plus"
+        request_segments: 2 # request
+        extra_headers: '{"X-DashScope-Async": "enable"}'
+        support_model: [ "wan2.2-i2v-plus" ]
+        request_to_aog:
+            conversion:
+                - converter: jsonata
+                  config: |
+                      {
+                         "model": $model,
+                         "input": {
+                                  "prompt": prompt,
+                                  "img_url": image
+                                  },
+                        "parameters": {
+                                  "resolution":"1080P"
+                                  }
+                      }
+
+                - converter: header
+                  config:
+                      set:
+                          Content-Type: application/json
+        request_from_aog:
+            conversion:
+                - converter: jsonata
+                  config: |
+                      {
+                         "model": $model,
+                         "input": {
+                                  "prompt": prompt,
+                                  "img_url": image
+                                  },
+                        "parameters": {
+                                  "resolution":"1080P"
+                                  }
+                      }
+                - converter: header
+                  config:
+                      set:
+                          Content-Type: application/json
+        response_to_aog:
+            conversion:
+                - converter: jsonata
+                  config: |
+                      {
+                        "id": request_id,
+                        "data": output.video_url
+                      }
+
+        response_from_aog:
+            conversion:
+                - converter: jsonata
+                  config: |
+                      {
+                        "id": request_id,
+                        "data": output.video_url
                       }

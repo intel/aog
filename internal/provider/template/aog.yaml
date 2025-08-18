@@ -1,4 +1,4 @@
-version: "0.2"
+version: "0.5"
 name: aog
 services:
     models:
@@ -9,7 +9,7 @@ services:
         endpoints: ["POST /generate"]
     embed:
         endpoints: ["POST /embed"]
-    text_to_speech:
+    text-to-speech:
         endpoints: ["POST /text-to-speech", "GET /text-to-speech"]
     text-to-image:
         endpoints: ["POST /text-to-image", "GET /text-to-image"]
@@ -17,5 +17,9 @@ services:
         endpoints: [ "POST /speech-to-text", "GET /speech-to-text" ]
     speech-to-text-ws:
         endpoints: ["WEBSOCKET /speech-to-text"]
+    image-to-video:
+        endpoints: ["POST /image-to-video"]
+    image-to-image:
+        endpoints: ["POST /image-to-image"]
     health:
         endpoints: ["GET /health"]

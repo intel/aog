@@ -26,36 +26,52 @@ import (
 	"runtime"
 	"strings"
 
-	"intel.com/aog/internal/api/dto"
-	"intel.com/aog/internal/client"
-	"intel.com/aog/internal/datastore"
-	"intel.com/aog/internal/logger"
-	"intel.com/aog/internal/provider"
-	"intel.com/aog/internal/provider/engine"
-	"intel.com/aog/internal/provider/template"
-	"intel.com/aog/internal/schedule"
-	"intel.com/aog/internal/types"
-	"intel.com/aog/internal/utils"
-	"intel.com/aog/internal/utils/bcode"
+	"github.com/intel/aog/internal/api/dto"
+	"github.com/intel/aog/internal/client"
+	"github.com/intel/aog/internal/datastore"
+	"github.com/intel/aog/internal/logger"
+	"github.com/intel/aog/internal/provider"
+	"github.com/intel/aog/internal/provider/engine"
+	"github.com/intel/aog/internal/provider/template"
+	"github.com/intel/aog/internal/schedule"
+	"github.com/intel/aog/internal/types"
+	"github.com/intel/aog/internal/utils"
+	"github.com/intel/aog/internal/utils/bcode"
 )
 
 type Model interface {
 	CreateModel(ctx context.Context, request *dto.CreateModelRequest) (*dto.CreateModelResponse, error)
 	DeleteModel(ctx context.Context, request *dto.DeleteModelRequest) (*dto.DeleteModelResponse, error)
 	GetModels(ctx context.Context, request *dto.GetModelsRequest) (*dto.GetModelsResponse, error)
+	CreateModelStream(ctx context.Context, request *dto.CreateModelRequest) (chan []byte, chan error)
+	ModelStreamCancel(ctx context.Context, req *dto.ModelStreamCancelRequest) (*dto.ModelStreamCancelResponse, error)
+	GetRecommendModel() (*dto.RecommendModelResponse, error)
+	GetSupportModelList(ctx context.Context, request *dto.GetSupportModelRequest) (*dto.GetSupportModelResponse, error)
 }
 
 type ModelImpl struct {
-	Ds datastore.Datastore
+	Ds  datastore.Datastore
+	JDs datastore.JsonDatastore
 }
 
 func NewModel() Model {
 	return &ModelImpl{
-		Ds: datastore.GetDefaultDatastore(),
+		Ds:  datastore.GetDefaultDatastore(),
+		JDs: datastore.GetDefaultJsonDatastore(),
 	}
 }
 
 func (s *ModelImpl) CreateModel(ctx context.Context, request *dto.CreateModelRequest) (*dto.CreateModelResponse, error) {
+	// ensure service avaliable first
+	service := &types.Service{Name: request.ServiceName}
+    err := s.Ds.Get(ctx, service)
+    if err != nil {
+        return nil, bcode.ErrServiceRecordNotFound
+    }
+    if service.Status != 0 {
+        return nil, bcode.ErrModelServiceNotAvailable
+    }
+
 	sp := new(types.ServiceProvider)
 	if request.ProviderName != "" {
 		sp.ProviderName = request.ProviderName
@@ -84,7 +100,7 @@ func (s *ModelImpl) CreateModel(ctx context.Context, request *dto.CreateModelReq
 	sp.ServiceName = request.ServiceName
 	sp.ServiceSource = request.ServiceSource
 
-	err := s.Ds.Get(ctx, sp)
+	err = s.Ds.Get(ctx, sp)
 	if err != nil && !errors.Is(err, datastore.ErrEntityInvalid) {
 		// todo debug log output
 		return nil, bcode.ErrServer
@@ -227,7 +243,7 @@ func (s *ModelImpl) GetModels(ctx context.Context, request *dto.GetModelsRequest
 	}, nil
 }
 
-func CreateModelStream(ctx context.Context, request dto.CreateModelRequest) (chan []byte, chan error) {
+func (s *ModelImpl) CreateModelStream(ctx context.Context, request *dto.CreateModelRequest) (chan []byte, chan error) {
 	newDataChan := make(chan []byte, 100)
 	newErrChan := make(chan error, 1)
 	defer close(newDataChan)
@@ -365,10 +381,11 @@ func CreateModelStream(ctx context.Context, request dto.CreateModelRequest) (cha
 						if request.ServiceName == types.ServiceChat {
 							generateM := new(types.Model)
 							generateM.ModelName = m.ModelName
-							generateM.ProviderName = strings.Replace(m.ProviderName, types.ServiceChat, types.ServiceGenerate, -1)
+							generateM.ProviderName = strings.Replace(m.ProviderName, "chat", "generate", -1)
+							generateM.Status = m.Status
 							generateM.ServiceName = types.ServiceGenerate
 							generateM.ServiceSource = m.ServiceSource
-							generateM.Status = m.Status
+							generateM.IsDefault = m.IsDefault
 							err = ds.Get(ctx, generateM)
 							if err != nil && !errors.Is(err, datastore.ErrEntityInvalid) {
 								newErrorCh <- err
@@ -417,7 +434,7 @@ func CreateModelStream(ctx context.Context, request dto.CreateModelRequest) (cha
 	return newDataCh, newErrorCh
 }
 
-func ModelStreamCancel(ctx context.Context, req *dto.ModelStreamCancelRequest) (*dto.ModelStreamCancelResponse, error) {
+func (s *ModelImpl) ModelStreamCancel(ctx context.Context, req *dto.ModelStreamCancelRequest) (*dto.ModelStreamCancelResponse, error) {
 	modelClientCancelArray := client.ModelClientMap[req.ModelName]
 	if modelClientCancelArray != nil {
 		for _, cancel := range modelClientCancelArray {
@@ -613,181 +630,150 @@ func RecommendModels() (map[string][]dto.RecommendModelData, error) {
 	return nil, err
 }
 
-func GetRecommendModel() (dto.RecommendModelResponse, error) {
+func (s *ModelImpl) GetRecommendModel() (*dto.RecommendModelResponse, error) {
 	recommendModel, err := RecommendModels()
 	if err != nil {
-		return dto.RecommendModelResponse{Data: nil}, err
+		return &dto.RecommendModelResponse{Data: nil}, err
 	}
-	return dto.RecommendModelResponse{Bcode: *bcode.ModelCode, Data: recommendModel}, nil
+	return &dto.RecommendModelResponse{Bcode: *bcode.ModelCode, Data: recommendModel}, nil
 }
 
-func GetSupportModelList(ctx context.Context, request dto.GetModelListRequest) (*dto.RecommendModelResponse, error) {
-	ds := datastore.GetDefaultDatastore()
-	flavor := request.Flavor
-	source := request.ServiceSource
-	serviceModelList := make(map[string][]dto.RecommendModelData)
-	if request.ServiceSource == types.ServiceSourceLocal {
-		localOllamaModelMap := make(map[string]dto.LocalSupportModelData)
-		localOllamaServiceMap := make(map[string][]dto.LocalSupportModelData)
-		fileContent, err := template.FlavorTemplateFs.ReadFile("local_model.json")
-		if err != nil {
-			fmt.Printf("Read file failed: %v\n", err)
-			return nil, err
-		}
-		// parse struct
-		err = json.Unmarshal(fileContent, &localOllamaServiceMap)
-		if err != nil {
-			fmt.Printf("Parse JSON failed: %v\n", err)
-			return nil, err
-		}
-		for _, serviceInfo := range localOllamaServiceMap {
-			for _, model := range serviceInfo {
-				localOllamaModelMap[model.Name] = model
-			}
-		}
-		//
-		//var recommendModelParamsSize float32
-		recommendModel, err := RecommendModels()
-		if err != nil {
-			return &dto.RecommendModelResponse{Data: nil}, err
-		}
-		flavor = "ollama"
-		// service := "chat"
-		var resModelNameList []string
-
-		for modelService, modelInfo := range recommendModel {
-			providerServiceDefaultInfo := schedule.GetProviderServiceDefaultInfo(flavor, modelService)
-			parts := strings.SplitN(providerServiceDefaultInfo.Endpoints[0], " ", 2)
-			for _, model := range modelInfo {
-				localModelInfo := localOllamaModelMap[model.Name]
-				modelQuery := new(types.Model)
-				modelQuery.ModelName = model.Name
-				modelQuery.ProviderName = fmt.Sprintf("%s_%s_%s", source, flavor, modelService)
-				canSelect := true
-				err := ds.Get(context.Background(), modelQuery)
-				if err != nil {
-					canSelect = false
-				}
-				if modelQuery.Status != "downloaded" {
-					canSelect = false
-				}
-				model.Service = modelService
-				model.Flavor = flavor
-				model.Method = parts[0]
-				model.Desc = localModelInfo.Description
-				model.Url = providerServiceDefaultInfo.RequestUrl
-				model.AuthType = providerServiceDefaultInfo.AuthType
-				model.IsRecommended = true
-				model.CanSelect = canSelect
-				model.ServiceProvider = fmt.Sprintf("%s_%s_%s", source, flavor, modelService)
-				model.Avatar = localModelInfo.Avatar
-				model.Class = localModelInfo.Class
-				model.OllamaId = localModelInfo.OllamaId
-				serviceModelList[modelService] = append(serviceModelList[modelService], model)
-				resModelNameList = append(resModelNameList, model.Name)
-			}
-
-		}
-		for modelService, modelInfo := range localOllamaServiceMap {
-			providerServiceDefaultInfo := schedule.GetProviderServiceDefaultInfo(flavor, modelService)
-			if providerServiceDefaultInfo.Endpoints == nil {
-				continue
-			}
-			parts := strings.SplitN(providerServiceDefaultInfo.Endpoints[0], " ", 2)
-			for _, localModel := range modelInfo {
-				if !utils.Contains(resModelNameList, localModel.Name) {
-					modelQuery := new(types.Model)
-					modelQuery.ModelName = localModel.Name
-					modelQuery.ProviderName = fmt.Sprintf("%s_%s_%s", source, flavor, modelService)
-					canSelect := true
-					err := ds.Get(context.Background(), modelQuery)
-					if err != nil {
-						canSelect = false
-					}
-					if modelQuery.Status != "downloaded" {
-						canSelect = false
-					}
-					model := new(dto.RecommendModelData)
-					model.Name = localModel.Name
-					model.Service = modelService
-					model.Flavor = flavor
-					model.Method = parts[0]
-					model.Desc = localModel.Description
-					model.Url = providerServiceDefaultInfo.RequestUrl
-					model.AuthType = providerServiceDefaultInfo.AuthType
-					model.IsRecommended = false
-					model.CanSelect = canSelect
-					model.ServiceProvider = fmt.Sprintf("%s_%s_%s", source, flavor, modelService)
-					model.Avatar = localModel.Avatar
-					model.Class = localModel.Class
-					model.Size = localModel.Size
-					model.OllamaId = localModel.OllamaId
-					serviceModelList[modelService] = append(serviceModelList[modelService], *model)
-					resModelNameList = append(resModelNameList, model.Name)
-				}
-			}
-
-		}
-
-	} else {
-		RemoteServiceMap := make(map[string][]dto.LocalSupportModelData)
-		fileContent, err := template.FlavorTemplateFs.ReadFile("remote_model.json")
-		if err != nil {
-			fmt.Printf("Read file failed: %v\n", err)
-			return nil, err
-		}
-		// parse struct
-		err = json.Unmarshal(fileContent, &RemoteServiceMap)
-		if err != nil {
-			fmt.Printf("Parse JSON failed: %v\n", err)
-			return nil, err
-		}
-		for _, service := range types.SupportService {
-			if service == types.ServiceModels || service == types.ServiceGenerate {
-				continue
-			}
-			remoteModelInfoList := RemoteServiceMap[service]
-			providerServiceDefaultInfo := schedule.GetProviderServiceDefaultInfo(flavor, service)
-			parts := strings.SplitN(providerServiceDefaultInfo.Endpoints[0], " ", 2)
-			authFields := []string{"api_key"}
-			if providerServiceDefaultInfo.AuthType == types.AuthTypeToken {
-				authFields = []string{"secret_id", "secret_key"}
-			}
-			for _, model := range remoteModelInfoList {
-				if model.Flavor != flavor {
-					continue
-				}
-				modelQuery := new(types.Model)
-				modelQuery.ModelName = model.Name
-				modelQuery.ProviderName = fmt.Sprintf("%s_%s_%s", source, flavor, service)
-				canSelect := true
-				err := ds.Get(context.Background(), modelQuery)
-				if err != nil {
-					canSelect = false
-				}
-				if modelQuery.Status != "downloaded" {
-					canSelect = false
-				}
-				modelData := dto.RecommendModelData{
-					Name:            model.Name,
-					Avatar:          model.Avatar,
-					Desc:            model.Description,
-					Service:         service,
-					Flavor:          flavor,
-					Method:          parts[0],
-					Url:             providerServiceDefaultInfo.RequestUrl,
-					AuthType:        providerServiceDefaultInfo.AuthType,
-					AuthFields:      authFields,
-					AuthApplyUrl:    providerServiceDefaultInfo.AuthApplyUrl,
-					ServiceProvider: fmt.Sprintf("%s_%s_%s", source, flavor, service),
-					CanSelect:       canSelect,
-				}
-				serviceModelList[service] = append(serviceModelList[service], modelData)
-			}
-		}
+func (s *ModelImpl) GetSupportModelList(ctx context.Context, request *dto.GetSupportModelRequest) (*dto.GetSupportModelResponse, error) {
+	page := request.Page
+	if page == 0 {
+		page = 1
 	}
-	return &dto.RecommendModelResponse{
-		Bcode: *bcode.ModelCode,
-		Data:  serviceModelList,
+	pageSize := request.PageSize
+	if pageSize == 0 {
+		pageSize = 10
+	}
+	var resData dto.GetSupportModelResponseData
+	resData.PageSize = pageSize
+	resData.Page = page
+	resultList := []dto.RecommendModelData{}
+	queryOpList := []datastore.FuzzyQueryOption{}
+	if request.Flavor != "" {
+		queryOpList = append(queryOpList, datastore.FuzzyQueryOption{
+			Key:   "flavor",
+			Query: request.Flavor,
+		})
+	}
+	if request.ServiceSource != "" {
+		queryOpList = append(queryOpList, datastore.FuzzyQueryOption{
+			Key:   "service_source",
+			Query: request.ServiceSource,
+		})
+	}
+	sm := &types.SupportModel{}
+	sortOption := []datastore.SortOption{
+		{Key: "name", Order: 1},
+	}
+	options := &datastore.ListOptions{FilterOptions: datastore.FilterOptions{Queries: queryOpList}, SortBy: sortOption}
+	totalCount, err := s.JDs.Count(ctx, sm, &datastore.FilterOptions{Queries: queryOpList})
+	if err != nil {
+		return nil, err
+	}
+	resData.Total = int(totalCount)
+	if int(totalCount)%pageSize == 0 {
+		resData.TotalPage = int(totalCount) / pageSize
+	} else {
+		resData.TotalPage = int(totalCount)/pageSize + 1
+	}
+	if resData.TotalPage == 0 {
+		resData.TotalPage = 1
+	}
+	options.Page = page
+	options.PageSize = pageSize
+	supportModelList, err := s.JDs.List(ctx, sm, options)
+	if err != nil {
+		return nil, err
+	}
+
+	recommendModel, _ := RecommendModels()
+	for _, supportModel := range supportModelList {
+		IsRecommend := false
+		smInfo := supportModel.(*types.SupportModel)
+		if smInfo.ApiFlavor == types.FlavorOllama {
+			if recommendModel == nil {
+				IsRecommend = false
+			}
+			rmServiceModelInfo := recommendModel[smInfo.ServiceName]
+			if rmServiceModelInfo != nil {
+				for _, rm := range rmServiceModelInfo {
+					if rm.Name == smInfo.Name {
+						IsRecommend = true
+						break
+					}
+
+				}
+			}
+		}
+
+		providerName := fmt.Sprintf("%s_%s_%s", smInfo.ServiceSource, types.FlavorOllama, smInfo.ServiceName)
+		modelQuery := new(types.Model)
+		modelQuery.ModelName = smInfo.Name
+		modelQuery.ProviderName = providerName
+		canSelect := true
+		err := s.JDs.Get(context.Background(), modelQuery)
+		if err != nil {
+			canSelect = false
+		}
+		if modelQuery.Status != "downloaded" {
+			canSelect = false
+		}
+
+		if canSelect {
+			smInfo.CreatedAt = modelQuery.CreatedAt
+		}
+
+		providerServiceDefaultInfo := schedule.GetProviderServiceDefaultInfo(smInfo.Flavor, smInfo.ServiceName)
+		authFields := []string{""}
+		if providerServiceDefaultInfo.AuthType == types.AuthTypeToken {
+			authFields = []string{"app_key", "access_key_id", "access_key_secret"}
+		} else if providerServiceDefaultInfo.AuthType == types.AuthTypeApiKey {
+			authFields = []string{"api_key"}
+		} else if providerServiceDefaultInfo.AuthType == types.AuthTypeSign {
+			authFields = []string{"secret_id", "secret_key"}
+		}
+		modelData := dto.RecommendModelData{
+			Id:              smInfo.Id,
+			Name:            smInfo.Name,
+			Avatar:          smInfo.Avatar,
+			Desc:            smInfo.Description,
+			Service:         smInfo.ServiceName,
+			ApiFlavor:       smInfo.ApiFlavor,
+			Flavor:          smInfo.Flavor,
+			AuthType:        providerServiceDefaultInfo.AuthType,
+			AuthFields:      authFields,
+			AuthApplyUrl:    providerServiceDefaultInfo.AuthApplyUrl,
+			ServiceProvider: fmt.Sprintf("%s_%s_%s", smInfo.ServiceSource, types.FlavorOllama, smInfo.ServiceName),
+			CanSelect:       canSelect,
+			IsRecommended:   IsRecommend,
+			Source:          smInfo.ServiceSource,
+			InputLength:     smInfo.InputLength,
+			OutputLength:    smInfo.OutputLength,
+			Class:           smInfo.Class,
+			Size:            smInfo.Size,
+			OllamaId:        smInfo.OllamaId,
+			Think:           smInfo.Think,
+			ThinkSwitch:     smInfo.ThinkSwitch,
+			Tools:           smInfo.Tools,
+			Context:         smInfo.Context,
+			CreatedAt:       smInfo.CreatedAt,
+		}
+		resultList = append(resultList, modelData)
+
+	}
+	resData.Total = len(resultList)
+	resData.TotalPage = len(resultList) / pageSize
+	if resData.TotalPage == 0 {
+		resData.TotalPage = 1
+	}
+
+	resData.Data = resultList
+
+	return &dto.GetSupportModelResponse{
+		*bcode.ModelCode,
+		resData,
 	}, nil
 }

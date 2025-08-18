@@ -1,0 +1,84 @@
+# Go build output
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+mcp-server
+mcp-server-*
+
+# Test binary files
+*.test
+
+# Output directories
+build/
+dist/
+
+# Dependency directories
+vendor/
+
+# Go workspace files
+go.work
+go.work.sum
+
+# Environment variable files
+.env
+.env.local
+.env.*.local
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Operating system files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Log files
+*.log
+logs/
+
+# Test coverage files
+coverage.out
+coverage.html
+*.cover
+
+# Performance analysis files
+*.prof
+*.pprof
+
+# Documentation generated files
+docs.txt
+
+# Temporary files
+*.tmp
+*.temp
+
+# Configuration files (may contain sensitive information)
+config.json
+config.yaml
+config.yml
+
+# Certificate files
+*.pem
+*.key
+*.crt
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Cache files
+.cache/
+
+# Build cache
+.build-cache/

@@ -26,8 +26,8 @@ import (
 
 	jsonata "github.com/blues/jsonata-go"
 
-	"intel.com/aog/internal/logger"
-	"intel.com/aog/internal/types"
+	"github.com/intel/aog/internal/logger"
+	"github.com/intel/aog/internal/types"
 )
 
 type ConvertContext map[string]any
@@ -90,7 +90,7 @@ func NewConverterPipeline(config []types.ConversionStepDef) (*ConverterPipeline,
 }
 
 func (p *ConverterPipeline) Convert(content types.HTTPContent, ctx ConvertContext) (types.HTTPContent, error) {
-	logger.LogicLogger.Debug("[Flavor] Convert Start: ", content)
+	logger.LogicLogger.Debug("[Flavor] Convert Start: ", len(content.Body))
 	if !p.IsReusable() { // need to replace the step which is not reusable
 		steps := make([]Converter, len(p.steps))
 		for i, step := range p.steps {

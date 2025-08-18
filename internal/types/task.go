@@ -22,9 +22,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 
-	"intel.com/aog/internal/logger"
+	"github.com/intel/aog/internal/logger"
 )
 
 type ServiceResultType int
@@ -64,7 +65,9 @@ func (sr *ServiceResult) WriteBack(w http.ResponseWriter) {
 				w.Header().Set(k, v[0])
 			}
 			_, _ = w.Write(httpError.Body)
-			logger.LogicLogger.Info("send_back_response", httpError.StatusCode, w.Header(), httpError.Body)
+			logger.LogicLogger.Info("send_back_response:", slog.Int("http_status_code", httpError.StatusCode),
+				slog.Any("response_headers", w.Header()),
+				slog.Any("response_body", httpError.Body))
 			return
 		}
 
@@ -111,7 +114,7 @@ type ServiceRequest struct {
 	RequestExtraUrl       string        `json:"extra_url"`
 	HTTP                  HTTPContent   `json:"-"`
 	OriginalRequest       *http.Request `json:"-"`
-	WebSocketConnID       string        `json:"-"` // WebSocket连接ID，用于关联同一连接上的多个消息
+	WebSocketConnID       string        `json:"-"` // WebSocket connection ID, used to associate multiple messages on the same connection
 }
 
 func (sr *ServiceRequest) String() string {
@@ -129,7 +132,8 @@ type ServiceTarget struct {
 	Model           string
 	ToFavor         string
 	XPU             string
-	Protocol        string // 服务协议类型，如GRPC_STREAM
+	Protocol        string // Service protocol type, such as GRPC_STREAM
+	ExposeProtocol  string
 	ServiceProvider *ServiceProvider
 }
 

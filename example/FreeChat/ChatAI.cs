@@ -30,7 +30,7 @@ namespace Core
 
         public const bool Stream = true;
 
-        public string ApiUrl { get; set; } = "http://localhost:16688/aog/v0.4/services/chat";
+        public string ApiUrl { get; set; } = "http://localhost:16688/aog/v0.2/services/chat";
 
         public string ApiKey { get; set; } = string.Empty;
 

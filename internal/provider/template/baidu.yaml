@@ -242,9 +242,7 @@ services:
                       {
                           "id": id,
                           "created": created,
-                           "data": {
-                               "url": [$map(data, function($v){$v.url})]
-                                   }
+                          "url": [$map(data, function($v){$v.url})]
                       }
         response_from_aog:
             conversion:
@@ -253,7 +251,65 @@ services:
                       {
                            "id": id,
                            "created": created,
-                           "data": {
-                               "url": [$map(data, function($v){$v})]
-                                   }
+                           "url": [$map(data, function($v){$v})]
+                      }
+
+    text-to-speech:
+        task_type: "text-to-speech"
+        protocol: "HTTP"
+        expose_protocol: "HTTP"
+        url: "https://tsn.baidu.com/text2audio"
+        endpoints: [ "POST /v1/text-to-speech" ] # request to this will use this flavor
+        extra_url: ""
+        auth_type: "apikey"
+        install_raw_routes: false # also install routes without aog prefix in url path
+        default_model: tts
+        request_segments: 1 # request
+        extra_headers: '{"Content-Type", "application/x-www-form-urlencoded"}'
+        support_models: [ "tts" ]
+        request_to_aog:
+            conversion:
+                - converter: jsonata
+                  config: |
+                      {
+                         "model": $model,
+                         "tex": text,
+                         "cuid": cuid,
+                         "ctp": 1,
+                         "lan":"zh"
+                      }
+
+                - converter: header
+                  config:
+                      set:
+                          Content-Type: application/json
+        request_from_aog:
+            conversion:
+                - converter: jsonata
+                  config: |
+                      {
+                         "model": $model,
+                         "tex": text,
+                         "cuid": uuid,
+                         "ctp": 1,
+                         "lan":"zh"
+                      }
+
+                - converter: header
+                  config:
+                      set:
+                          Content-Type: application/json
+        response_to_aog:
+            conversion:
+                - converter: jsonata
+                  config: |
+                      {
+                          "data": binary
+                      }
+        response_from_aog:
+            conversion:
+                - converter: jsonata
+                  config: |
+                      {
+                          "data": binary
                       }

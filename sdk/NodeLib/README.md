@@ -291,7 +291,7 @@ aog.speechToText(data).then(response => {
 // 实时语音识别服务
 const speechStream = oadin.SpeechToTextStream({
   model: "NamoLi/whisper-large-v3-ov",
-  language: "<|zh|>",
+  language: "zh",
   sampleRate: 16000
 });
 

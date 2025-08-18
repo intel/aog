@@ -197,6 +197,7 @@ services:
                           "stream": $stream,
                           "messages": messages,
                           "seed": options.seed,
+                          "images": images,
                           "temperature": options.temperature,
                           "template": options.template,
                           "top_p": options.top_p,
@@ -220,6 +221,7 @@ services:
                           "stream": $stream,
                           "prompt": prompt,
                           "tools": tools,
+                          "images": images,
                           "keep_alive": keep_alive,
                           "options": {
                               "seed": seed,
@@ -301,6 +303,8 @@ services:
 
     embed:
         task_type: "embedding"
+        protocol: "HTTP"
+        expose_protocol: "HTTP"
         url: "http://127.0.0.1:16677/api/embed"
         endpoints: [ "POST /api/embed"] # request to this will use this flavor
         extra_url: ""

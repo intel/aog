@@ -44,7 +44,7 @@ def is_aog_available():
 # 检查服务提供商是否存在
 def get_service_provider():
     try:
-        response = requests.get("http://127.0.0.1:16688/aog/v0.4/service_provider", timeout=3)
+        response = requests.get("http://127.0.0.1:16688/aog/v0.2/service_provider", timeout=3)
         return response.status_code == 200 and response.text.strip() != ""
     except requests.RequestException:
         return False

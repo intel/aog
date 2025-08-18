@@ -2,7 +2,7 @@
 
 中文 | [English](README_en.md)
 
-当前为 AOG 预览版 v0.4.0，更多功能和稳定性正在不断完善过程中。欢迎就发现的缺陷提交 Issues。
+当前为 AOG 预览版 v0.5.0，更多功能和稳定性正在不断完善过程中。欢迎就发现的缺陷提交 Issues。
 
 当前版本支持 chat、embed、text-to-image 服务，下层支持 ollama 和 openvino model server。更多服务如视频、音频相关，以及其他 AI 引擎，敬请
 期待正在开发的后续版本。
@@ -377,7 +377,7 @@ AOG API 是一个 Restful API。您可以通过与调用云 AI 服务（如 Open
 例如，您可以使用 `curl` 在 Windows 上测试聊天服务。
 
 ```sh
-curl -X POST http://localhost:16688/aog/v0.4/services/chat  -X POST -H
+curl -X POST http://localhost:16688/aog/v0.2/services/chat  -X POST -H
 "Content-Type: application/json" -d
 "{\"model\":\"deepseek-r1:7b\",\"messages\":[{\"role\":\"user\",\"content\":\"why is
 the sky blue?\"}],\"stream\":false}"
@@ -389,13 +389,13 @@ the sky blue?\"}],\"stream\":false}"
 
 例如，如果您使用的是 OpenAI 的聊天完成服务，您只需将端点 URL 从
 `https://api.openai.com/v1/chat/completions` 替换为
-`http://localhost:16688/aog/v0.4/api_flavors/openai/v1/chat/completions`。
+`http://localhost:16688/aog/v0.2/api_flavors/openai/v1/chat/completions`。
 
 NOTE 请注意，调用 AOG 的新 URL 位于 `api_flavors/openai` ，其余 URL 与原始 OpenAI API 相同，即
 `/v1/chat/completions` 。
 
 如果您使用 ollama API，可以将端点 URL 从 `https://localhost:11434/api/chat` 替换为
-`http://localhost:16688/aog/v0.4/api_flavors/ollama/api/chat` 。同样，它位于 `api_flavors/ollama` ，
+`http://localhost:16688/aog/v0.2/api_flavors/ollama/api/chat` 。同样，它位于 `api_flavors/ollama` ，
 其余 URL 与原始 ollama API 相同，即 `/api/chat`。
 
 ## 发布您的基于 AOG 的 AI 应用
@@ -410,7 +410,7 @@ Windows 上是 `AOGChecker.dll` 。您不需要发布 AI 堆栈或模型。
 
 ```json
 {
-  "version": "0.4",
+  "version": "0.5",
   "service": {
     "chat": {
       "models": ["qwen2.5:0.5b", "qwen2.5:7b"]
@@ -434,7 +434,26 @@ Windows 上是 `AOGChecker.dll` 。您不需要发布 AI 堆栈或模型。
 
 ## 发布历史
 
-### v0.4.0 (当前版本)
+### v0.5.0 (当前版本)
+**发布日期：** 2025-08-15
+
+**新功能：**
+- AOG MCP Server 
+- 语音合成能力支持（本地基于OpenVINO、云端支持阿里百炼、腾讯、百度千帆）
+- 图生图、图生视频支持（暂仅支持云端阿里百炼）
+- Chat/Generate 多模态输入支持
+- 版本升级数据迁移
+
+**改进：**
+- 本地模型请求加入队列机制（当前非embed模型请求加入队列）、已加载模型定时清理机制
+- 修复了一些稳定性bug及文档
+
+
+
+---
+
+
+### v0.4.0 
 **发布日期：** 2025-07-03
 
 **新功能：**

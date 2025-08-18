@@ -22,10 +22,11 @@ import (
 
 const (
 	// Database table names
-	TableService         = "aog_service"
-	TableServiceProvider = "aog_service_provider"
-	TableModel           = "aog_model"
-	TableVersionUpdate   = "aog_version_update_record"
+	TableService            = "aog_service"
+	TableServiceProvider    = "aog_service_provider"
+	TableModel              = "aog_model"
+	TableVersionUpdate      = "aog_version_update_record"
+	TableDataMigrateVersion = "aog_data_migration_version"
 )
 
 // Service  table structure
@@ -161,9 +162,9 @@ func (t *Model) Index() map[string]interface{} {
 		index["provider_name"] = t.ProviderName
 	}
 
-	if t.ServiceName != "" {
-		index["service_name"] = t.ServiceName
-	}
+	//if t.ServiceName != "" {
+	//	index["service_name"] = t.ServiceName
+	//}
 
 	return index
 }
@@ -195,6 +196,39 @@ func (t *VersionUpdateRecord) TableName() string {
 }
 
 func (t *VersionUpdateRecord) Index() map[string]interface{} {
+	index := make(map[string]interface{})
+	if t.Version != "" {
+		index["version"] = t.Version
+	}
+
+	return index
+}
+
+// VersionUpdateRecord  table structure
+type DataMigrateVersion struct {
+	ID        int       `gorm:"primaryKey;column:id;autoIncrement" json:"id"`
+	Version   string    `gorm:"column:version;not null" json:"version"`
+	CreatedAt time.Time `gorm:"column:created_at;default:CURRENT_TIMESTAMP" json:"created_at"`
+	UpdatedAt time.Time `gorm:"column:updated_at;default:CURRENT_TIMESTAMP" json:"updated_at"`
+}
+
+func (t *DataMigrateVersion) SetCreateTime(time time.Time) {
+	t.CreatedAt = time
+}
+
+func (t *DataMigrateVersion) SetUpdateTime(time time.Time) {
+	t.UpdatedAt = time
+}
+
+func (t *DataMigrateVersion) PrimaryKey() string {
+	return "id"
+}
+
+func (t *DataMigrateVersion) TableName() string {
+	return TableDataMigrateVersion
+}
+
+func (t *DataMigrateVersion) Index() map[string]interface{} {
 	index := make(map[string]interface{})
 	if t.Version != "" {
 		index["version"] = t.Version

@@ -27,16 +27,16 @@ import (
 	"strings"
 	"time"
 
-	"intel.com/aog/internal/api/dto"
-	"intel.com/aog/internal/constants"
-	"intel.com/aog/internal/datastore"
-	"intel.com/aog/internal/logger"
-	"intel.com/aog/internal/provider"
-	"intel.com/aog/internal/schedule"
-	"intel.com/aog/internal/types"
-	"intel.com/aog/internal/utils"
-	"intel.com/aog/internal/utils/bcode"
-	"intel.com/aog/version"
+	"github.com/intel/aog/internal/api/dto"
+	"github.com/intel/aog/internal/constants"
+	"github.com/intel/aog/internal/datastore"
+	"github.com/intel/aog/internal/logger"
+	"github.com/intel/aog/internal/provider"
+	"github.com/intel/aog/internal/schedule"
+	"github.com/intel/aog/internal/types"
+	"github.com/intel/aog/internal/utils"
+	"github.com/intel/aog/internal/utils/bcode"
+	"github.com/intel/aog/version"
 )
 
 const (
@@ -68,6 +68,14 @@ func (s *AIGCServiceImpl) CreateAIGCService(ctx context.Context, request *dto.Cr
 	if request.ServiceSource == "" {
 		request.ServiceSource = types.ServiceSourceLocal
 	}
+	if utils.Contains(types.SupportOnlyRemoteService, request.ServiceName) {
+		request.ServiceSource = types.ServiceSourceRemote
+	}
+	// get flavor
+	recommendConfig := getRecommendConfig(request.ServiceName)
+	if request.ApiFlavor == "" {
+		request.ApiFlavor = recommendConfig.ModelEngine
+	}
 
 	service := &types.Service{Name: request.ServiceName}
 	err := s.Ds.Get(ctx, service)
@@ -79,7 +87,14 @@ func (s *AIGCServiceImpl) CreateAIGCService(ctx context.Context, request *dto.Cr
 	sp := &types.ServiceProvider{}
 	m := &types.Model{}
 	mIsExist := false
-	providerServiceInfo := schedule.GetProviderServiceDefaultInfo(request.ApiFlavor, request.ServiceName)
+
+	providerInfo := schedule.GetProviderServices(request.ApiFlavor)
+	providerServiceInfo, ok := providerInfo[request.ServiceName]
+	if !ok {
+		logger.LogicLogger.Error("Service " + request.ServiceName + " not supported by " + request.ApiFlavor)
+		return nil, bcode.ErrEngineUnSupportService
+	}
+
 	sp.ProviderName = request.ProviderName
 	sp.ServiceSource = request.ServiceSource
 	sp.Method = http.MethodPost
@@ -93,13 +108,15 @@ func (s *AIGCServiceImpl) CreateAIGCService(ctx context.Context, request *dto.Cr
 		sp.URL = providerServiceInfo.RequestUrl
 	}
 
-	if request.ApiFlavor == types.FlavorOllama && request.ServiceName == types.ServiceTextToImage {
-		return nil, fmt.Errorf("Ollama not support  text-to-image service")
-	}
-
 	m.ProviderName = request.ProviderName
 	if request.ServiceSource == types.ServiceSourceRemote {
 		sp.URL = request.Url
+		if request.Url == "" {
+			sp.URL = providerServiceInfo.RequestUrl
+		}
+		if request.AuthType == "" {
+			request.AuthType = types.AuthTypeNone
+		}
 		sp.AuthType = request.AuthType
 		if request.AuthType != types.AuthTypeNone && request.AuthKey == "" {
 			return nil, bcode.ErrProviderAuthInfoLost
@@ -116,16 +133,25 @@ func (s *AIGCServiceImpl) CreateAIGCService(ctx context.Context, request *dto.Cr
 		m.ServiceName = request.ServiceName
 		m.ModelName = providerServiceInfo.DefaultModel
 
-		// 在创建后置为0
+		if sp.AuthType != types.AuthTypeNone {
+			checkSp := ChooseCheckServer(*sp, m.ModelName)
+			if checkSp != nil {
+				return nil, bcode.ErrProviderIsUnavailable
+			}
+			if !checkSp.CheckServer() {
+				return nil, bcode.ErrProviderIsUnavailable
+			}
+		}
+
+		// Set to 0 after creation
 		err := s.Ds.Get(ctx, service)
 		if err == nil {
 			service.Status = 0
 			_ = s.Ds.Put(ctx, service)
 		}
 	} else {
-		recommendConfig := getRecommendConfig(request.ServiceName)
-		// Check if ollama is installed locally and if it is available.
-		// If it is available, proceed to the next step. Otherwise, prompt that ollama is not installed.
+		// Check if model engine is installed locally and if it is available.
+		// If it is available, proceed to the next step. Otherwise, prompt that model engine is not installed.
 		engineProvider := provider.GetModelEngine(recommendConfig.ModelEngine)
 		engineConfig := engineProvider.GetConfig()
 		if request.ModelName != "" {
@@ -203,7 +229,7 @@ func (s *AIGCServiceImpl) CreateAIGCService(ctx context.Context, request *dto.Cr
 			return nil, bcode.ErrAIGCServiceStartEngine
 		}
 
-		// 在创建后置为0
+		// Set to 0 after creation
 		service := &types.Service{Name: request.ServiceName}
 		err = s.Ds.Get(ctx, service)
 		if err == nil {
@@ -273,7 +299,7 @@ func (s *AIGCServiceImpl) CreateAIGCService(ctx context.Context, request *dto.Cr
 				if err != nil {
 					return nil, bcode.ErrAddModel
 				}
-				// 本地已存在模型则将 Status 置为 1
+				// If model already exists locally, set Status to 1
 				checkServer := ChooseCheckServer(*sp, m.ModelName)
 				if checkServer != nil {
 					service.Status = 1
@@ -684,7 +710,7 @@ func (s *AIGCServiceImpl) GetAIGCServices(ctx context.Context, request *dto.GetA
 		dsService := v.(*types.Service)
 		tmp.ServiceName = dsService.Name
 		tmp.LocalProvider = dsService.LocalProvider
-		serviceStatus := 0
+		serviceStatus := 1
 		if dsService.LocalProvider != "" {
 			localSp := &types.ServiceProvider{
 				ProviderName: dsService.LocalProvider,
@@ -720,14 +746,8 @@ func (s *AIGCServiceImpl) GetAIGCServices(ctx context.Context, request *dto.GetA
 			if dsService.Name == types.ServiceTextToImage {
 				continue
 			}
-			checkServerObj := ChooseCheckServer(*remoteSp, remoteModel.ModelName)
-			status := checkServerObj.CheckServer()
-			if status {
-				serviceStatus = 1
-			}
 		}
 		tmp.HybridPolicy = dsService.HybridPolicy
-		// tmp.Status = dsService.Status
 		tmp.Status = serviceStatus
 		tmp.UpdatedAt = dsService.UpdatedAt
 		tmp.CreatedAt = dsService.CreatedAt
@@ -874,6 +894,24 @@ func getRecommendConfig(service string) types.RecommendConfig {
 			ModelEngine:       types.FlavorOpenvino,
 			ModelName:         constants.DefaultSpeechToTextModel,
 			EngineDownloadUrl: OpenvinoEngineDownloadURL,
+		}
+	case types.ServiceTextToSpeech:
+		return types.RecommendConfig{
+			ModelEngine:       types.FlavorOpenvino,
+			ModelName:         constants.DefaultTextToSpeechModel,
+			EngineDownloadUrl: OpenvinoEngineDownloadURL,
+		}
+	case types.ServiceImageToImage:
+		return types.RecommendConfig{
+			ModelEngine:       types.FlavorAliYun,
+			ModelName:         constants.DefaultImageToImageModel,
+			EngineDownloadUrl: "",
+		}
+	case types.ServiceImageToVideo:
+		return types.RecommendConfig{
+			ModelEngine:       types.FlavorAliYun,
+			ModelName:         constants.DefaultImageToVideoModel,
+			EngineDownloadUrl: "",
 		}
 	default:
 		return types.RecommendConfig{}

@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AOG智能内容创作助手</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="app-container">
+        <!-- 头部 -->
+        <header class="app-header">
+            <div class="header-content">
+                <h1 class="app-title">
+                    <span class="logo">🤖</span>
+                    AOG智能内容创作助手
+                </h1>
+                <div class="status-indicator" id="aog-status">
+                    <span class="status-dot"></span>
+                    <span class="status-text">连接中...</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- 主要内容区域 -->
+        <main class="main-content">
+            <!-- 步骤指示器 -->
+            <div class="step-indicator">
+                <div class="step active" data-step="1">
+                    <div class="step-number">1</div>
+                    <div class="step-label">语音输入</div>
+                </div>
+                <div class="step" data-step="2">
+                    <div class="step-number">2</div>
+                    <div class="step-label">文案生成</div>
+                </div>
+                <div class="step" data-step="3">
+                    <div class="step-number">3</div>
+                    <div class="step-label">拍摄参考</div>
+                </div>
+                <div class="step" data-step="4">
+                    <div class="step-number">4</div>
+                    <div class="step-label">本地垫图</div>
+                </div>
+                <div class="step" data-step="5">
+                    <div class="step-number">5</div>
+                    <div class="step-label">语音优化</div>
+                </div>
+                <div class="step" data-step="6">
+                    <div class="step-number">6</div>
+                    <div class="step-label">云端精图</div>
+                </div>
+                <div class="step" data-step="7">
+                    <div class="step-number">7</div>
+                    <div class="step-label">语音播报</div>
+                </div>
+            </div>
+
+            <!-- 步骤页面容器 -->
+            <div class="step-container">
+
+                <!-- 步骤1: 语音输入 -->
+                <div class="step-page active" id="step-1">
+                    <div class="step-content">
+                        <div class="step-header">
+                            <h2>🎤 语音描述您的创作需求</h2>
+                            <p class="step-description">请清晰地说出您想要创作的内容</p>
+                        </div>
+
+                        <div class="voice-recorder">
+                            <button class="record-btn" id="record-btn">
+                                <span class="record-icon">🎤</span>
+                                <span class="record-text">点击开始录音</span>
+                            </button>
+                            <div class="recording-indicator" id="recording-indicator">
+                                <div class="wave-animation">
+                                    <div class="wave"></div>
+                                    <div class="wave"></div>
+                                    <div class="wave"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="speech-result" id="speech-result">
+                            <div class="result-label">识别结果：</div>
+                            <textarea class="result-text" id="speech-text" rows="2" style="width:100%;">等待语音输入...</textarea>
+                        </div>
+
+                        <div class="step-actions">
+                            <button class="btn btn-secondary" id="retry-speech-btn" style="display: none;">重新录音</button>
+                            <button class="btn btn-primary" id="confirm-speech-btn">确认并继续</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 步骤2: 文案生成 -->
+                <div class="step-page" id="step-2">
+                    <div class="step-content">
+                        <div class="step-header">
+                            <h2>💬 AI正在生成创意文案</h2>
+                            <p class="step-description">基于您的需求，AI正在创作精彩的文案内容</p>
+                        </div>
+
+                        <div class="user-input-display">
+                            <div class="input-label">您的需求：</div>
+                            <div class="input-content" id="user-input-display"></div>
+                        </div>
+
+                        <div class="chat-container">
+                            <div class="chat-messages" id="chat-messages">
+                                <div class="welcome-message">
+                                    <div class="message-icon">🤖</div>
+                                    <div class="message-text">正在为您生成创意文案，请稍候...</div>
+                                </div>
+                            </div>
+                            <div class="model-info">
+                                <span class="model-label">使用模型：</span>
+                                <select id="chat-model">
+                                    <option value="qwen2.5:0.5b">Qwen2.5 0.5B</option>
+                                    <option value="deepseek-r1:7b">DeepSeek R1 7B</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="step-actions">
+                            <button class="btn btn-secondary" id="back-to-speech-btn">返回上一步</button>
+                            <button class="btn btn-secondary" id="regenerate-content-btn" style="display: none;">重新生成</button>
+                            <button class="btn btn-primary" id="confirm-content-btn" disabled>确认文案并继续</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 步骤3: 拍摄参考 (可选) -->
+                <div class="step-page" id="step-3">
+                    <div class="step-content">
+                        <div class="step-header">
+                            <h2>📷 拍摄参考图片 (可选)</h2>
+                            <p class="step-description">您可以拍摄相关图片作为AI生成的参考，或直接跳过此步骤</p>
+                        </div>
+
+                        <div class="camera-container">
+                            <video id="camera-video" class="camera-video" autoplay muted style="display: none;"></video>
+                            <canvas id="camera-canvas" class="camera-canvas" style="display: none;"></canvas>
+
+                            <div class="camera-placeholder" id="camera-placeholder">
+                                <div class="placeholder-icon">📷</div>
+                                <div class="placeholder-text">点击启动摄像头拍摄参考图片</div>
+                            </div>
+                            <div class="captured-image" id="captured-image" style="display: none;">
+                                <div class="image-actions">
+                                    <button class="btn btn-small" id="retake-btn">重新拍摄</button>
+                                    <button class="btn btn-small btn-primary" id="use-image-btn">使用此图片</button>
+                                </div>
+                            </div>
+
+                            <div class="camera-controls">
+                                <button class="btn btn-secondary" id="start-camera-btn">启动摄像头</button>
+                                <button class="btn btn-primary" id="capture-btn" disabled style="display: none;">拍摄照片</button>
+                                <button class="btn btn-secondary" id="stop-camera-btn" disabled style="display: none;">关闭摄像头</button>
+                            </div>
+                        </div>
+
+                        <div class="step-actions">
+                            <button class="btn btn-secondary" id="back-to-content-btn">返回上一步</button>
+                            <button class="btn btn-secondary" id="skip-camera-btn">跳过拍摄</button>
+                            <button class="btn btn-primary" id="confirm-camera-btn" disabled>确认并继续</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 步骤4: 本地垫图生成 -->
+                <div class="step-page" id="step-4">
+                    <div class="step-content">
+                        <div class="step-header">
+                            <h2>🖼️ 本地快速生成预览图</h2>
+                            <p class="step-description">使用本地AI服务生成参考图片预览</p>
+                        </div>
+
+                        <div class="generation-info">
+                            <div class="info-item">
+                                <span class="info-label">提取关键词：</span>
+                                <span class="info-value" id="extracted-keywords">正在分析文案...</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">生成服务：</span>
+                                <span class="provider-badge local">本地 OpenVINO</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">生成规格：</span>
+                                <span class="info-value">2张 512x512 图片</span>
+                            </div>
+                        </div>
+
+                        <div class="image-generation-area">
+                            <div class="generation-status" id="local-generation-status">
+                                <div class="status-icon">⏳</div>
+                                <div class="status-text">准备生成本地预览图...</div>
+                            </div>
+
+                            <div class="generation-metrics" id="local-metrics" style="display: none;">
+                                <span class="metric-item">生成时间: <span id="local-timing">-</span></span>
+                                <span class="metric-item">图片数量: <span id="local-count">-</span></span>
+                            </div>
+                        </div>
+
+                        <div class="step-actions">
+                            <button class="btn btn-secondary" id="back-to-camera-btn">返回上一步</button>
+                            <button class="btn btn-secondary" id="regenerate-local-btn" style="display: none;">重新生成</button>
+                            <button class="btn btn-primary" id="confirm-local-btn" disabled>确认预览并继续</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 步骤5: 语音优化指令 -->
+                <div class="step-page" id="step-5">
+                    <div class="step-content">
+                        <div class="step-header">
+                            <h2>🎙️ 语音描述优化方向</h2>
+                            <p class="step-description">请用语音描述您希望的图片优化方向，比如风格、颜色、元素等</p>
+                        </div>
+
+                        <div class="step5-flex">
+                            <!-- 左侧：预览图 -->
+                            <div class="step5-left">
+                                <div class="preview-images">
+                                    <div class="preview-label">当前参考图：</div>
+                                    <div class="preview-grid" id="preview-images">
+                                        <!-- 显示本地生成的预览图 -->
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- 右侧：优化相关 -->
+                            <div class="step5-right">
+                                <div class="voice-optimization">
+                                    <div class="optimization-examples">
+                                        <div class="examples-label">优化示例：</div>
+                                        <div class="example-tags">
+                                            <span class="example-tag">"让图片更加明亮温暖"</span>
+                                            <span class="example-tag">"增加更多花朵元素"</span>
+                                            <span class="example-tag">"变成卡通风格"</span>
+                                            <span class="example-tag">"添加科技感"</span>
+                                            <span class="example-tag">"把背景变成草原"</span>
+                                        </div>
+                                    </div>
+
+                                    <div class="voice-recorder">
+                                        <button class="record-btn" id="optimize-record-btn">
+                                            <span class="record-icon">🎙️</span>
+                                            <span class="record-text">点击录音描述优化方向</span>
+                                        </button>
+                                        <div class="recording-indicator" id="optimize-recording-indicator">
+                                            <div class="wave-animation">
+                                                <div class="wave"></div>
+                                                <div class="wave"></div>
+                                                <div class="wave"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="optimization-result" id="optimization-result">
+                                        <div class="result-label">优化指令：</div>
+                                        <textarea class="result-text" id="optimization-text" rows="2" style="width:100%;">等待语音输入...</textarea>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="step-actions">
+                            <button class="btn btn-secondary" id="back-to-local-btn">返回上一步</button>
+                            <button class="btn btn-secondary" id="retry-optimization-btn" style="display: none;">重新录音</button>
+                            <button class="btn btn-primary" id="confirm-optimization-btn" disabled>确认优化并继续</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 步骤6: 云端精细化生成 -->
+                <div class="step-page" id="step-6">
+                    <div class="step-content">
+                        <div class="step-header">
+                            <h2>🎨 云端精细化生成</h2>
+                            <p class="step-description">基于您的优化指令，使用云端AI服务生成高质量的最终图片</p>
+                        </div>
+
+                        <div class="generation-comparison">
+                            <div class="comparison-item">
+                                <div class="comparison-header">
+                                    <h3>本地预览图</h3>
+                                    <span class="provider-badge local">本地 OpenVINO</span>
+                                </div>
+                                <div class="comparison-images" id="local-comparison">
+                                    <!-- 本地生成的图片 -->
+                                </div>
+                            </div>
+
+                            <div class="comparison-arrow">→</div>
+
+                            <div class="comparison-item">
+                                <div class="comparison-header">
+                                    <h3>云端图片编辑</h3>
+                                    <span class="provider-badge cloud">云端 阿里云</span>
+                                </div>
+                                <div class="comparison-images" id="cloud-comparison">
+                                    <div class="generation-status" id="cloud-generation-status">
+                                        <div class="status-icon">⏳</div>
+                                        <div class="status-text">正在生成高质量图片...</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="optimization-info">
+                            <div class="info-item">
+                                <span class="info-label">优化指令：</span>
+                                <span class="info-value" id="applied-optimization">-</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">生成规格：</span>
+                                <span class="info-value">1张高清图片</span>
+                            </div>
+                        </div>
+
+                        <div class="generation-metrics" id="cloud-metrics" style="display: none;">
+                            <span class="metric-item">生成时间: <span id="cloud-timing">-</span></span>
+                            <span class="metric-item">质量提升: <span id="quality-improvement">-</span></span>
+                        </div>
+
+                        <div class="step-actions">
+                            <button class="btn btn-secondary" id="back-to-optimization-btn">返回上一步</button>
+                            <button class="btn btn-secondary" id="regenerate-cloud-btn" style="display: none;">重新生成</button>
+                            <button class="btn btn-primary" id="confirm-cloud-btn" disabled>确认图片并继续</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 步骤7: 语音播报生成 -->
+                <div class="step-page" id="step-7">
+                    <div class="step-content">
+                        <div class="step-header">
+                            <h2>🔊 生成语音播报</h2>
+                            <p class="step-description">根据图片画面作一首诗并生成语音</p>
+                        </div>
+
+                        <div class="step7-flex">
+                            <!-- 左侧：最终图片 -->
+                            <div class="step7-left">
+                                <div class="summary-item">
+                                    <h3>🖼️ 最终图片</h3>
+                                    <div class="final-image-preview" id="final-image-preview">
+                                        <!-- 显示最终选择的图片 -->
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- 右侧：文案和语音播报 -->
+                            <div class="step7-right">
+                                <div class="summary-item">
+                                    <h3>📝 生成的文案</h3>
+                                    <div class="content-preview" id="final-content-preview">
+                                        <!-- 显示最终文案内容 -->
+                                    </div>
+                                </div>
+                                <div class="audio-generation">
+                                    <div class="audio-controls">
+                                        <button class="btn btn-primary" id="generate-audio-btn">
+                                            <span class="btn-icon">🔊</span>
+                                            <span class="btn-text">生成语音播报</span>
+                                        </button>
+                                    </div>
+                                    <div class="audio-status" id="audio-generation-status" style="display: none;">
+                                        <div class="status-icon">⏳</div>
+                                        <div class="status-text">正在生成语音...</div>
+                                    </div>
+                                    <div class="audio-player" id="audio-player" style="display: none;">
+                                        <audio controls id="generated-audio">
+                                            您的浏览器不支持音频播放。
+                                        </audio>
+                                        <div class="audio-info">
+                                            <span class="audio-duration" id="audio-duration">-</span>
+                                            <!-- <span class="audio-model">本地 OpenVINO TTS</span> -->
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="step-actions">
+                            <button class="btn btn-secondary" id="back-to-cloud-btn">返回上一步</button>
+                            <button class="btn btn-secondary" id="regenerate-audio-btn" style="display: none;">重新生成语音</button>
+                            <button class="btn btn-primary" id="complete-workflow-btn" disabled>完成创作</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 完成页面 -->
+                <div class="step-page" id="step-complete">
+                    <div class="step-content">
+                        <div class="completion-header">
+                            <div class="completion-icon">🎉</div>
+                            <h2>内容创作完成！</h2>
+                            <p class="completion-description">恭喜！您已成功完成AI内容创作流程</p>
+                        </div>
+
+                        <div class="workflow-summary">
+                            <h3>📊 创作流程回顾</h3>
+                            <div class="summary-steps">
+                                <div class="summary-step completed">
+                                    <span class="step-icon">🎤</span>
+                                    <span class="step-name">语音输入</span>
+                                    <span class="step-status">✅</span>
+                                </div>
+                                <div class="summary-step completed">
+                                    <span class="step-icon">💬</span>
+                                    <span class="step-name">文案生成</span>
+                                    <span class="step-status">✅</span>
+                                </div>
+                                <div class="summary-step completed">
+                                    <span class="step-icon">📷</span>
+                                    <span class="step-name">参考拍摄</span>
+                                    <span class="step-status">✅</span>
+                                </div>
+                                <div class="summary-step completed">
+                                    <span class="step-icon">🖼️</span>
+                                    <span class="step-name">本地垫图</span>
+                                    <span class="step-status">✅</span>
+                                </div>
+                                <div class="summary-step completed">
+                                    <span class="step-icon">🎙️</span>
+                                    <span class="step-name">语音优化</span>
+                                    <span class="step-status">✅</span>
+                                </div>
+                                <div class="summary-step completed">
+                                    <span class="step-icon">🎨</span>
+                                    <span class="step-name">云端精图</span>
+                                    <span class="step-status">✅</span>
+                                </div>
+                                <div class="summary-step completed">
+                                    <span class="step-icon">🔊</span>
+                                    <span class="step-name">语音播报</span>
+                                    <span class="step-status">✅</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="final-actions">
+                            <button class="btn btn-secondary" id="download-results-btn">下载作品</button>
+                            <button class="btn btn-primary" id="start-new-btn">开始新的创作</button>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </main>
+
+        <!-- 服务状态监控面板 -->
+        <aside class="status-panel" id="status-panel">
+            <div class="panel-header">
+                <h3>服务状态监控</h3>
+                <button class="panel-toggle" id="panel-toggle">📊</button>
+            </div>
+            <div class="panel-content" id="panel-content">
+                <div class="service-status" id="service-status">
+                    <div class="service-item">
+                        <span class="service-name">Chat服务</span>
+                        <span class="service-indicator" data-service="chat">●</span>
+                    </div>
+                    <div class="service-item">
+                        <span class="service-name">文生图服务</span>
+                        <span class="service-indicator" data-service="text-to-image">●</span>
+                    </div>
+                    <div class="service-item">
+                        <span class="service-name">语音识别</span>
+                        <span class="service-indicator" data-service="speech-to-text">●</span>
+                    </div>
+                    <div class="service-item">
+                        <span class="service-name">语音合成</span>
+                        <span class="service-indicator" data-service="text-to-speech">●</span>
+                    </div>
+                </div>
+                <div class="performance-metrics" id="performance-metrics">
+                    <div class="metric">
+                        <span class="metric-label">总响应时间</span>
+                        <span class="metric-value" id="total-time">0ms</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">本地/云端比例</span>
+                        <span class="metric-value" id="provider-ratio">0/0</span>
+                    </div>
+                </div>
+            </div>
+        </aside>
+    </div>
+
+    <!-- JavaScript模块 -->
+    <script src="js/audioRecorder.js"></script>
+    <script src="js/cameraCapture.js"></script>
+    <script src="js/streamHandler.js"></script>
+    <script src="js/statusMonitor.js"></script>
+    <script src="js/stepManager.js"></script>
+    <script src="js/main.js"></script>
+</body>
+</html>

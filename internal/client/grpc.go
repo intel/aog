@@ -21,10 +21,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/intel/aog/internal/client/grpc/grpc_client"
+	"github.com/intel/aog/internal/logger"
+	"github.com/intel/aog/internal/utils"
 	"google.golang.org/grpc"
-	"intel.com/aog/internal/client/grpc/grpc_client"
-	"intel.com/aog/internal/logger"
-	"intel.com/aog/internal/utils"
 )
 
 type GRPCClient struct {

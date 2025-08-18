@@ -27,11 +27,18 @@ import (
 	"strings"
 	"time"
 
-	"intel.com/aog/internal/datastore"
-	"intel.com/aog/internal/logger"
-	"intel.com/aog/internal/types"
-	"intel.com/aog/internal/utils"
-	"intel.com/aog/internal/utils/bcode"
+	"github.com/intel/aog/internal/datastore"
+	"github.com/intel/aog/internal/logger"
+	"github.com/intel/aog/internal/manager"
+	"github.com/intel/aog/internal/provider"
+	"github.com/intel/aog/internal/types"
+	"github.com/intel/aog/internal/utils"
+	"github.com/intel/aog/internal/utils/bcode"
+)
+
+const (
+	// ModelPreparationTimeout 模型准备超时时间
+	ModelPreparationTimeout = 5 * time.Minute
 )
 
 type ServiceTaskEventType int
@@ -225,8 +232,7 @@ func (ss *BasicServiceScheduler) dispatch(task *ServiceTask) (*types.ServiceTarg
 	}
 
 	m := &types.Model{
-		ModelName:   task.Request.Model,
-		ServiceName: task.Request.Service,
+		ModelName: task.Request.Model,
 	}
 
 	// Provider Selection
@@ -243,11 +249,22 @@ func (ss *BasicServiceScheduler) dispatch(task *ServiceTask) (*types.ServiceTarg
 			providerName = service.RemoteProvider
 		}
 	} else {
-		err := ds.Get(context.Background(), m)
+		sortOption := []datastore.SortOption{
+			{Key: "updated_at", Order: -1},
+		}
+		ms, err := ds.List(context.Background(), m, &datastore.ListOptions{
+			FilterOptions: datastore.FilterOptions{
+				Queries: []datastore.FuzzyQueryOption{
+					{Key: "service_name", Query: task.Request.Service},
+				},
+			},
+			SortBy: sortOption,
+		})
 		if err != nil {
 			logger.LogicLogger.Error("[Schedule] model not found", "error", err, "model", task.Request.Model)
 			return nil, bcode.ErrModelRecordNotFound
 		}
+		m = ms[0].(*types.Model)
 		if m.Status != "downloaded" {
 			logger.LogicLogger.Error("[Schedule] model installing", "model", task.Request.Model, "status", m.Status)
 			return nil, bcode.ErrModelUnDownloaded
@@ -351,8 +368,61 @@ func (ss *BasicServiceScheduler) dispatch(task *ServiceTask) (*types.ServiceTarg
 	// 从YAML配置中获取服务协议类型
 	flavorDef := GetFlavorDef(sp.Flavor)
 	protocol := ""
+	exposeProtocol := ""
 	if serviceDef, exists := flavorDef.Services[task.Request.Service]; exists {
 		protocol = serviceDef.Protocol
+		exposeProtocol = serviceDef.ExposeProtocol
+	}
+
+	// 模型内存管理：确保本地模型已加载
+	if location == types.ServiceSourceLocal && model != "" {
+		// 获取模型引擎实例
+		modelEngine := provider.GetModelEngine(sp.Flavor)
+		if modelEngine != nil {
+			mmm := manager.GetModelManager()
+			ctx := context.Background()
+
+			// 请求分流：判断是否需要进入排队机制
+			if manager.NeedsQueuing(location, task.Request.Service) {
+				// 本地非embed请求：进入排队机制
+				logger.LogicLogger.Debug("[Schedule] Enqueueing local non-embed model request",
+					"model", model, "service", task.Request.Service, "provider", sp.ProviderName)
+
+				readyChan, errorChan, err := mmm.EnqueueLocalModelRequest(ctx, model, modelEngine, sp.ProviderName, sp.Flavor, task.Schedule.Id)
+				if err != nil {
+					logger.LogicLogger.Error("[Schedule] Failed to enqueue local model request",
+						"model", model, "provider", sp.ProviderName, "error", err)
+					return nil, fmt.Errorf("failed to enqueue model request %s: %w", model, err)
+				}
+
+				logger.LogicLogger.Info("[Schedule] Local model request enqueued, waiting for model preparation",
+					"model", model, "provider", sp.ProviderName, "taskID", task.Schedule.Id)
+
+				// 等待队列处理完成（模型切换和准备）
+				select {
+				case <-readyChan:
+					// 检查是否有错误
+					select {
+					case queueErr := <-errorChan:
+						logger.LogicLogger.Error("[Schedule] Model preparation failed",
+							"model", model, "taskID", task.Schedule.Id, "error", queueErr)
+						return nil, fmt.Errorf("model preparation failed for %s: %w", model, queueErr)
+					default:
+						logger.LogicLogger.Info("[Schedule] Model preparation completed, ready to execute task",
+							"model", model, "taskID", task.Schedule.Id)
+					}
+				case <-ctx.Done():
+					logger.LogicLogger.Warn("[Schedule] Context cancelled while waiting for model preparation",
+						"model", model, "taskID", task.Schedule.Id, "error", ctx.Err())
+					return nil, ctx.Err()
+				case <-time.After(ModelPreparationTimeout):
+					logger.LogicLogger.Error("[Schedule] Timeout waiting for model preparation",
+						"model", model, "taskID", task.Schedule.Id, "timeout", ModelPreparationTimeout)
+					return nil, fmt.Errorf("timeout waiting for model preparation: %s (timeout: %v)", model, ModelPreparationTimeout)
+				}
+			}
+			// 远程请求或本地embed请求：直接走原有流程，不需要特殊处理
+		}
 	}
 
 	return &types.ServiceTarget{
@@ -361,6 +431,7 @@ func (ss *BasicServiceScheduler) dispatch(task *ServiceTask) (*types.ServiceTarg
 		Model:           model,
 		ToFavor:         sp.Flavor,
 		Protocol:        protocol, // 设置Protocol字段
+		ExposeProtocol:  exposeProtocol,
 		ServiceProvider: sp,
 	}, nil
 }

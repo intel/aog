@@ -41,9 +41,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/intel/aog/internal/types"
 	"github.com/jaypipes/ghw"
 	"github.com/shirou/gopsutil/disk"
-	"intel.com/aog/internal/types"
 )
 
 const (
@@ -127,7 +127,7 @@ func GetAOGDataDir() (string, error) {
 	return dir, nil
 }
 
-// CheckServiceIsExistInEnv  检查服务是否存在于环境变量
+// CheckServiceIsExistInEnv checks if service exists in environment variables
 func CheckServiceIsExistInEnv(serviceName string) bool {
 	_, err := exec.LookPath(serviceName)
 	return err != nil
@@ -347,7 +347,7 @@ func GetGpuInfo() (int, error) {
 	return gpuUtilization, nil
 }
 
-// 解压文件 区分系统 win/linux/macos
+// Unzip file, distinguish system win/linux/macos
 func UnzipFile(zipFile, destDir string) error {
 	// 检查目标目录是否存在，如果不存在则创建
 	if _, err := os.Stat(destDir); os.IsNotExist(err) {
@@ -545,7 +545,7 @@ func BuildGetRequestURL(baseURL string, body []byte) (string, error) {
 	return u.String(), nil
 }
 
-// GenerateUUID 生成一个唯一的UUID字符串
+// GenerateUUID generates a unique UUID string
 func GenerateUUID() string {
 	// 使用时间和随机字符串组合生成唯一ID
 	now := time.Now().UnixNano()

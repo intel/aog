@@ -18,30 +18,61 @@ package types
 
 import (
 	"encoding/json"
+	"sync"
+
+	"github.com/gorilla/websocket"
 )
 
-// WebSocket消息常量
+// WebSocket message constants
 const (
 	// Client Action types
 	WSActionRunTask    = "run-task"
 	WSActionFinishTask = "finish-task"
 
 	WSSTTTaskTypeUnknown    = "unknown"
-	WSSTTTaskTypeRunTask    = WSActionRunTask    // 启动识别任务
-	WSSTTTaskTypeAudio      = "audio"            // 音频数据
-	WSSTTTaskTypeFinishTask = WSActionFinishTask // 结束识别任务
+	WSSTTTaskTypeRunTask    = WSActionRunTask    // Start recognition task
+	WSSTTTaskTypeAudio      = "audio"            // Audio data
+	WSSTTTaskTypeFinishTask = WSActionFinishTask // End recognition task
 
-	// 服务端Event类型
-	WSEventTaskStarted     = "task-started"
-	WSEventTaskFinished    = "task-finished"
-	WSEventResultGenerated = "result-generated"
-	WSEventTaskFailed      = "task-failed"
+	// Server Event types
+	WSEventTaskStarted        = "task-started"
+	WSEventTaskFinished       = "task-finished"
+	WSEventResultGenerated    = "result-generated"
+	WSEventTaskFailed         = "task-failed"
+	WSEventTaskResultGenerate = "result-generated"
 
-	// 错误码
+	// Error codes
 	WSErrorCodeClientError = "CLIENT_ERROR"
 	WSErrorCodeServerError = "SERVER_ERROR"
 	WSErrorCodeModelError  = "MODEL_ERROR"
 )
+
+var (
+	WSRemoteLocalMap      = make(map[string]*websocket.Conn)
+	wsRemoteLocalMapMutex sync.RWMutex
+)
+
+// GetWSRemoteConnection 线程安全地获取WebSocket连接
+func GetWSRemoteConnection(connID string) (*websocket.Conn, bool) {
+	wsRemoteLocalMapMutex.RLock()
+	defer wsRemoteLocalMapMutex.RUnlock()
+	conn, exists := WSRemoteLocalMap[connID]
+	return conn, exists
+}
+
+// SetWSRemoteConnection 线程安全地设置WebSocket连接
+func SetWSRemoteConnection(connID string, conn *websocket.Conn) {
+	wsRemoteLocalMapMutex.Lock()
+	defer wsRemoteLocalMapMutex.Unlock()
+	WSRemoteLocalMap[connID] = conn
+}
+
+// RemoveWSRemoteConnection 线程安全地移除WebSocket连接
+func RemoveWSRemoteConnection(connID string) {
+	wsRemoteLocalMapMutex.Lock()
+	defer wsRemoteLocalMapMutex.Unlock()
+	delete(WSRemoteLocalMap, connID)
+}
 
 // WebSocketParameters 通用参数结构
 type WebSocketParameters struct {
@@ -69,11 +100,9 @@ type SpeechToTextParams struct {
 	MaxDuration  int    `json:"max_duration,omitempty"`  // 最大处理时长(秒)
 
 	// 状态参数
-	TaskStarted     bool  `json:"task_started,omitempty"`      // 任务是否已启动
-	StartTime       int64 `json:"start_time,omitempty"`        // 任务开始时间
-	EndTime         int64 `json:"end_time,omitempty"`          // 任务结束时间
-	TotalAudioBytes int   `json:"total_audio_bytes,omitempty"` // 总音频字节数
-	LastAudioTime   int64 `json:"last_audio_time,omitempty"`   // 最后一次接收音频的时间
+	Action          string `json:"action,omitempty"`            // 当前任务状态 run-task  finish-task
+	TotalAudioBytes int    `json:"total_audio_bytes,omitempty"` // 总音频字节数
+	LastAudioTime   int64  `json:"last_audio_time,omitempty"`   // 最后一次接收音频的时间
 }
 
 // NewSpeechToTextParams 创建语音识别参数对象，设置默认值
@@ -128,6 +157,8 @@ type WebSocketFinishTaskAction struct {
 
 // WebSocketEventHeader 所有服务端事件的通用头部
 type WebSocketEventHeader struct {
+	Action       string `json:"action"`
+	Streaming    string `json:"streaming"`
 	TaskID       string `json:"task_id"`                 // 任务ID
 	Event        string `json:"event"`                   // 事件类型
 	ErrorCode    string `json:"error_code,omitempty"`    // 错误码，仅在task-failed事件中出现

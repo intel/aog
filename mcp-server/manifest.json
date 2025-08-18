@@ -1,0 +1,140 @@
+{
+  "dxt_version": "0.5.0",
+  "name": "aog-mcp-server",
+  "version": "0.5.0",
+  "description": "AOG MCP Server - Provides MCP protocol support for AOG (AIPC Open Gateway), enabling AI models to use all AOG AI service capabilities through standardized tool calls.",
+  "author": {
+    "name": "AOG Team"
+  },
+  "license": "Apache-2.0",
+  "homepage": "https://github.com/intel/aog",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/intel/aog.git"
+  },
+  "keywords": [
+    "aog",
+    "ai",
+    "gateway",
+    "chat",
+    "text-to-image",
+    "speech-to-text",
+    "embedding"
+  ],
+  "server": {
+    "type": "binary",
+    "entry_point": "aog-mcp-server",
+    "mcp_config": {
+      "command": "${__dirname}/aog-mcp-server",
+      "args": [
+        "--base-url",
+        "${AOG_BASE_URL:http://localhost:16688}",
+        "--timeout",
+        "${AOG_TIMEOUT:120000}"
+      ],
+      "env": {
+        "AOG_BASE_URL": "${AOG_BASE_URL:http://localhost:16688}",
+        "AOG_TIMEOUT": "${AOG_TIMEOUT:120000}"
+      }
+    },
+    "platforms": [
+      {
+        "os": "darwin",
+        "arch": "x64",
+        "binary": "aog-mcp-server"
+      },
+      {
+        "os": "darwin", 
+        "arch": "arm64",
+        "binary": "aog-mcp-server"
+      },
+      {
+        "os": "win32",
+        "arch": "x64",
+        "binary": "aog-mcp-server.exe"
+      }
+    ]
+  },
+  "capabilities": {
+    "tools": [
+      {
+        "name": "aog_get_services",
+        "description": "Get all available AI service lists in AOG"
+      },
+      {
+        "name": "aog_get_service_providers", 
+        "description": "Get service provider information for specified services"
+      },
+      {
+        "name": "aog_get_models",
+        "description": "Get list of installed models"
+      },
+      {
+        "name": "aog_get_recommended_models",
+        "description": "Get AOG recommended model list"
+      },
+      {
+        "name": "aog_get_supported_models",
+        "description": "Get list of models supported by specified service provider"
+      },
+      {
+        "name": "aog_install_model",
+        "description": "Install specified AI model"
+      },
+      {
+        "name": "aog_chat",
+        "description": "Use AOG's chat service for conversations"
+      },
+      {
+        "name": "aog_text_to_image",
+        "description": "Use AOG's text-to-image service to generate images"
+      },
+      {
+        "name": "aog_speech_to_text",
+        "description": "Use AOG's speech-to-text service"
+      },
+      {
+        "name": "aog_embed",
+        "description": "Use AOG's embedding service to generate text vector representations"
+      },
+      {
+        "name": "aog_health_check",
+        "description": "Check AOG service health status"
+      },
+      {
+        "name": "aog_get_version",
+        "description": "Get AOG version information"
+      }
+    ]
+  },
+  "configuration": {
+    "properties": {
+      "AOG_BASE_URL": {
+        "type": "string",
+        "title": "AOG Base URL",
+        "description": "Base URL of AOG service",
+        "default": "http://localhost:16688",
+        "examples": ["http://localhost:16688"]
+      },
+      "AOG_TIMEOUT": {
+        "type": "integer",
+        "title": "Request Timeout",
+        "description": "Request timeout in milliseconds (default: 2 minutes, suitable for time-consuming services like text-to-image)",
+        "default": 120000,
+        "minimum": 1000,
+        "maximum": 600000
+      }
+    }
+  },
+  "requirements": {
+    "description": "Requires AOG service running on the specified base URL",
+    "external_services": [
+      {
+        "name": "AOG Service",
+        "description": "AIPC Open Gateway service must be running and accessible",
+        "default_port": 16688,
+        "check_endpoint": "/health"
+      }
+    ]
+  }
+}

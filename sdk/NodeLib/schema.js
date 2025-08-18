@@ -15,6 +15,7 @@
 //*****************************************************************************
 
 const { str } = require("ajv");
+const { size } = require("lodash");
 
 // ========== 服务管理 ==========
 const getServicesSchema = {
@@ -536,7 +537,8 @@ const generateRequest = {
     properties: {
         model: { type: "string" },
         stream: { type: "boolean" },
-        prompt: { type: "string" }
+        prompt: { type: "string" },
+        images: { type: "array", items: { type: "string" } }
     },
     required: ["model", "prompt"]
 };  
@@ -571,7 +573,11 @@ const textToImageRequest = {
     type: "object",
     properties: {
         model: { type: "string" },
-        prompt: { type: "string" }
+        prompt: { type: "string" },
+        n: { type: "integer" },
+        size: { type: "string" },
+        image: { type: "string" },
+        image_type: { type: "string"}
     },
     required: ["prompt"]
 };
@@ -582,7 +588,7 @@ const textToImageResponse = {
         data: {
             type: "object",
             properties: {
-                url: { type: "string" }
+                url: { type: "array", items: { type: "string" } }
             },
         },
         id: { type: "string" },
@@ -629,6 +635,7 @@ const embeddingResponse = {
     required: ["model", "data"]
 };
 
+// ========= speech-to-text ==========
 const speechToTextRequest = {
     type: "object",
     properties: {
@@ -668,6 +675,63 @@ const speechToTextResponse = {
     }
 };
 
+// ========= text-to-speech ==========
+const textToSpeechRequest = {
+    type: "object",
+    properties: {
+        model: { type: "string" },
+        text: { type: "string" },
+        voice: { type: "string" }
+    }
+};
+
+
+const textToSpeechResponse = {
+    type: "object",
+    properties: {
+        business_code: { type: "integer" },
+        message: { type: "string" },
+        data: {
+            type: "object",
+            properties: {
+                data: { type: "string" },
+                id: { type: "string" }
+            },
+            required: ["data"]
+        }
+    }
+};
+
+// ========= image-to-image ==========
+
+const imageToImageRequest = {
+    type: "object",
+    properties: {
+        model: { type: "string" },
+        image: { type: "string" },
+        image_type: { type: "string" },
+        prompt: { type: "string" }
+    },
+    required: ["image"]
+};
+
+const imageToImageResponse = {
+    type: "object",
+    properties: {
+        code: { type: "integer" },
+        msg: { type: "string" },
+        data: {
+            type: "object",
+            properties: {
+                id: { type: "string" },
+                url: { type: "array", items: { type: "string" } }
+            },
+            required: ["url"]
+        },
+        
+    }
+};
+
 module.exports = {
     getServicesSchema,
     installServiceRequestSchema,
@@ -698,6 +762,9 @@ module.exports = {
     embeddingRequest,
     embeddingResponse,
     speechToTextRequest,
-    speechToTextResponse
-};
-    
+    speechToTextResponse,
+    textToSpeechRequest,
+    textToSpeechResponse,
+    imageToImageRequest,
+    imageToImageResponse
+};  

@@ -178,7 +178,7 @@ function isAOGAvailable() {
 // 获取模型提供商
 async function getServiceProvider() {
   try {
-    const response = await axios.get('http://127.0.0.1:16688/aog/v0.4/service_provider');
+    const response = await axios.get('http://127.0.0.1:16688/aog/v0.2/service_provider');
     const providers = response.data.data;
     if (Array.isArray(providers) && providers.length === 0) {
       return false;
@@ -320,7 +320,7 @@ async function importConfig(filePath) {
     console.log('🔍 正在导入配置文件:', data);
 
     // 发送 POST 请求
-    const res = await axios.post('http://127.0.0.1:16688/aog/v0.4/service/import', data, {
+    const res = await axios.post('http://127.0.0.1:16688/aog/v0.2/service/import', data, {
       headers: {
         'Content-Type': 'application/json',
       },

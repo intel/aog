@@ -30,7 +30,7 @@ import (
 	"sync"
 	"time"
 
-	"intel.com/aog/internal/datastore"
+	"github.com/intel/aog/internal/datastore"
 )
 
 const ModelQueryKey = "name"
@@ -40,7 +40,7 @@ func generateRandomID() string {
 	b := make([]byte, 16)
 	_, err := rand.Read(b)
 	if err != nil {
-		// 如果随机数生成失败，使用时间戳作为备选方案
+		// If random number generation fails, use timestamp as fallback
 		return fmt.Sprintf("%x", time.Now().UnixNano())
 	}
 	return hex.EncodeToString(b)

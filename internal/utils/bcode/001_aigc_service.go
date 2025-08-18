@@ -52,4 +52,6 @@ var (
 	ErrUnSupportFlavor = NewBcode(http.StatusBadRequest, 10017, "unsupport api flavor")
 
 	ErrUnSupportAuthType = NewBcode(http.StatusBadRequest, 10018, "unsupport auth type")
+
+	ErrEngineUnSupportService = NewBcode(http.StatusBadRequest, 10019, "engine unsupport current service")
 )

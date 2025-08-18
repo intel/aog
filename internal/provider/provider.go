@@ -19,8 +19,8 @@ package provider
 import (
 	"context"
 
-	"intel.com/aog/internal/provider/engine"
-	"intel.com/aog/internal/types"
+	"github.com/intel/aog/internal/provider/engine"
+	"github.com/intel/aog/internal/types"
 )
 
 // ModelServiceProvider model service provider interface
@@ -37,6 +37,9 @@ type ModelServiceProvider interface {
 	PullModelStream(ctx context.Context, req *types.PullModelRequest) (chan []byte, chan error)
 	DeleteModel(ctx context.Context, req *types.DeleteRequest) error
 	ListModels(ctx context.Context) (*types.ListResponse, error)
+	LoadModel(ctx context.Context, req *types.LoadRequest) error
+	UnloadModel(ctx context.Context, req *types.UnloadModelRequest) error
+	GetRunningModels(ctx context.Context) (*types.ListResponse, error)
 
 	// config and version
 	GetConfig() *types.EngineRecommendConfig

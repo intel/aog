@@ -25,14 +25,13 @@ import (
 	"runtime"
 
 	"github.com/gin-gonic/gin"
-
-	"intel.com/aog/config"
-	"intel.com/aog/internal/constants"
-	"intel.com/aog/internal/datastore"
-	"intel.com/aog/internal/provider"
-	"intel.com/aog/internal/types"
-	"intel.com/aog/internal/utils"
-	"intel.com/aog/version"
+	"github.com/intel/aog/config"
+	"github.com/intel/aog/internal/constants"
+	"github.com/intel/aog/internal/datastore"
+	"github.com/intel/aog/internal/provider"
+	"github.com/intel/aog/internal/types"
+	"github.com/intel/aog/internal/utils"
+	"github.com/intel/aog/version"
 )
 
 func InjectRouter(e *AOGCoreServer) {
@@ -44,7 +43,7 @@ func InjectRouter(e *AOGCoreServer) {
 	e.Router.Handle(http.MethodGet, "/update/status", updateAvailableHandler)
 	e.Router.Handle(http.MethodPost, "/update", updateHandler)
 
-	r := e.Router.Group("/" + constants.AppName + "/" + version.AOGVersion)
+	r := e.Router.Group("/" + constants.AppName + "/" + version.SpecVersion)
 
 	// service import / export
 	r.Handle(http.MethodPost, "/service/export", e.ExportService)
@@ -74,7 +73,7 @@ func InjectRouter(e *AOGCoreServer) {
 	r.Handle(http.MethodGet, "/control_panel/about", e.GetProductInfoHandler)
 	r.Handle(http.MethodPost, "/control_panel/modelkey", e.GetModelkeyHandler)
 
-	slog.Info("Gateway started", "host", config.GlobalAOGEnvironment.ApiHost)
+	slog.Info("Gateway started", "host", config.GlobalEnvironment.ApiHost)
 }
 
 func rootHandler(c *gin.Context) {
@@ -135,7 +134,7 @@ func updateHandler(c *gin.Context) {
 	status := utils.IsServerRunning()
 	if status {
 		// stop server
-		pidFilePath := filepath.Join(config.GlobalAOGEnvironment.RootDir, "aog.pid")
+		pidFilePath := filepath.Join(config.GlobalEnvironment.RootDir, "aog.pid")
 		err := utils.StopAOGServer(pidFilePath)
 		if err != nil {
 			c.JSON(http.StatusOK, map[string]string{"message": err.Error()})
@@ -146,22 +145,22 @@ func updateHandler(c *gin.Context) {
 	if runtime.GOOS != "windows" {
 		aogFileName = "aog"
 	}
-	aogFilePath := filepath.Join(config.GlobalAOGEnvironment.RootDir, aogFileName)
+	aogFilePath := filepath.Join(config.GlobalEnvironment.RootDir, aogFileName)
 	err := os.Remove(aogFilePath)
 	if err != nil {
 		slog.Error("[Update] Failed to remove aog file %s: %v\n", aogFilePath, err)
 		c.JSON(http.StatusOK, map[string]string{"message": err.Error()})
 	}
 	// install new version
-	downloadPath := filepath.Join(config.GlobalAOGEnvironment.RootDir, "download", aogFileName)
+	downloadPath := filepath.Join(config.GlobalEnvironment.RootDir, "download", aogFileName)
 	err = os.Rename(downloadPath, aogFilePath)
 	if err != nil {
 		slog.Error("[Update] Failed to rename aog file %s: %v\n", downloadPath, err)
 		c.JSON(http.StatusOK, map[string]string{"message": err.Error()})
 	}
 	// start server
-	logPath := config.GlobalAOGEnvironment.ConsoleLog
-	rootDir := config.GlobalAOGEnvironment.RootDir
+	logPath := config.GlobalEnvironment.ConsoleLog
+	rootDir := config.GlobalEnvironment.RootDir
 	err = utils.StartAOGServer(logPath, rootDir)
 	if err != nil {
 		slog.Error("[Update] Failed to start aog log %s: %v\n", logPath, err)

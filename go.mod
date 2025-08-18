@@ -1,4 +1,4 @@
-module intel.com/aog
+module github.com/intel/aog
 
 go 1.23.4
 

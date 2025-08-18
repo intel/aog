@@ -93,7 +93,7 @@ The demo uses the following default configuration:
 ```go
 const (
     // WebSocket server URL for AOG Speech-to-Text service
-    wsURL = "ws://localhost:16688/aog/v0.4/services/speech-to-text-ws"
+    wsURL = "ws://localhost:16688/aog/v0.2/services/speech-to-text-ws"
     // Audio file path - replace with your audio file
     audioFile = "output.mp3"
     // Model to use for speech recognition
@@ -209,7 +209,7 @@ The demo includes comprehensive error handling for:
 ```
 AOG Speech-to-Text WebSocket Client Demo
 ========================================
-Connected to AOG Speech-to-Text service at ws://localhost:16688/aog/v0.4/services/speech-to-text-ws
+Connected to AOG Speech-to-Text service at ws://localhost:16688/aog/v0.2/services/speech-to-text-ws
 Validating input audio file: output.mp3
 Input audio format validated: mp3 (will be converted to PCM for server)
 Converted MP3 to PCM: 1234567 bytes

@@ -30,7 +30,7 @@ export type Service = {
   updated_at: string; // 更新时间
 };
 export type Model = {
-  Avatar: string;
+  avatar: string;
   model_name: string;
   provider_name: string;
   status: string;

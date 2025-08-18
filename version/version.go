@@ -16,10 +16,14 @@
 
 package version
 
-const AOGVersion = "v0.4"
+const (
+	AOGVersion = "v0.5"
 
-const AOGIcon = ""
+	SpecVersion = "v0.2"
 
-const AOGName = "AOG"
+	AOGIcon = ""
 
-const AOGDescription = "AOG (AIPC Open Gateway) aims to decouple AI applications on AI PCs from the AI services they rely on. It is designed to provide developers with an extremely simple and easy-to-use infrastructure to install local AI services in their development environments and publish their AI applications without packaging their own AI stacks and models."
+	AOGName = "AOG"
+
+	AOGDescription = "AOG (AIPC Open Gateway) aims to decouple AI applications on AI PCs from the AI services they rely on. It is designed to provide developers with an extremely simple and easy-to-use infrastructure to install local AI services in their development environments and publish their AI applications without packaging their own AI stacks and models."
+)

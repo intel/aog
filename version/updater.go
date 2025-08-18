@@ -36,10 +36,10 @@ import (
 
 	"gorm.io/gorm"
 
-	"intel.com/aog/internal/constants"
-	"intel.com/aog/internal/datastore"
-	"intel.com/aog/internal/types"
-	"intel.com/aog/internal/utils"
+	"github.com/intel/aog/internal/constants"
+	"github.com/intel/aog/internal/datastore"
+	"github.com/intel/aog/internal/types"
+	"github.com/intel/aog/internal/utils"
 )
 
 const (

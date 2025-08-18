@@ -28,7 +28,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"intel.com/aog/version"
+	"github.com/intel/aog/version"
 )
 
 //go:embed dist/*
@@ -53,7 +53,7 @@ func RegisterConsoleRoutes(engine *gin.Engine) error {
 	// SPA路由兜底：所有未命中的GET路由都返回index.html
 	engine.NoRoute(func(c *gin.Context) {
 		// 包含 /aog/ 并且不包含 /aog/{version} 的路由
-		if strings.HasPrefix(c.Request.URL.Path, "/aog/") && !strings.Contains(c.Request.URL.Path, "/aog/"+version.AOGVersion) {
+		if strings.HasPrefix(c.Request.URL.Path, "/aog/") && !strings.Contains(c.Request.URL.Path, "/aog/"+version.SpecVersion) {
 			c.Status(http.StatusNotFound)
 			return
 		}

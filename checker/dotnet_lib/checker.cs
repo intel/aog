@@ -197,7 +197,7 @@ namespace AogCheckerLib
         {
             try
             {
-                var response = await HttpClient.GetAsync("http://127.0.0.1:16688/aog/v0.4/service_provider");
+                var response = await HttpClient.GetAsync("http://127.0.0.1:16688/aog/v0.2/service_provider");
                 var content = await response.Content.ReadAsStringAsync();
                 return !string.IsNullOrEmpty(content);
             }

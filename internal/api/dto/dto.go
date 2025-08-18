@@ -19,7 +19,7 @@ package dto
 import (
 	"time"
 
-	"intel.com/aog/internal/utils/bcode"
+	"github.com/intel/aog/internal/utils/bcode"
 )
 
 type GetProductInfoResponse struct {
@@ -197,7 +197,7 @@ type ModelStreamCancelResponse struct {
 
 type Model struct {
 	ModelName     string    `json:"model_name"`
-	Avatar        string    `json: avatar`
+	Avatar        string    `json:"avatar"`
 	ProviderName  string    `json:"provider_name"`
 	Status        string    `json:"status"`
 	ServiceName   string    `json:"service_name"`
@@ -226,32 +226,35 @@ type LocalSupportModelData struct {
 }
 
 type RecommendModelData struct {
-	Id              string   `json:"id"`
-	Service         string   `json:"service_name"`
-	ApiFlavor       string   `json:"api_flavor"`
-	Flavor          string   `json:"flavor"`
-	Method          string   `json:"method" default:"POST"`
-	Desc            string   `json:"desc"`
-	Url             string   `json:"url"`
-	AuthType        string   `json:"auth_type"`
-	AuthApplyUrl    string   `json:"auth_apply_url"`
-	AuthFields      []string `json:"auth_fields"`
-	Name            string   `json:"name"`
-	ServiceProvider string   `json:"service_provider_name"`
-	Size            string   `json:"size"`
-	IsRecommended   bool     `json:"is_recommended" default:"false"`
-	Status          string   `json:"status"`
-	Avatar          string   `json:"avatar"`
-	CanSelect       bool     `json:"can_select" default:"false"`
-	Class           []string `json:"class"`
-	OllamaId        string   `json:"ollama_id"`
-	ParamsSize      float32  `json:"params_size"`
-	InputLength     int      `json:"input_length"`
-	OutputLength    int      `json:"output_length"`
-	Source          string   `json:"source"`
-	// SmartVisionProvider string   `json:"smartvision_provider"`
-	// SmartVisionModelKey string   `json:"smartvision_model_key"`
-	IsDefault string `json:"is_default" default:"false"`
+	Id              string    `json:"id"`
+	Service         string    `json:"service_name"`
+	ApiFlavor       string    `json:"api_flavor"`
+	Flavor          string    `json:"flavor"`
+	Method          string    `json:"method" default:"POST"`
+	Desc            string    `json:"desc"`
+	Url             string    `json:"url"`
+	AuthType        string    `json:"auth_type"`
+	AuthApplyUrl    string    `json:"auth_apply_url"`
+	AuthFields      []string  `json:"auth_fields"`
+	Name            string    `json:"name"`
+	ServiceProvider string    `json:"service_provider_name"`
+	Size            string    `json:"size"`
+	IsRecommended   bool      `json:"is_recommended" default:"false"`
+	Status          string    `json:"status"`
+	Avatar          string    `json:"avatar"`
+	CanSelect       bool      `json:"can_select" default:"false"`
+	Class           []string  `json:"class"`
+	OllamaId        string    `json:"ollama_id"`
+	ParamsSize      float32   `json:"params_size"`
+	InputLength     int       `json:"input_length"`
+	OutputLength    int       `json:"output_length"`
+	Source          string    `json:"source"`
+	IsDefault       string    `json:"is_default" default:"false"`
+	Think           bool      `json:"think"`
+	ThinkSwitch     bool      `json:"think_switch"`
+	Tools           bool      `json:"tools"` // 是否支持工具调用
+	Context         float32   `json:"context"`
+	CreatedAt       time.Time `json:"created_at"`
 }
 
 type CreateServiceProviderRequest struct {
@@ -343,18 +346,17 @@ type DashboardResponse struct {
 	Services []Service `json:"services"`
 }
 
-// control panel 模型列表
+// control panel model list
 type GetSupportModelRequest struct {
 	Flavor        string `form:"flavor"`
-	ServiceSource string `form:"service_source" validate:"required"`
+	ServiceSource string `form:"service_source"`
 	ServiceName   string `form:"service_name"`
-	Mine          bool   `form:"mine" default:"false"`
 	PageSize      int    `form:"page_size"`
 	Page          int    `form:"page"`
 	SearchName    string `form:"search_name"`
 }
 
-// control panel 分页模型列表
+// control panel paginated model list
 type GetSupportModelResponseData struct {
 	Data      []RecommendModelData `json:"data"`
 	Page      int                  `json:"page"`

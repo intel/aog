@@ -22,7 +22,9 @@ const path = require('path');
 const os = require('os');
 const axios = require('axios');
 const EventEmitter = require('events');
+const WebSocket = require('ws');
 const { execFile, spawn } = require('child_process');
+const _ = require('lodash');
 const { promises: fsPromises } = require("fs");
 
 const schemas = require('./schema.js');
@@ -33,7 +35,7 @@ const { PLATFORM_CONFIG, AOG_HEALTH, AOG_ENGINE_PATH, AOG_VERSION, WS_URL, } = r
 
 class AOG {
   constructor(version) {
-    this.version = version || "aog/v0.4";
+    this.version = version || AOG_VERSION;
     this.client = instance
     logAndConsole('info', `AOG类初始化，版本: ${this.version}`);
   }
@@ -269,7 +271,7 @@ class AOG {
 
   async deleteModel(data) {
     return this._requestWithSchema({
-      method: 'post',
+      method: 'delete',
       url: '/model',
       data,
       schema: { request: schemas.deleteModelRequestSchema, response: schemas.ResponseSchema }
@@ -393,8 +395,9 @@ class AOG {
     }
     // 流式
     try {
+      const client = createAxiosInstance(this.version)
       const config = { responseType: 'stream' };
-      const res = await this.client.post('services/chat', data, config);
+      const res = await client.post('services/chat', data, config);
       const eventEmitter = new EventEmitter();
       res.data.on('data', (chunk) => {
         try {
@@ -406,9 +409,6 @@ class AOG {
           }
           const response = JSON.parse(jsonString);
           eventEmitter.emit('data', response);
-          if (response.status === 'success' || response.status === 'canceled' || response.status === 'error') {
-            eventEmitter.emit('end', response);
-          }
         } catch (err) {
           eventEmitter.emit('error', `解析流数据失败: ${err.message}`);
         }
@@ -416,6 +416,10 @@ class AOG {
       res.data.on('error', (err) => {
         eventEmitter.emit('error', `流式响应错误: ${err.message}`);
       });
+      res.data.on('end', () => {
+        eventEmitter.emit('end'); // 触发结束事件
+      });
+
       return eventEmitter;
     } catch (error) {
       return { code: 400, msg: error.response?.data?.message || error.message, data: null };
@@ -429,8 +433,9 @@ class AOG {
       return this._requestWithSchema({ method: 'post', url: 'services/generate', data });
     }
     try {
+      const client = createAxiosInstance(this.version)
       const config = { responseType: 'stream' };
-      const res = await this.client.post('services/generate', data, config);
+      const res = await client.post('services/generate', data, config);
       const eventEmitter = new EventEmitter();
       res.data.on('data', (chunk) => {
         try {
@@ -442,9 +447,6 @@ class AOG {
           }
           const response = JSON.parse(jsonString);
           eventEmitter.emit('data', response);
-          if (response.status === 'success' || response.status === 'canceled' || response.status === 'error') {
-            eventEmitter.emit('end', response);
-          }
         } catch (err) {
           eventEmitter.emit('error', `解析流数据失败: ${err.message}`);
         }
@@ -452,11 +454,16 @@ class AOG {
       res.data.on('error', (err) => {
         eventEmitter.emit('error', `流式响应错误: ${err.message}`);
       });
+      res.data.on('end', () => {
+        eventEmitter.emit('end'); // 触发结束事件
+      });
+
       return eventEmitter;
     } catch (error) {
       return { code: 400, msg: error.response?.data?.message || error.message, data: null };
     }
   }
+  
   
   // 生图服务
   async textToImage(data) {
@@ -629,6 +636,25 @@ class AOG {
     };
     
     return emitter;
+  }
+
+  // 文生语音服务
+  async textToSpeech(data) {
+    return this._requestWithSchema({
+      method: 'post',
+      url: '/services/text-to-speech',
+      data,
+      schema: { request: schemas.textToSpeechRequest, response: schemas.textToSpeechResponse }
+    });
+  }
+
+  async imageToImage(data) {
+    return this._requestWithSchema({
+      method: 'post',
+      url: '/services/image-to-image',
+      data,
+      schema: { request: schemas.imageToImageRequest, response: schemas.imageToImageResponse }
+    });
   }
 
   // 用于一键安装 AOG 和 导入配置

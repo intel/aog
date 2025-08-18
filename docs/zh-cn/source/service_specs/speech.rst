@@ -10,6 +10,7 @@ AOG Speech相关服务
 
 * :ref:`speech_to_text_service`
 * :ref:`speech_to_text_ws_service`
+* :ref:`text_to_speech_service`
 
 .. _speech_to_text_service:
 
@@ -112,7 +113,7 @@ ______________
 
 .. code-block:: shell
 
-    curl https://localhost:16688/aog/v0.4/services/speech-to-text\
+    curl https://localhost:16688/aog/v0.2/services/speech-to-text\
     -H "Content-Type: application/json" \
     -d '{
             "model": "NamoLi/whisper-large-v3-ov",
@@ -125,8 +126,7 @@ ______________
 .. code-block:: json
 
     {
-        "data": {
-            "segments": [
+        "segments": [
                 {
                     "id": 0,
                     "start": "00:00:00.000",
@@ -140,7 +140,6 @@ ______________
                     "text": "第二段识别的文本内容"
                 }
             ]
-        }
     }
 
 .. _speech_to_text_ws_service:
@@ -187,7 +186,7 @@ WebSocket通信流程
 
 .. code-block:: text
 
-    ws://localhost:16688/aog/v0.4/services/speech-to-text-ws
+    ws://localhost:16688/aog/v0.2/services/speech-to-text-ws
 
 **通信流程**
 
@@ -464,3 +463,134 @@ WebSocket通信流程
             "NamoLi/whipser-large-v3-ov"
         ]
     }
+
+.. _text_to_speech_service:
+
+Text-To-Speech 服务
+=====================
+
+.. _`custom_properties_text_to_speech`:
+
+Custom Properties of its Service Providers
+--------------------------------------------
+
+除了在 :ref:`Metadata of AOG Service
+Provider` 中定义的常见属性外, 语音合成服务提供商还可以将以下属性放入服务提供商元数据的 ``custom_properties`` 字段中。
+
+.. list-table::
+   :header-rows: 1
+
+   * - 自定义属性
+     - 值
+     - 描述
+   * - voice
+     - string
+     - 指定语音合成的音色，如"male"、"female"、"girl"等
+   * - language
+     - string
+     - 指定合成语音的语言，当前仅支持"en"（英文）
+
+请求格式
+--------------------------------------------
+
+.. _`header_text-to-speech`:
+
+请求头
+___________
+
+参见 :ref:`Common Fields in Header of Request`
+
+
+.. _`request_text-to-speech`:
+
+请求
+______________
+
+除了在 :ref:`Common Fields in Request Body` 中定义的字段外，服务在其请求 JSON 体中也可能包含以下字段：
+
+.. list-table::
+   :header-rows: 1
+   :widths: 10 35 10 45
+
+   * - 附加 JSON 字段
+     - 值
+     - 是否必需
+     - 描述
+   * - text
+     - string
+     - 必需
+     - 需要转换为语音的文本内容，当前仅支持英文文本
+   * - voice
+     - string
+     - 可选
+     - 语音音色，支持"male"（男声）、"female"（女声）、"girl"(女孩)，默认为"male"
+
+.. _`response_text-to-speech`:
+
+响应格式
+--------------------------------------------
+
+除了在 :ref:`Common Fields in Response Body` 中定义的字段外，该服务在其响应 JSON 体中可能还有以下字段：
+
+.. list-table::
+   :header-rows: 1
+   :widths: 10 35 10 45
+
+   * - 附加 JSON 字段
+     - 值
+     - 是否必需
+     - 描述
+   * - data
+     - object
+     - 必填
+     - 语音合成结果数据对象
+   * - data.url
+     - string
+     - 必填
+     - 生成的音频文件路径
+
+示例
+--------------
+
+发送请求
+
+.. code-block:: shell
+
+    curl --location 'http://127.0.0.1:16688/aog/v0.2/services/text-to-speech' \
+    --header 'Content-Type: application/json' \
+    --data '{
+        "model": "NamoLi/speecht5-tts",
+        "text": "Unless required by applicable law or agreed to in writing,",
+        "voice": "male"
+    }'
+
+返回响应
+
+.. code-block:: json
+
+    {
+        "business_code": 200,
+        "message": "success",
+        "data": {
+            "url": "/Users/xxxx/Downloads/202507171635597494.wav"
+        }
+    }
+
+**支持的模型**
+
+当前支持的语音合成模型：
+
+.. list-table::
+   :header-rows: 1
+   :widths: 30 70
+
+   * - 模型名称
+     - 描述
+   * - NamoLi/speecht5-tts
+     - 基于SpeechT5的文本转语音模型，支持英文文本合成
+
+**限制说明**
+
+* **语言支持**: 当前仅支持英文文本的语音合成
+* **音色支持**: 支持"male"（男声）、"female"（女声）、"girl"(女孩)、"baby"(幼儿)四种音色
+* **输出格式**: 生成的音频文件为WAV格式

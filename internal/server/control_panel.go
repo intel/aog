@@ -18,47 +18,50 @@ package server
 
 import (
 	"context"
-	// "encoding/json"
 	"errors"
 	"fmt"
 	"sort"
 	"strings"
 
-	"intel.com/aog/internal/api/dto"
-	"intel.com/aog/internal/datastore"
-	"intel.com/aog/internal/schedule"
-	"intel.com/aog/internal/types"
-	"intel.com/aog/version"
+	"github.com/intel/aog/internal/api/dto"
+	"github.com/intel/aog/internal/datastore"
+	"github.com/intel/aog/internal/schedule"
+	"github.com/intel/aog/internal/types"
+	"github.com/intel/aog/version"
 
-	// "intel.com/aog/internal/utils"
-	"intel.com/aog/internal/utils/bcode"
+	// "github.com/intel/aog/internal/utils"
+	"github.com/intel/aog/internal/utils/bcode"
 )
 
-func myModelFilter(modelList *[]dto.RecommendModelData) {
-	var finalDataList []dto.RecommendModelData
-	if modelList == nil || len(*modelList) == 0 {
-		return
-	}
-
-	var tempList []dto.RecommendModelData = *modelList
-	for i := len(tempList) - 1; i >= 0; i-- {
-		if tempList[i].CanSelect {
-			finalDataList = append(finalDataList, tempList[i])
-		}
-	}
-	// 数据回填
-	*modelList = finalDataList
+type ControlPanel interface {
+	GetSupportModelListCombine(ctx context.Context, request *dto.GetSupportModelRequest) (*dto.GetSupportModelResponse, error)
+	SetDefaultModel(ctx context.Context, req *dto.SetDefaultModelRequest) error
+	GetDashboard(ctx context.Context) (*dto.DashboardResponse, error)
+	GetProductInfo(ctx context.Context) (*dto.GetProductInfoResponse, error)
+	GetModelkey(ctx context.Context, req *dto.GetModelkeyRequest) (*dto.GetModelkeyResponse, error)
 }
 
-func GetSupportModelListCombine(ctx context.Context, request *dto.GetSupportModelRequest) (*dto.GetSupportModelResponse, error) {
-	jds := datastore.GetDefaultJsonDatastore()
-	if jds == nil {
-		return nil, errors.New("json datastore is nil, please check initialization")
+type ControlPanelImpl struct {
+	Ds  datastore.Datastore
+	JDs datastore.JsonDatastore
+}
+
+func NewControlPanel() *ControlPanelImpl {
+	return &ControlPanelImpl{
+		Ds:  datastore.GetDefaultDatastore(),
+		JDs: datastore.GetDefaultJsonDatastore(),
 	}
-	ds := datastore.GetDefaultDatastore()
+}
+
+func (c *ControlPanelImpl) GetSupportModelListCombine(ctx context.Context, request *dto.GetSupportModelRequest) (*dto.GetSupportModelResponse, error) {
 
 	if request.ServiceName == types.ServiceGenerate {
 		request.ServiceName = types.ServiceChat
+	}
+	if request.ServiceSource == types.ServiceSourceLocal {
+		if request.ServiceName == types.ServiceSpeechToText {
+			request.ServiceName = types.ServiceSpeechToTextWS
+		}
 	}
 
 	// 分页参数
@@ -118,7 +121,7 @@ func GetSupportModelListCombine(ctx context.Context, request *dto.GetSupportMode
 			return nil, errors.New(fmt.Sprintf("%s flavor is not local flavor", request.Flavor))
 		}
 		// 查全部
-		supportModelList, err := jds.List(ctx, sm, options)
+		supportModelList, err := c.JDs.List(ctx, sm, options)
 		if err != nil {
 			return nil, err
 		}
@@ -152,7 +155,7 @@ func GetSupportModelListCombine(ctx context.Context, request *dto.GetSupportMode
 				ProviderName: providerName,
 			}
 			canSelect := true
-			err := ds.Get(context.Background(), modelQuery)
+			err := c.Ds.Get(context.Background(), modelQuery)
 			if err != nil || modelQuery.Status != "downloaded" {
 				canSelect = false
 			}
@@ -196,7 +199,7 @@ func GetSupportModelListCombine(ctx context.Context, request *dto.GetSupportMode
 		}
 	} else {
 		// 远程模型
-		supportModelList, err := jds.List(ctx, sm, options)
+		supportModelList, err := c.JDs.List(ctx, sm, options)
 		if err != nil {
 			return nil, err
 		}
@@ -210,7 +213,7 @@ func GetSupportModelListCombine(ctx context.Context, request *dto.GetSupportMode
 				ServiceSource: smInfo.ServiceSource,
 			}
 			canSelect := true
-			err := ds.Get(context.Background(), modelQuery)
+			err := c.Ds.Get(context.Background(), modelQuery)
 			if err != nil || modelQuery.Status != "downloaded" {
 				canSelect = false
 			}
@@ -261,12 +264,6 @@ func GetSupportModelListCombine(ctx context.Context, request *dto.GetSupportMode
 		allModels = append([]dto.RecommendModelData{defaultModel}, allModels...)
 	}
 
-	// mine 过滤
-	if request.Mine {
-		myModelFilter(&allModels)
-	}
-
-	// 如果是单个模型查询，则严格匹配
 	if pageSize == 1 && request.SearchName != "" {
 		var strictList []dto.RecommendModelData
 		for _, m := range allModels {
@@ -311,13 +308,12 @@ func GetSupportModelListCombine(ctx context.Context, request *dto.GetSupportMode
 	}, nil
 }
 
-func SetDefaultModel(ctx context.Context, req *dto.SetDefaultModelRequest) error {
-	ds := datastore.GetDefaultDatastore()
+func (c *ControlPanelImpl) SetDefaultModel(ctx context.Context, req *dto.SetDefaultModelRequest) error {
 	m := &types.Model{
 		ServiceName:   req.ServiceName,
 		ServiceSource: req.ServiceSource,
 	}
-	list, err := ds.List(ctx, m, &datastore.ListOptions{Page: 0, PageSize: 1000})
+	list, err := c.Ds.List(ctx, m, &datastore.ListOptions{Page: 0, PageSize: 1000})
 	if err != nil {
 		return err
 	}
@@ -337,7 +333,7 @@ func SetDefaultModel(ctx context.Context, req *dto.SetDefaultModelRequest) error
 		} else {
 			model.IsDefault = false
 		}
-		if err := ds.Put(ctx, model); err != nil {
+		if err := c.Ds.Put(ctx, model); err != nil {
 			return err
 		}
 	}
@@ -347,12 +343,10 @@ func SetDefaultModel(ctx context.Context, req *dto.SetDefaultModelRequest) error
 	return nil
 }
 
-func GetDashboard(ctx context.Context) (*dto.DashboardResponse, error) {
-	ds := datastore.GetDefaultDatastore()
-	jds := datastore.GetDefaultJsonDatastore()
+func (c *ControlPanelImpl) GetDashboard(ctx context.Context) (*dto.DashboardResponse, error) {
 
 	// 获取所有模型
-	modelList, err := ds.List(ctx, &types.Model{}, &datastore.ListOptions{
+	modelList, err := c.Ds.List(ctx, &types.Model{}, &datastore.ListOptions{
 		Page: 0, PageSize: 1000,
 	})
 	if err != nil {
@@ -370,7 +364,7 @@ func GetDashboard(ctx context.Context) (*dto.DashboardResponse, error) {
 			ServiceName:   m.ServiceName,
 			ServiceSource: m.ServiceSource,
 		}
-		smList, err := jds.List(ctx, sm, nil)
+		smList, err := c.JDs.List(ctx, sm, nil)
 		avatar := ""
 		if err == nil && len(smList) > 0 {
 			for _, s := range smList {
@@ -402,7 +396,7 @@ func GetDashboard(ctx context.Context) (*dto.DashboardResponse, error) {
 		return models[i].IsDefault && !models[j].IsDefault
 	})
 	// 只查 can_install = true 的服务
-	serviceList, err := ds.List(ctx, &types.Service{}, &datastore.ListOptions{
+	serviceList, err := c.Ds.List(ctx, &types.Service{}, &datastore.ListOptions{
 		FilterOptions: datastore.FilterOptions{
 			Queries: []datastore.FuzzyQueryOption{
 				{Key: "can_install", Query: "1"},
@@ -434,7 +428,7 @@ func GetDashboard(ctx context.Context) (*dto.DashboardResponse, error) {
 	}, nil
 }
 
-func GetProductInfo(ctx context.Context) (*dto.GetProductInfoResponse, error) {
+func (c *ControlPanelImpl) GetProductInfo(ctx context.Context) (*dto.GetProductInfoResponse, error) {
 	return &dto.GetProductInfoResponse{
 		Icon:        version.AOGIcon,
 		ProductName: version.AOGName,
@@ -443,14 +437,13 @@ func GetProductInfo(ctx context.Context) (*dto.GetProductInfoResponse, error) {
 	}, nil
 }
 
-func GetModelkey(ctx context.Context, req *dto.GetModelkeyRequest) (*dto.GetModelkeyResponse, error) {
-	ds := datastore.GetDefaultDatastore()
+func (c *ControlPanelImpl) GetModelkey(ctx context.Context, req *dto.GetModelkeyRequest) (*dto.GetModelkeyResponse, error) {
 
 	// 构造查询条件
 	sp := &types.ServiceProvider{
 		ProviderName: req.ProviderName,
 	}
-	err := ds.Get(ctx, sp)
+	err := c.Ds.Get(ctx, sp)
 	if err != nil {
 		return nil, err
 	}

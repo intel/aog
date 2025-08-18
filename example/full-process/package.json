@@ -1,0 +1,40 @@
+{
+  "name": "aog-content-creator-web",
+  "version": "1.0.0",
+  "description": "AOG智能内容创作助手 Web Demo",
+  "main": "server/server.js",
+  "scripts": {
+    "start": "node server/server.js",
+    "dev": "nodemon server/server.js",
+    "test": "node test-services.js",
+    "test:services": "node test-services.js",
+    "prestart": "node test-services.js"
+  },
+  "keywords": [
+    "aog",
+    "ai",
+    "multimodal",
+    "content-creation",
+    "web-demo"
+  ],
+  "author": "AOG Team",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "aog-checker": "file:aog-checker-1.2.0.tgz",
+    "aog-lib": "file:aog-lib-1.3.0.tgz",
+    "axios": "^1.11.0",
+    "body-parser": "^1.20.2",
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
+    "multer": "^1.4.4-lts.1",
+    "recorder-core": "^1.3.25011100",
+    "uuid": "^9.0.1",
+    "ws": "^8.18.3"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

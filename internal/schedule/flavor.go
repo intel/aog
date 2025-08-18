@@ -31,17 +31,16 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
+	"github.com/intel/aog/internal/client"
+	"github.com/intel/aog/internal/constants"
+	"github.com/intel/aog/internal/convert"
+	"github.com/intel/aog/internal/logger"
+	"github.com/intel/aog/internal/provider/template"
+	"github.com/intel/aog/internal/types"
+	"github.com/intel/aog/internal/utils"
+	"github.com/intel/aog/internal/utils/bcode"
+	"github.com/intel/aog/version"
 	"gopkg.in/yaml.v3"
-
-	"intel.com/aog/internal/client"
-	"intel.com/aog/internal/constants"
-	"intel.com/aog/internal/convert"
-	"intel.com/aog/internal/logger"
-	"intel.com/aog/internal/provider/template"
-	"intel.com/aog/internal/types"
-	"intel.com/aog/internal/utils"
-	"intel.com/aog/internal/utils/bcode"
-	"intel.com/aog/version"
 )
 
 // APIFlavor mode is usually set to "default". And set to "stream" if it is using stream mode
@@ -281,7 +280,7 @@ func (f *ConfigBasedAPIFlavor) Name() string {
 }
 
 func (f *ConfigBasedAPIFlavor) InstallRoutes(gateway *gin.Engine) {
-	vSpec := version.AOGVersion
+	vSpec := version.SpecVersion
 	for service, serviceDef := range f.Config.Services {
 		if serviceDef.Protocol == types.ProtocolGRPC || serviceDef.Protocol == types.ProtocolGRPC_STREAM {
 			continue
@@ -337,7 +336,7 @@ func (f *ConfigBasedAPIFlavor) GetStreamResponseEpilog(service string) []string 
 
 func (f *ConfigBasedAPIFlavor) Convert(service, conversion string, content types.HTTPContent, ctx convert.ConvertContext) (types.HTTPContent, error) {
 	pipeline := f.GetConverterPipeline(service, conversion)
-	logger.LogicLogger.Debug("[Flavor] Converting", "flavor", f.Name(), "service", service, "conversion", conversion, "content", content)
+	logger.LogicLogger.Debug("[Flavor] Converting", "flavor", f.Name(), "service", service, "conversion", conversion, "content", len(content.Body))
 	return pipeline.Convert(content, ctx)
 }
 
@@ -403,14 +402,14 @@ func makeServiceRequestHandler(flavor APIFlavor, service string) func(c *gin.Con
 					logger.LogicLogger.Debug("[Handler] Service task channel closed", "taskID", taskID)
 					break outerLoop
 				}
-				logger.LogicLogger.Debug("[Handler] Received service result", "result", data)
+				logger.LogicLogger.Debug("[Handler] Received service result", "result status", data.StatusCode, "result body", len(data.HTTP.Body))
 				if isHTTPCompleted {
 					// skip below statements but do not quit
 					// we should exhaust the channel to allow it to be closed
 					continue
 				}
 
-				// 处理错误结果，使用统一的bcode.ReturnError
+				// Handle error results using unified bcode.ReturnError
 				if data.Type == types.ServiceResultFailed && data.Error != nil {
 					logger.LogicLogger.Error("[Handler] Service task failed", "taskID", taskID, "error", data.Error)
 					bcode.ReturnError(c, data.Error)
@@ -422,11 +421,11 @@ func makeServiceRequestHandler(flavor APIFlavor, service string) func(c *gin.Con
 					isHTTPCompleted = true
 				}
 
-				// 对于成功响应，使用标准格式处理
+				// For successful responses, use standard format processing
 				if data.Type == types.ServiceResultDone && data.StatusCode == http.StatusOK {
 					processSuccessResponse(c, data)
 				} else {
-					// 流式响应或非标准状态码响应直接写回
+					// Stream responses or non-standard status code responses are written back directly
 					for k, v := range data.HTTP.Header {
 						if len(v) > 0 {
 							c.Writer.Header().Set(k, v[0])
@@ -442,9 +441,9 @@ func makeServiceRequestHandler(flavor APIFlavor, service string) func(c *gin.Con
 	}
 }
 
-// processSuccessResponse 处理成功响应，使用bcode标准格式
+// processSuccessResponse Process successful responses, using the bcode standard format
 func processSuccessResponse(c *gin.Context, result *types.ServiceResult) {
-	// 检查是否是JSON响应
+	// Check if it is a JSON response
 	contentType := ""
 	for k, v := range result.HTTP.Header {
 		if strings.ToLower(k) == "content-type" && len(v) > 0 {
@@ -453,16 +452,16 @@ func processSuccessResponse(c *gin.Context, result *types.ServiceResult) {
 		}
 	}
 
-	// 如果是JSON响应，使用bcode标准格式
+	// If it is a JSON response, use the bcode standard format
 	if strings.Contains(contentType, "application/json") {
 		var rawData interface{}
 		if json.Unmarshal(result.HTTP.Body, &rawData) == nil {
-			// 创建包含原始数据的响应
+			// Create response with original data source
 			response := struct {
-				bcode.Bcode             // 内嵌Bcode结构，继承business_code和message字段
+				bcode.Bcode             // Embedded Bcode structure, inheriting business_code and message fields
 				Data        interface{} `json:"data"`
 			}{
-				Bcode: *bcode.SuccessCode, // 使用预定义的成功码
+				Bcode: *bcode.SuccessCode, // Constantly check if there are any available sessions
 				Data:  rawData,
 			}
 
@@ -471,7 +470,7 @@ func processSuccessResponse(c *gin.Context, result *types.ServiceResult) {
 		}
 	}
 
-	// 非JSON或解析失败，使用原始响应
+	// Non-JSON or parsing failed, using raw response
 	for k, v := range result.HTTP.Header {
 		if len(v) > 0 {
 			c.Writer.Header().Set(k, v[0])
@@ -481,22 +480,268 @@ func processSuccessResponse(c *gin.Context, result *types.ServiceResult) {
 	c.Writer.Write(result.HTTP.Body)
 }
 
+// GRPCWebSocketHandler handle GRCWebSocket
+func GRPCWebSocketHandler(wsConn *client.WebSocketConnection, done chan struct{}) {
+	// Monitor if a gRPC session has been created
+	var session *client.GRPCStreamSession
+	var isMonitoring bool
+
+	// Constantly check if there are any available sessions
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-done:
+			// WebSocket connection closed, exit goroutine
+			logger.LogicLogger.Info("[Handler] WebSocket connection closed, stopping stream monitor",
+				"connID", wsConn.ID)
+			return
+
+		case <-ticker.C:
+			// If you are already listening to the stream, skip the check
+			if isMonitoring {
+				continue
+			}
+
+			// Check if a session has been created
+			if session == nil {
+				grpcStreamManager := client.GetGlobalGRPCStreamManager()
+				session = grpcStreamManager.GetSessionByWSConnID(wsConn.ID)
+
+				if session != nil {
+					logger.LogicLogger.Info("[Handler] Found gRPC session for WebSocket, starting to monitor",
+						"connID", wsConn.ID)
+
+					// The flag has started listening
+					isMonitoring = true
+
+					// Stop ticking, no more regular checks
+					ticker.Stop()
+
+					// Start listening to the stream continuously (this will block the current goroutine until the stream closes or an error occurs).
+					monitorStreamResponses(session, wsConn)
+
+					// After listening, reset the state to restart the inspection
+					session = nil
+					isMonitoring = false
+					ticker = time.NewTicker(100 * time.Millisecond)
+				}
+			}
+		}
+	}
+}
+
+// RemoteWebSocketHandler handle HTTPWebSocket
+func RemoteWebSocketHandler(wsConn *client.WebSocketConnection, done chan struct{}) {
+	logger.LogicLogger.Info("[Handler] Starting remote WebSocket handler", "connID", wsConn.ID)
+
+	defer func() {
+		// Clear connection
+		types.RemoveWSRemoteConnection(wsConn.ID)
+		logger.LogicLogger.Info("[Handler] Remote WebSocket handler stopped", "connID", wsConn.ID)
+	}()
+
+	// Wait for a remote WebSocket connection to be created
+	var remoteWebSocketConn *websocket.Conn
+	var exists bool
+
+	// 最多等待30秒
+	timeout := time.After(30 * time.Second)
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-done:
+			// WebSocket connection closed, exit goroutine
+			logger.LogicLogger.Info("[Handler] WebSocket connection closed, stopping remote handler",
+				"connID", wsConn.ID)
+			return
+		case <-timeout:
+			logger.LogicLogger.Error("[Handler] Timeout waiting for remote WebSocket connection", "connID", wsConn.ID)
+			return
+		case <-ticker.C:
+			// Attempt to obtain a remote WebSocket connection
+			remoteWebSocketConn, exists = types.GetWSRemoteConnection(wsConn.ID)
+			if exists {
+				logger.LogicLogger.Info("[Handler] Remote WebSocket connection found, starting to monitor", "connID", wsConn.ID)
+				break
+			}
+			continue
+		}
+		break
+	}
+
+	// Continuously listen for remote WebSocket messages
+	for {
+		select {
+		case <-done:
+			// WebSocket connection closed, exit goroutine
+			logger.LogicLogger.Info("[Handler] WebSocket connection closed, stopping remote handler",
+				"connID", wsConn.ID)
+			return
+		default:
+			// Set read timeout
+			remoteWebSocketConn.SetReadDeadline(time.Now().Add(30 * time.Second))
+
+			// Read message
+			messageType, message, err := remoteWebSocketConn.ReadMessage()
+			if err != nil {
+				if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
+					logger.LogicLogger.Error("[Handler] Remote WebSocket connection closed unexpectedly",
+						"connID", wsConn.ID,
+						"error", err)
+				}
+				return
+			}
+
+			logger.LogicLogger.Info("[Handler] Received message from remote WebSocket",
+				"connID", wsConn.ID,
+				"messageType", messageType,
+				"messageSize", len(message),
+				"message", string(message))
+
+			// 处理消息
+			if err := processRemoteWebSocketMessage(messageType, message, wsConn); err != nil {
+				logger.LogicLogger.Error("[Handler] Failed to process remote WebSocket message",
+					"connID", wsConn.ID,
+					"error", err)
+			}
+		}
+	}
+}
+
+// processRemoteWebSocketMessage Handling remote WebSocket messages
+func processRemoteWebSocketMessage(messageType int, message []byte, wsConn *client.WebSocketConnection) error {
+	switch messageType {
+	case websocket.TextMessage:
+		// Processing text messages (JSON format)
+		var responseData map[string]interface{}
+		if err := json.Unmarshal(message, &responseData); err != nil {
+			logger.LogicLogger.Error("[Handler] Failed to unmarshal WebSocket message",
+				"connID", wsConn.ID,
+				"error", err,
+				"message", string(message))
+			return fmt.Errorf("failed to unmarshal WebSocket message: %w", err)
+		}
+
+		logger.LogicLogger.Info("[Handler] Parsed WebSocket message",
+			"connID", wsConn.ID,
+			"responseData", responseData)
+
+		// Check if it is the final result.
+		if header, ok := responseData["header"].(map[string]interface{}); ok {
+			if event, ok := header["event"].(string); ok {
+				logger.LogicLogger.Info("[Handler] Processing WebSocket event",
+					"connID", wsConn.ID,
+					"event", event)
+
+				switch event {
+				case types.WSEventResultGenerated:
+					// This is the final result, sent to the WebSocket client side
+					if err := wsConn.WriteMessage(websocket.TextMessage, message); err != nil {
+						logger.LogicLogger.Error("[Handler] Failed to forward result to WebSocket client",
+							"connID", wsConn.ID,
+							"error", err)
+						return fmt.Errorf("failed to forward result to WebSocket client: %w", err)
+					}
+					logger.LogicLogger.Info("[Handler] Forwarded final result to WebSocket client",
+						"connID", wsConn.ID,
+						"result", string(message))
+
+				case types.WSEventTaskFinished:
+					// Task completed, send completion event
+					finishEvent := types.NewTaskFinishedEvent(wsConn.ID)
+					finishData, _ := json.Marshal(finishEvent)
+					if err := wsConn.WriteMessage(websocket.TextMessage, finishData); err != nil {
+						logger.LogicLogger.Error("[Handler] Failed to send finish event",
+							"connID", wsConn.ID,
+							"error", err)
+						return fmt.Errorf("failed to send finish event: %w", err)
+					}
+					logger.LogicLogger.Info("[Handler] Task finished", "connID", wsConn.ID)
+
+				case types.WSEventTaskStarted:
+					// Start the task and forward it to the client side
+					if err := wsConn.WriteMessage(websocket.TextMessage, message); err != nil {
+						logger.LogicLogger.Error("[Handler] Failed to forward task-started event",
+							"connID", wsConn.ID,
+							"error", err)
+						return fmt.Errorf("failed to forward task-started event: %w", err)
+					}
+					logger.LogicLogger.Info("[Handler] Forwarded task-started event",
+						"connID", wsConn.ID)
+
+				case types.WSEventTaskFailed:
+					logger.LogicLogger.Error("[Handler] Task failed", "connID", wsConn.ID)
+					// Forward task failure event
+					if err := wsConn.WriteMessage(websocket.TextMessage, message); err != nil {
+						return fmt.Errorf("failed to forward task-failed event: %w", err)
+					}
+					return nil
+
+				default:
+					// Forwarding other events
+					if err := wsConn.WriteMessage(websocket.TextMessage, message); err != nil {
+						logger.LogicLogger.Error("[Handler] Failed to forward event",
+							"connID", wsConn.ID,
+							"error", err)
+						return fmt.Errorf("failed to forward event: %w", err)
+					}
+					logger.LogicLogger.Info("[Handler] Forwarded event to WebSocket client",
+						"connID", wsConn.ID,
+						"event", event)
+				}
+			} else {
+				logger.LogicLogger.Warn("[Handler] No event field in header",
+					"connID", wsConn.ID,
+					"header", header)
+			}
+		} else {
+			logger.LogicLogger.Warn("[Handler] No header field in response",
+				"connID", wsConn.ID,
+				"responseData", responseData)
+		}
+
+	case websocket.BinaryMessage:
+		// Processing binary messages (audio data, etc.)
+		logger.LogicLogger.Info("[Handler] Received binary message",
+			"connID", wsConn.ID,
+			"size", len(message))
+
+		if err := wsConn.WriteMessage(websocket.BinaryMessage, message); err != nil {
+			logger.LogicLogger.Error("[Handler] Failed to forward binary message",
+				"connID", wsConn.ID,
+				"error", err)
+			return fmt.Errorf("failed to forward binary message: %w", err)
+		}
+
+	default:
+		logger.LogicLogger.Warn("[Handler] Unknown WebSocket message type",
+			"connID", wsConn.ID,
+			"messageType", messageType)
+	}
+
+	return nil
+}
+
 func makeWebSocketHandler(flavor APIFlavor, service string) func(c *gin.Context) {
 	return func(c *gin.Context) {
 		logger.LogicLogger.Info("[Handler] Invoking websocket service", "flavor", flavor.Name(), "service", service)
 
-		// WebSocket升级器配置
+		// WebSocket upgrader configuration
 		upgrader := websocket.Upgrader{
 			ReadBufferSize:  1024,
 			WriteBufferSize: 1024,
 			CheckOrigin: func(r *http.Request) bool {
-				// 允许所有来源的WebSocket连接请求
-				// 在生产环境中，应该根据安全需求限制来源
+				// Allow WebSocket connection requests from all origins
+				// In production environment, origins should be restricted based on security requirements
 				return true
 			},
 		}
 
-		// 升级HTTP连接到WebSocket
+		// Upgrade HTTP connection to WebSocket
 		conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 		if err != nil {
 			logger.LogicLogger.Error("[Handler] Failed to upgrade to websocket", "error", err)
@@ -506,32 +751,32 @@ func makeWebSocketHandler(flavor APIFlavor, service string) func(c *gin.Context)
 
 		logger.LogicLogger.Info("[Handler] WebSocket connection established", "flavor", flavor.Name(), "service", service)
 
-		// 保存原始请求信息，供后续消息处理使用
+		// Save original request information for subsequent message processing
 		originalRequest := c.Request
 
-		// 注册WebSocket连接到管理器
+		// Register WebSocket connection to manager
 		wsConn := client.GetGlobalWebSocketManager().RegisterConnection(conn, 0, flavor.Name(), service)
 
-		// 设置连接关闭处理程序
+		// Set up the connection closure handler
 		conn.SetCloseHandler(func(code int, text string) error {
 			logger.LogicLogger.Info("[Handler] WebSocket connection closing",
 				"connID", wsConn.ID,
 				"code", code,
 				"reason", text)
 
-			// 关闭连接，这将同时关闭关联的GRPC流
+			// Close connection, which will also close associated GRPC stream
 			wsConn.Close()
 
-			// 调用默认关闭处理程序
+			// Call default close handler
 			return nil
 		})
 
-		defer wsConn.Close() // 确保连接被清理
+		defer wsConn.Close() // Ensure connection is cleaned up
 
-		// 设置一个完成标志和关闭通道
+		// Set up completion flag and close channel
 		done := make(chan struct{})
 
-		// 处理从客户端接收消息的goroutine
+		// Goroutine to handle messages received from client
 		go func() {
 			defer close(done)
 			for {
@@ -547,91 +792,57 @@ func makeWebSocketHandler(flavor APIFlavor, service string) func(c *gin.Context)
 
 				logger.LogicLogger.Debug("[Handler] Received WebSocket message",
 					"type", messageType,
-					"message", string(message),
+					"message", len(string(message)),
 					"connID", wsConn.ID)
 
-				// 根据消息类型处理接收到的WebSocket消息
+				// Handle received WebSocket messages based on message type
 				switch messageType {
 				case websocket.TextMessage:
-					// 处理文本消息
+					// Handle text messages
 					handleWebSocketMessage(wsConn, flavor.Name(), service, message, originalRequest, "application/json")
 				case websocket.BinaryMessage:
-					// 处理二进制消息，例如音频数据
+					// Handle binary messages, such as audio data
 					handleWebSocketMessage(wsConn, flavor.Name(), service, message, originalRequest, "application/octet-stream")
 				case websocket.CloseMessage:
-					// 客户端请求关闭连接
+					// Client requests to close connection
 					logger.LogicLogger.Info("[Handler] Received close message from client", "connID", wsConn.ID)
 					return
 				case websocket.PingMessage:
-					// 收到Ping消息，回复Pong
+					// Received Ping message, reply with Pong
 					if err := wsConn.WriteMessage(websocket.PongMessage, nil); err != nil {
 						logger.LogicLogger.Error("[Handler] Failed to send pong", "error", err, "connID", wsConn.ID)
 						return
 					}
 				}
 
-				time.Sleep(100 * time.Millisecond) // 避免过快循环
+				time.Sleep(100 * time.Millisecond) // Avoid too fast cycles
 			}
 		}()
-
-		go func() {
-			// 监控是否已经创建了gRPC会话
-			var session *client.GRPCStreamSession
-			var isMonitoring bool
-
-			// 不断检查是否有可用的会话
-			ticker := time.NewTicker(100 * time.Millisecond)
-			defer ticker.Stop()
-
-			for {
-				select {
-				case <-done:
-					// WebSocket连接已关闭，退出goroutine
-					logger.LogicLogger.Info("[Handler] WebSocket connection closed, stopping stream monitor",
-						"connID", wsConn.ID)
-					return
-
-				case <-ticker.C:
-					// 如果已经在监听stream，跳过检查
-					if isMonitoring {
-						continue
-					}
-
-					// 检查是否有会话创建
-					if session == nil {
-						grpcStreamManager := client.GetGlobalGRPCStreamManager()
-						session = grpcStreamManager.GetSessionByWSConnID(wsConn.ID)
-
-						if session != nil {
-							logger.LogicLogger.Info("[Handler] Found gRPC session for WebSocket, starting to monitor",
-								"connID", wsConn.ID)
-
-							// 标记已开始监听
-							isMonitoring = true
-
-							// 停止ticker，不再需要定期检查
-							ticker.Stop()
-
-							// 开始持续监听stream（这会阻塞当前goroutine，直到stream关闭或出错）
-							monitorStreamResponses(session, wsConn)
-
-							// 监听结束后，重置状态以便重新开始检查
-							session = nil
-							isMonitoring = false
-							ticker = time.NewTicker(100 * time.Millisecond)
-						}
-					}
-				}
+		grpcStreamManager := client.GetGlobalGRPCStreamManager()
+		for {
+			grpcStream := grpcStreamManager.GetSessionByWSConnID(wsConn.ID)
+			if grpcStream != nil {
+				logger.LogicLogger.Debug("[Handler] Received WebSocket grpc stream")
+				go GRPCWebSocketHandler(wsConn, done)
+				break
 			}
-		}()
+			remoteWSManager, _ := types.GetWSRemoteConnection(wsConn.ID)
+			if remoteWSManager != nil {
+				logger.LogicLogger.Debug("[Handler] Received WebSocket remote ws stream")
+				go RemoteWebSocketHandler(wsConn, done)
+				break
+			}
 
-		// 监听连接关闭
+			time.Sleep(100 * time.Millisecond)
+		}
+
+		// Listen for connection closed
 		<-done
 		logger.LogicLogger.Info("[Handler] WebSocket connection closed", "connID", wsConn.ID)
 	}
 }
 
-// 处理WebSocket消息，不区分文本或二进制，只是根据contentType设置不同的Content-Type
+// Handle WebSocket messages without distinguishing between text or binary, just setting different Content-Types based on contentType
 func handleWebSocketMessage(wsConn *client.WebSocketConnection, flavor, service string, message []byte, originalRequest *http.Request, contentType string) {
 	logger.LogicLogger.Debug("[WebSocket] Processing message",
 		"connID", wsConn.ID,
@@ -641,78 +852,57 @@ func handleWebSocketMessage(wsConn *client.WebSocketConnection, flavor, service 
 		"length", len(message),
 		"managerInstanceAddr", fmt.Sprintf("%p", client.GetGlobalWebSocketManager()))
 
-	// 克隆原始请求，保留关键信息
+	// Clone the original request to preserve key information
 	clonedReq := originalRequest.Clone(originalRequest.Context())
 
-	// 检查是否是二进制数据
+	// Check if it is binary data
 	isBinary := strings.Contains(contentType, "application/octet-stream") ||
 		strings.Contains(contentType, "audio/")
 
-	// 检查是否是JSON消息，如果是，尝试解析为Action结构
+	// Check if it is a JSON message, and if so, try to resolve it to an Action structure
 	var actionMsg types.WebSocketActionMessage
 	var updatedMessage []byte
 	taskType := types.WSSTTTaskTypeUnknown
 
 	if !isBinary && json.Unmarshal(message, &actionMsg) == nil {
 		taskType = actionMsg.Action
-		// 添加WebSocket连接ID
-		if actionMsg.Action == types.WSActionRunTask {
-			logger.LogicLogger.Debug("[WebSocket] Processing run-task action",
-				"connID", wsConn.ID,
-				"model", actionMsg.Model)
 
-			// 保存任务信息到WebSocket连接中
-			if actionMsg.Parameters != nil {
-				// 存储任务参数到STTParams
-				sttParams := wsConn.GetSTTParams()
-				if actionMsg.Parameters.Format != "" {
-					sttParams.AudioFormat = actionMsg.Parameters.Format
-				}
-				if actionMsg.Parameters.SampleRate > 0 {
-					sttParams.SampleRate = actionMsg.Parameters.SampleRate
-				}
-				if actionMsg.Parameters.Language != "" {
-					sttParams.Language = actionMsg.Parameters.Language
-				}
-				sttParams.UseVAD = actionMsg.Parameters.UseVAD
-				if actionMsg.Parameters.ReturnFormat != "" {
-					sttParams.ReturnFormat = actionMsg.Parameters.ReturnFormat
-				}
-
-				logger.LogicLogger.Debug("[WebSocket] Updated STT parameters in connection",
-					"connID", wsConn.ID,
-					"format", sttParams.AudioFormat,
-					"sampleRate", sttParams.SampleRate,
-					"language", sttParams.Language,
-					"useVAD", sttParams.UseVAD,
-					"returnFormat", sttParams.ReturnFormat)
+		// Save task information to WebSocket connection
+		sttParams := wsConn.GetSTTParams()
+		sttParams.Action = actionMsg.Action
+		if actionMsg.Parameters != nil {
+			if actionMsg.Parameters.Format != "" {
+				sttParams.AudioFormat = actionMsg.Parameters.Format
 			}
-
-			// 存储模型信息
-			if actionMsg.Model != "" {
-				wsConn.SessionData.STTParams.Model = actionMsg.Model
-				logger.LogicLogger.Debug("[WebSocket] Stored model in connection",
-					"connID", wsConn.ID,
-					"model", actionMsg.Model)
+			if actionMsg.Parameters.SampleRate > 0 {
+				sttParams.SampleRate = actionMsg.Parameters.SampleRate
 			}
-
-			// 标记任务已开始
-			wsConn.SetConnectionTaskStatus(true, time.Now().Unix())
-			logger.LogicLogger.Debug("[WebSocket] Marked task as started in connection",
-				"connID", wsConn.ID,
-				"startTime", time.Now().Unix())
-
-			// 不再在这里发送任务开始事件，而是在处理结果时发送
-			logger.LogicLogger.Info("[WebSocket] Task processing initiated",
-				"connID", wsConn.ID,
-				"model", actionMsg.Model)
-		} else if actionMsg.Action == types.WSActionFinishTask {
-			logger.LogicLogger.Debug("[WebSocket] Processing finish-task action",
-				"connID", wsConn.ID,
-				"taskID", actionMsg.TaskID)
+			if actionMsg.Parameters.Language != "" {
+				sttParams.Language = actionMsg.Parameters.Language
+			}
+			sttParams.UseVAD = actionMsg.Parameters.UseVAD
+			if actionMsg.Parameters.ReturnFormat != "" {
+				sttParams.ReturnFormat = actionMsg.Parameters.ReturnFormat
+			}
 		}
 
-		// 直接设置WebSocket连接ID到结构体并重新序列化
+		if actionMsg.Model != "" {
+			sttParams.Model = actionMsg.Model
+		}
+
+		logger.LogicLogger.Debug("[WebSocket] Updated STT parameters in connection",
+			"connID", wsConn.ID,
+			"format", sttParams.AudioFormat,
+			"sampleRate", sttParams.SampleRate,
+			"language", sttParams.Language,
+			"useVAD", sttParams.UseVAD,
+			"model", sttParams.Model,
+			"returnFormat", sttParams.ReturnFormat)
+
+		// Tag task started
+		wsConn.SetConnectionTaskStatus(true, time.Now().Unix())
+
+		// Directly set the WebSocket connection ID to the struct and reserialize it
 		actionMsg.TaskID = wsConn.ID
 		updatedMessage, _ = json.Marshal(actionMsg)
 
@@ -727,11 +917,11 @@ func handleWebSocketMessage(wsConn *client.WebSocketConnection, flavor, service 
 			"connID", wsConn.ID,
 			"size", len(message))
 	} else {
-		// 无法识别的消息格式
+		// Unrecognized message format
 		logger.LogicLogger.Warn("[WebSocket] Unrecognized message format",
 			"connID", wsConn.ID)
 
-		// 发送错误事件
+		// Send error event
 		errorEvent := types.NewTaskFailedEvent(wsConn.ID,
 			types.WSErrorCodeClientError,
 			bcode.ErrWebSocketMessageFormat.Error())
@@ -741,14 +931,14 @@ func handleWebSocketMessage(wsConn *client.WebSocketConnection, flavor, service 
 		return
 	}
 
-	// 使用新的消息内容替换请求体
+	// Replace request body with new message content
 	clonedReq.Body = io.NopCloser(bytes.NewReader(updatedMessage))
 	clonedReq.ContentLength = int64(len(updatedMessage))
 
-	// 设置Content-Type
+	// Set Content-Type
 	clonedReq.Header.Set("Content-Type", contentType)
 
-	// 添加WebSocket标识，便于服务区分WebSocket消息
+	// Add WebSocket identifier for service to distinguish WebSocket messages
 	clonedReq.Header.Set("X-WebSocket-ConnID", wsConn.ID)
 
 	logger.LogicLogger.Debug("[WebSocket] Prepared HTTP request with WebSocket connection ID",
@@ -756,14 +946,14 @@ func handleWebSocketMessage(wsConn *client.WebSocketConnection, flavor, service 
 		"contentType", contentType,
 		"contentLength", clonedReq.ContentLength)
 
-	// 调用服务处理消息
+	// Call service to process message
 	msgTaskID, msgCh, err := InvokeService(flavor, service, clonedReq)
 	if err != nil {
 		logger.LogicLogger.Error("[WebSocket] Failed to invoke service for message",
 			"error", err,
 			"connID", wsConn.ID)
 
-		// 向客户端发送错误信息
+		// Send an error message to the client side
 		errorEvent := types.NewTaskFailedEvent(wsConn.ID,
 			types.WSErrorCodeServerError,
 			err.Error())
@@ -772,10 +962,10 @@ func handleWebSocketMessage(wsConn *client.WebSocketConnection, flavor, service 
 		return
 	}
 
-	// 将taskType和msgTaskID绑定并写入到wsConn中
+	// Bind and write taskType and msgTaskID to wsConn
 	wsConn.SetTaskType(msgTaskID, taskType)
 
-	// 如果不是finish-task，则添加到活跃任务列表
+	// If not a final task, add it to the active task list
 	if taskType != types.WSActionFinishTask {
 		wsConn.AddActiveTask(msgTaskID)
 	}
@@ -787,20 +977,20 @@ func handleWebSocketMessage(wsConn *client.WebSocketConnection, flavor, service 
 		"taskType", taskType,
 		"activeTaskCount", wsConn.GetActiveTaskCount())
 
-	// 启动goroutine处理服务结果并发送给客户端
+	// Start goroutine to process service results and send to client side
 	go processServiceResult(wsConn, msgCh, msgTaskID)
 }
 
-// 处理服务结果并发送给WebSocket客户端
+// Process service results and send to WebSocket client side
 func processServiceResult(wsConn *client.WebSocketConnection, ch chan *types.ServiceResult, msgTaskID uint64) {
-	// 获取任务类型
+	// Get task type
 	taskType := wsConn.GetTaskType(msgTaskID)
 	logger.LogicLogger.Debug("[WebSocket] Processing service result",
 		"msgTaskID", msgTaskID,
 		"connID", wsConn.ID,
 		"taskType", taskType)
 
-	// 在函数退出时确保清理活跃任务
+	// Make sure to clean up active tasks when a function exits
 	defer func() {
 		if taskType != types.WSActionFinishTask {
 			wsConn.RemoveActiveTask(msgTaskID)
@@ -815,46 +1005,12 @@ func processServiceResult(wsConn *client.WebSocketConnection, ch chan *types.Ser
 		data, ok := <-ch
 		if !ok {
 			logger.LogicLogger.Debug("[WebSocket] Message task channel closed", "taskID", msgTaskID, "connID", wsConn.ID)
-
-			// 如果是finish-task任务，检查是否还有活跃任务
-			if taskType == types.WSActionFinishTask {
-				// 最多等待5秒，检查所有活跃任务是否完成
-				waitStart := time.Now()
-				maxWaitTime := 5 * time.Second
-				checkInterval := 100 * time.Millisecond
-
-				for wsConn.HasActiveTasks() && time.Since(waitStart) < maxWaitTime {
-					logger.LogicLogger.Debug("[WebSocket] Waiting for active tasks to complete before sending finish event",
-						"connID", wsConn.ID,
-						"activeTaskCount", wsConn.GetActiveTaskCount(),
-						"waitTime", time.Since(waitStart))
-					time.Sleep(checkInterval)
-				}
-
-				if wsConn.HasActiveTasks() {
-					logger.LogicLogger.Warn("[WebSocket] Some tasks are still active after wait period, sending finish event anyway",
-						"connID", wsConn.ID,
-						"activeTaskCount", wsConn.GetActiveTaskCount())
-				} else {
-					logger.LogicLogger.Info("[WebSocket] All tasks completed, sending finish event",
-						"connID", wsConn.ID)
-				}
-
-				// 现在发送任务完成事件
-				finishedEvent := types.NewTaskFinishedEvent(wsConn.ID)
-				finishedJSON, _ := json.Marshal(finishedEvent)
-				if err := wsConn.WriteMessage(websocket.TextMessage, finishedJSON); err != nil {
-					logger.LogicLogger.Error("[WebSocket] Failed to send finish event",
-						"error", err,
-						"connID", wsConn.ID)
-				}
-			}
 			return
 		}
 
 		logger.LogicLogger.Debug("[WebSocket] Received message task result", "result", data, "connID", wsConn.ID)
 
-		// 首先发送任务开始事件
+		// First send the task start event
 		if taskType == types.WSActionRunTask {
 			startedEvent := types.NewTaskStartedEvent(wsConn.ID)
 			startedJSON, _ := json.Marshal(startedEvent)
@@ -866,13 +1022,13 @@ func processServiceResult(wsConn *client.WebSocketConnection, ch chan *types.Ser
 		}
 
 		if data.Type == types.ServiceResultFailed {
-			// 处理错误
+			// Handle error
 			errorMsg := "Service processing failed"
 			if data.Error != nil {
 				errorMsg = data.Error.Error()
 			}
 
-			// 创建并发送错误事件
+			// Create and send error events
 			errorEvent := types.NewTaskFailedEvent(wsConn.ID,
 				types.WSErrorCodeModelError,
 				errorMsg)
@@ -893,7 +1049,7 @@ func ConvertBetweenFlavors(from, to APIFlavor, service string, conv string, cont
 		return content, nil
 	}
 
-	// 若是二进制数据，跳过转换
+	// If it's binary data, skip conversion
 	if content.Body != nil && content.Header.Get("Content-Type") == "application/octet-stream" {
 		logger.LogicLogger.Debug("[Flavor] Skipping conversion for binary data", "flavor", from.Name(), "service", service, "conversion", conv)
 		return content, nil
@@ -1161,21 +1317,21 @@ func ChooseProviderAuthenticator(p *AuthenticatorParams) Authenticator {
 	return authenticator
 }
 
-// 监听stream响应的函数
+// Function to monitor stream responses
 func monitorStreamResponses(session *client.GRPCStreamSession, wsConn *client.WebSocketConnection) {
 	grpcStreamManager := client.GetGlobalGRPCStreamManager()
 
 	for {
-		// 检查会话是否仍然有效（我们不再访问内部mutex和Active字段，而是通过公共方法检查）
+		// Check if session is still valid (we no longer access internal mutex and Active fields, but check through public methods)
 		if grpcStreamManager.GetSessionByWSConnID(wsConn.ID) == nil {
 			logger.LogicLogger.Info("[Handler] gRPC session no longer active, stopping monitoring",
 				"connID", wsConn.ID)
 			return
 		}
 
-		// 接收响应（这是阻塞调用）
+		// Receive response (this is a blocking call)
 		streamResponse, err := session.Stream.Recv()
-		// 处理接收错误
+		// Handle receive errors
 		if err != nil {
 			if err == io.EOF {
 				logger.LogicLogger.Info("[Handler] gRPC stream closed by server",
@@ -1185,7 +1341,7 @@ func monitorStreamResponses(session *client.GRPCStreamSession, wsConn *client.We
 					"error", err,
 					"connID", wsConn.ID)
 
-				// 发送错误事件给客户端
+				// Send error event to client
 				errorEvent := types.NewTaskFailedEvent(wsConn.ID,
 					types.WSErrorCodeModelError,
 					bcode.WrapError(bcode.ErrGRPCStreamReceive, err).Error())
@@ -1194,21 +1350,21 @@ func monitorStreamResponses(session *client.GRPCStreamSession, wsConn *client.We
 				wsConn.WriteMessage(websocket.TextMessage, errorJSON)
 			}
 
-			// 关闭会话
+			// Close session
 			grpcStreamManager.CloseSessionByWSConnID(wsConn.ID)
 
 			return
 		}
 
-		// 处理接收到的响应
+		// Handle received response
 		if streamResponse != nil {
-			// 检查是否有错误消息
+			// Check if there are error messages
 			if streamResponse.ErrorMessage != "" {
 				logger.LogicLogger.Error("[Handler] Server returned error",
 					"error", streamResponse.ErrorMessage,
 					"connID", wsConn.ID)
 
-				// 发送错误事件给客户端
+				// Send error event to client
 				errorEvent := types.NewTaskFailedEvent(wsConn.ID,
 					types.WSErrorCodeModelError,
 					streamResponse.ErrorMessage)
@@ -1218,15 +1374,15 @@ func monitorStreamResponses(session *client.GRPCStreamSession, wsConn *client.We
 				continue
 			}
 
-			// 获取推理响应
+			// Get inference response
 			inferResp := streamResponse.GetInferResponse()
 			if inferResp == nil {
 				continue
 			}
 
-			// 解析JSON响应
+			// Parse JSON response
 			if len(inferResp.RawOutputContents) > 0 {
-				// 解析 RawOutputContents 为 JSON
+				// Parse RawOutputContents as JSON
 				rawContent := string(inferResp.RawOutputContents[0])
 
 				var resultData struct {
@@ -1243,7 +1399,7 @@ func monitorStreamResponses(session *client.GRPCStreamSession, wsConn *client.We
 						"raw", rawContent,
 						"connID", wsConn.ID)
 
-					// 发送错误事件给客户端
+					// Send error event to client
 					errorEvent := types.NewTaskFailedEvent(wsConn.ID,
 						types.WSErrorCodeModelError,
 						bcode.WrapError(bcode.ErrJSONParsing, err).Error())
@@ -1252,20 +1408,20 @@ func monitorStreamResponses(session *client.GRPCStreamSession, wsConn *client.We
 					continue
 				}
 
-				// 使用解析后的内容
+				// Use parsed content
 				text := resultData.Content
 				statusInfo := resultData.Status
 				isFinal := resultData.IsFinal
 				messageInfo := resultData.Message
 
-				// 记录状态信息
+				// Log status information
 				logger.LogicLogger.Debug("[Handler] Received inference result",
 					"status", statusInfo,
 					"is_final", isFinal,
 					"message", messageInfo,
 					"connID", wsConn.ID)
 
-				// 如果内容是SRT格式，解析时间戳
+				// If content is in SRT format, parse timestamps
 				var beginTime, endTime *int
 				if text != "" {
 					beginTime, endTime = utils.ParseSRTTimestamps(text)
@@ -1274,13 +1430,11 @@ func monitorStreamResponses(session *client.GRPCStreamSession, wsConn *client.We
 						"beginTime", beginTime,
 						"endTime", endTime,
 						"connID", wsConn.ID)
-				}
 
-				if text != "" {
 					resultEvent := types.NewResultGeneratedEvent(wsConn.ID, beginTime, endTime, text)
 					resultJSON, _ := json.Marshal(resultEvent)
 
-					// 发送结果到WebSocket客户端
+					// Send result to WebSocket client
 					if err := wsConn.WriteMessage(websocket.TextMessage, resultJSON); err != nil {
 						logger.LogicLogger.Error("[Handler] Failed to send result to WebSocket",
 							"error", err,
@@ -1288,6 +1442,19 @@ func monitorStreamResponses(session *client.GRPCStreamSession, wsConn *client.We
 					} else {
 						logger.LogicLogger.Debug("[Handler] Sent recognition result to WebSocket",
 							"text", text,
+							"connID", wsConn.ID)
+					}
+				}
+
+				if isFinal {
+					finishEvent := types.NewTaskFinishedEvent(wsConn.ID)
+					finishJSON, _ := json.Marshal(finishEvent)
+					if err := wsConn.WriteMessage(websocket.TextMessage, finishJSON); err != nil {
+						logger.LogicLogger.Error("[Handler] Failed to send finish event to WebSocket",
+							"error", err,
+							"connID", wsConn.ID)
+					} else {
+						logger.LogicLogger.Debug("[Handler] Sent finish event to WebSocket",
 							"connID", wsConn.ID)
 					}
 				}

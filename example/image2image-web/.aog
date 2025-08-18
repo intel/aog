@@ -1,5 +1,5 @@
 {
-  "version": "v0.4",
+  "version": "v0.5",
   "services": {
     "chat": {
       "service_providers": {

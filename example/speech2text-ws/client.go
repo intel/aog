@@ -39,7 +39,7 @@ import (
 // Configuration constants
 const (
 	// WebSocket server URL for AOG Speech-to-Text service
-	wsURL = "ws://localhost:16688/aog/v0.4/services/speech-to-text-ws"
+	wsURL = "ws://localhost:16688/aog/v0.2/services/speech-to-text-ws"
 	// Audio file path - replace with your audio file
 	// IMPORTANT: Input formats PCM, WAV, and MP3 are supported for conversion
 	// All formats are automatically converted to PCM before sending to AOG server
@@ -250,7 +250,7 @@ func (c *SpeechToTextClient) sendRunTaskCommand() error {
 		Parameters: &Parameters{
 			Format:     "pcm", // Server only accepts PCM format
 			SampleRate: 16000,
-			Language:   "<|zh|>", // Chinese language
+			Language:   "zh", // Chinese language
 			UseVAD:     true,
 		},
 	}

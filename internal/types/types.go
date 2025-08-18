@@ -22,7 +22,7 @@ import (
 	"net/http"
 	"time"
 
-	"intel.com/aog/internal/constants"
+	"github.com/intel/aog/internal/constants"
 )
 
 const (
@@ -51,13 +51,19 @@ const (
 	ServiceTextToSpeech   = "text-to-speech"
 	ServiceSpeechToText   = "speech-to-text"
 	ServiceTextToVideo    = "text-to-video"
+	ServiceImageToVideo   = "image-to-video"
+	ServiceImageToImage   = "image-to-image"
 	ServiceSpeechToTextWS = "speech-to-text-ws"
 
-	ServiceChatAvatar         = constants.BaseDownloadURL + constants.UrlDirPathWindows + "/chat.svg"
-	ServiceTextToImageAvatar  = constants.BaseDownloadURL + constants.UrlDirPathWindows + "/text-to-image.svg"
-	ServiceEmbedAvatar        = constants.BaseDownloadURL + constants.UrlDirPathWindows + "/Embed.svg"
-	ServiceGenerateAvatar     = constants.BaseDownloadURL + constants.UrlDirPathWindows + "/Generate.svg"
-	ServiceSpeechToTextAvatar = constants.BaseDownloadURL + constants.UrlDirPathWindows + "/Speech-to-text.svg"
+	ServiceChatAvatar           = constants.BaseDownloadURL + constants.URLDirPathIcon + "/chat.svg"
+	ServiceTextToImageAvatar    = constants.BaseDownloadURL + constants.URLDirPathIcon + "/text-to-image.svg"
+	ServiceEmbedAvatar          = constants.BaseDownloadURL + constants.URLDirPathIcon + "/Embed.svg"
+	ServiceGenerateAvatar       = constants.BaseDownloadURL + constants.URLDirPathIcon + "/Generate.svg"
+	ServiceSpeechToTextAvatar   = constants.BaseDownloadURL + constants.URLDirPathIcon + "/Speech-to-text.svg"
+	ServiceTextToSpeechAvatar   = constants.BaseDownloadURL + constants.URLDirPathIcon + "/Text-to-speech.svg"
+	ServiceImageToVideoAvatar   = constants.BaseDownloadURL + constants.URLDirPathIcon + "/Image-to-video.svg"
+	ServiceImageToImageAvatar   = constants.BaseDownloadURL + constants.URLDirPathIcon + "/Image-to-image.svg"
+	ServiceSpeechToTextWSAvatar = constants.BaseDownloadURL + constants.URLDirPathIcon + "/Speech-to-text-ws.svg"
 
 	ImageTypeUrl    = "url"
 	ImageTypePath   = "path"
@@ -96,21 +102,42 @@ const (
 	AudioAac  = "aac"
 	AudioMp4  = "mp4"
 
+	VoiceMale   = "male"
+	VoiceFemale = "female"
+	VoiceGirl   = "girl"
+	VoiceBaby   = "baby"
+
 	GPUTypeNvidia    = "Nvidia"
 	GPUTypeAmd       = "AMD"
 	GPUTypeIntelArc  = "Intel Arc"
 	GPUTypeIntelCore = "Intel Core"
 	GPUTypeNone      = "None"
+
+	LanguageZh = "zh"
+	LanguageEn = "en"
 )
 
 var (
-	SupportService      = []string{ServiceEmbed, ServiceModels, ServiceChat, ServiceGenerate, ServiceTextToImage, ServiceSpeechToText, ServiceSpeechToTextWS}
-	SupportHybridPolicy = []string{HybridPolicyDefault, HybridPolicyLocal, HybridPolicyRemote}
-	SupportAuthType     = []string{AuthTypeNone, AuthTypeApiKey, AuthTypeSign, AuthTypeToken}
-	SupportFlavor       = []string{FlavorDeepSeek, FlavorOpenAI, FlavorTencent, FlavorOllama, FlavorBaidu, FlavorAliYun, FlavorOpenvino}
-	SupportModelEngine  = []string{FlavorOpenvino, FlavorOllama}
-	SupportImageType    = []string{ImageTypeUrl, ImageTypeBase64, ImageTypePath}
-	SupportAudioType    = []string{AudioWav, AudioMp3}
+	SupportService           = []string{ServiceEmbed, ServiceModels, ServiceChat, ServiceGenerate, ServiceTextToImage, ServiceSpeechToText, ServiceSpeechToTextWS, ServiceTextToSpeech, ServiceImageToVideo, ServiceImageToImage}
+	SupportHybridPolicy      = []string{HybridPolicyDefault, HybridPolicyLocal, HybridPolicyRemote}
+	SupportAuthType          = []string{AuthTypeNone, AuthTypeApiKey, AuthTypeSign, AuthTypeToken}
+	SupportFlavor            = []string{FlavorDeepSeek, FlavorOpenAI, FlavorTencent, FlavorOllama, FlavorBaidu, FlavorAliYun, FlavorOpenvino}
+	SupportModelEngine       = []string{FlavorOpenvino, FlavorOllama}
+	SupportImageType         = []string{ImageTypeUrl, ImageTypeBase64, ImageTypePath}
+	SupportAudioType         = []string{AudioWav, AudioMp3}
+	SupportVoiceType         = []string{VoiceMale, VoiceFemale, VoiceGirl, VoiceBaby}
+	SupportOnlyRemoteService = []string{ServiceImageToVideo, ServiceImageToImage}
+	SupportServiceAvatar     = map[string]string{
+		ServiceChat:           ServiceChatAvatar,
+		ServiceEmbed:          ServiceEmbedAvatar,
+		ServiceGenerate:       ServiceGenerateAvatar,
+		ServiceTextToImage:    ServiceTextToImageAvatar,
+		ServiceTextToSpeech:   ServiceTextToSpeechAvatar,
+		ServiceSpeechToText:   ServiceSpeechToTextAvatar,
+		ServiceSpeechToTextWS: ServiceSpeechToTextWSAvatar,
+		ServiceImageToVideo:   ServiceImageToVideoAvatar,
+		ServiceImageToImage:   ServiceImageToImageAvatar,
+	}
 )
 
 type HTTPContent struct {
@@ -242,4 +269,27 @@ type PathDiskSizeInfo struct {
 	FreeSize  int `json:"free_size"`
 	TotalSize int `json:"total_size"`
 	UsageSize int `json:"usage_size"`
+}
+
+type TextToSpeechRequest struct {
+	Text   string `json:"text"`
+	Voice  string `json:"voice"`
+	Params string `json:"params"`
+}
+
+type LoadRequest struct {
+	Model string `json:"model"`
+}
+
+type UnloadModelRequest struct {
+	Models []string `json:"model"`
+}
+
+type OllamaUnloadModelRequest struct {
+	Model     string `json:"model"`
+	KeepAlive int64  `json:"keep_alive"`
+}
+
+type OllamaLoadModelRequest struct {
+	Model string `json:"model"`
 }

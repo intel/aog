@@ -1061,5 +1061,21 @@
     "service_name":"speech-to-text-ws",
     "service_source":"local",
     "size": "5.75GB"
+  },
+  {
+    "api_flavor":"openvino",
+    "avatar": "http://smartvision-aipc-open.oss-cn-hangzhou.aliyuncs.com/aog/icon/openvino_logo.png",
+    "class":[
+      "文本转语音"
+    ],
+    "description": "微软开源的一款语音合成模型，仅支持英文。",
+    "flavor": "openvino",
+    "id": "e722a6ef",
+    "max_input": 0,
+    "max_output": 0,
+    "name":"NamoLi/speecht5-tts",
+    "service_name":"text-to-speech",
+    "service_source":"local",
+    "size": "608MB"
   }
 ]
