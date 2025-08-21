@@ -19,6 +19,7 @@ package logger
 import (
 	"log/slog"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -96,16 +97,22 @@ func NewLogManager(c LogConfig) *LogManager {
 func (lm *LogManager) AddLogger(c LogConfig, name string) {
 	logLevel := GetLoggerLevel(c.LogLevel)
 	lumberjackLogger := &lumberjack.Logger{
-		Filename:   c.LogPath + "/" + name + ".log",
+		Filename:   filepath.Join(c.LogPath, name+".log"),
 		MaxSize:    LoggerMaxSize,    // Maximum size of a single log file (MB)
 		MaxBackups: LoggerMaxBackups, // Maximum number of old log files to keep
 		MaxAge:     LoggerMaxAge,     // Maximum number of days reserved
 		Compress:   LoggerCompress,
 	}
 	// Get file date
-	fileInfo, err := os.Stat(lumberjackLogger.Filename)
+	fileInfo, err := os.Stat(c.LogPath)
 	if err != nil && !os.IsExist(err) {
-		_ = os.MkdirAll(lumberjackLogger.Filename, 0o750)
+		_ = os.MkdirAll(c.LogPath, 0750)
+	}
+	if _, err := os.Stat(lumberjackLogger.Filename); os.IsNotExist(err) {
+		_, err = os.Create(lumberjackLogger.Filename)
+		if err != nil {
+			return
+		}
 		fileInfo, _ = os.Stat(lumberjackLogger.Filename)
 	}
 

@@ -64,13 +64,13 @@ func NewModel() Model {
 func (s *ModelImpl) CreateModel(ctx context.Context, request *dto.CreateModelRequest) (*dto.CreateModelResponse, error) {
 	// ensure service avaliable first
 	service := &types.Service{Name: request.ServiceName}
-    err := s.Ds.Get(ctx, service)
-    if err != nil {
-        return nil, bcode.ErrServiceRecordNotFound
-    }
-    if service.Status != 0 {
-        return nil, bcode.ErrModelServiceNotAvailable
-    }
+	err := s.Ds.Get(ctx, service)
+	if err != nil {
+		return nil, bcode.ErrServiceRecordNotFound
+	}
+	if service.Status != 0 {
+		return nil, bcode.ErrModelServiceNotAvailable
+	}
 
 	sp := new(types.ServiceProvider)
 	if request.ProviderName != "" {
@@ -704,7 +704,6 @@ func (s *ModelImpl) GetSupportModelList(ctx context.Context, request *dto.GetSup
 						IsRecommend = true
 						break
 					}
-
 				}
 			}
 		}

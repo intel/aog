@@ -29,6 +29,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.22.0",
+    "@eslint/plugin-kit": "^0.3.4",
     "@types/node": "^22.15.2",
     "@types/react": "18.3.12",
     "@types/react-dom": "^18.3.6",
@@ -49,5 +50,9 @@
   },
   "alias": {
     "src": "./src"
+  },
+  "resolutions": {
+    "@eslint/plugin-kit": "^0.3.4",
+    "form-data": "^4.0.4"
   }
 }

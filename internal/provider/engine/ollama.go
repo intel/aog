@@ -313,15 +313,20 @@ func (o *OllamaProvider) GetVersion(ctx context.Context, resp *types.EngineVersi
 
 func (o *OllamaProvider) InstallEngine() error {
 	file, err := utils.DownloadFile(o.EngineConfig.DownloadUrl, o.EngineConfig.DownloadPath)
+	logger.EngineLogger.Info("[Ollama] Download ollama file: " + o.EngineConfig.DownloadUrl + " to " + o.EngineConfig.DownloadPath)
 	if err != nil {
+		logger.EngineLogger.Error("[Ollama] Failed to download ollama: " + err.Error())
 		return fmt.Errorf("failed to download ollama: %v, url: %v", err, o.EngineConfig.DownloadUrl)
 	}
 
 	slog.Info("[Install Engine] start install...")
+	logger.EngineLogger.Info("[Ollama] Start unzipping ollama file: " + file)
 	if runtime.GOOS == "darwin" {
 		files, err := os.ReadDir(o.EngineConfig.DownloadPath)
 		if err != nil {
+			logger.EngineLogger.Error("[Ollama] Failed to read directory: " + err.Error())
 			slog.Error("[Install Engine] read dir failed: ", o.EngineConfig.DownloadPath)
+			return err
 		}
 		for _, f := range files {
 			if f.IsDir() && f.Name() == "__MACOSX" {
@@ -333,6 +338,7 @@ func (o *OllamaProvider) InstallEngine() error {
 		if _, err = os.Stat(appPath); os.IsNotExist(err) {
 			unzipCmd := exec.Command(UnzipCommand, file, UnzipDestFlag, o.EngineConfig.DownloadPath)
 			if err := unzipCmd.Run(); err != nil {
+				logger.EngineLogger.Error("[Ollama] Failed to read directory: " + err.Error())
 				return fmt.Errorf("failed to unzip file: %v", err)
 			}
 			appPath = filepath.Join(o.EngineConfig.DownloadPath, "Ollama.app")
@@ -343,6 +349,7 @@ func (o *OllamaProvider) InstallEngine() error {
 		if _, err = os.Stat(applicationPath); os.IsNotExist(err) {
 			mvCmd := exec.Command(MoveCommand, appPath, "/Applications/")
 			if err := mvCmd.Run(); err != nil {
+				logger.EngineLogger.Error("[Ollama] Failed to move ollama to Applications: " + err.Error())
 				return fmt.Errorf("failed to move ollama to Applications: %v", err)
 			}
 		}
@@ -355,12 +362,13 @@ func (o *OllamaProvider) InstallEngine() error {
 				slog.Error("Get user home dir failed: ", err.Error())
 				return err
 			}
-			ipexPath := userDir
+			ipexPath := filepath.Join(userDir, "ipex-llm-ollama")
 			if _, err = os.Stat(ipexPath); os.IsNotExist(err) {
 				os.MkdirAll(ipexPath, 0o755)
 				if runtime.GOOS == "windows" {
 					unzipCmd := exec.Command(TarCommand, TarExtractFlag, file, TarDestFlag, ipexPath)
 					if err := unzipCmd.Run(); err != nil {
+						logger.EngineLogger.Error("[Ollama] Failed to extract ollama to Applications: " + err.Error())
 						return fmt.Errorf("failed to unzip file: %v", err)
 					}
 				}
@@ -372,13 +380,16 @@ func (o *OllamaProvider) InstallEngine() error {
 				os.MkdirAll(ipexPath, 0o755)
 				unzipCmd := exec.Command(TarCommand, TarExtractFlag, file, TarDestFlag, ipexPath)
 				if err := unzipCmd.Run(); err != nil {
+					logger.EngineLogger.Error("[Ollama] Failed to extract ollama to Applications: " + err.Error())
 					return fmt.Errorf("failed to unzip file: %v", err)
 				}
 			}
 		} else {
+			logger.EngineLogger.Error("[Ollama] Unsupported OS: " + runtime.GOOS)
 			return fmt.Errorf("unsupported operating system: %s", runtime.GOOS)
 		}
 	}
+	logger.EngineLogger.Info("[Ollama] Install ollama completed: " + o.EngineConfig.DownloadPath)
 	slog.Info("[Install Engine] model engine install completed")
 	return nil
 }
