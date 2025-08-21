@@ -16,7 +16,7 @@
     "@phosphor-icons/react": "^2.1.10",
     "ahooks": "^3.8.4",
     "antd": "5.25.0",
-    "axios": "^1.8.4",
+    "axios": "^1.11.0",
     "i18next": "^25.2.1",
     "immer": "^10.1.1",
     "react": "18.3.1",
