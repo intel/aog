@@ -20,10 +20,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/intel/aog/internal/provider"
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/intel/aog/internal/provider"
 
 	"github.com/intel/aog/internal/api/dto"
 	"github.com/intel/aog/internal/constants"

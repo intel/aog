@@ -358,12 +358,12 @@ func (m *AOGProcessManager) IsProcessRunning() bool {
 		// If no process manager, fall back to health check
 		return m.healthCheck() == nil
 	}
-	
+
 	// If process manager knows about a running process, trust it
 	if m.processManager.IsRunning() {
 		return true
 	}
-	
+
 	// If process manager doesn't know about a running process,
 	// check via health endpoint (maybe server was started by another instance)
 	return m.healthCheck() == nil

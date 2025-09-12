@@ -18,11 +18,6 @@ package server
 
 import (
 	"context"
-	"log/slog"
-	"os"
-	"os/exec"
-	"runtime"
-	"strconv"
 	"time"
 
 	"github.com/intel/aog/internal/datastore"
@@ -31,69 +26,6 @@ import (
 	"github.com/intel/aog/internal/types"
 	"github.com/intel/aog/internal/utils"
 )
-
-// StartModelEngine starts a model engine
-func StartModelEngine(engineName, mode string) error {
-	if runtime.GOOS == "darwin" {
-		return nil
-	}
-	// Check if the model engine service is started
-	engineProvider := provider.GetModelEngine(engineName)
-	engineConfig := engineProvider.GetConfig()
-
-	err := engineProvider.HealthCheck()
-	if err != nil {
-		// cmd := exec.Command(engineConfig.ExecPath+engineConfig.ExecFile, "-h")
-		// err := cmd.Run()
-		// if err != nil {
-		slog.Info("Check model engine " + engineName + " status")
-		reCheckCmd := exec.Command(engineConfig.ExecPath+"/"+engineConfig.ExecFile, "-h")
-		err = reCheckCmd.Run()
-		_, isExistErr := os.Stat(engineConfig.ExecPath + "/" + engineConfig.ExecFile)
-		if err != nil && isExistErr != nil {
-			slog.Info("Model engine " + engineName + " status: not downloaded")
-			return nil
-		}
-		//}
-
-		slog.Info("Setting env...")
-		err = engineProvider.InitEnv()
-		if err != nil {
-			slog.Error("Setting env error: ", err.Error())
-			return err
-		}
-
-		slog.Info("Start " + engineName + "...")
-		err = engineProvider.StartEngine(mode)
-		if err != nil {
-			slog.Error("Start engine "+engineName+" error: ", err.Error())
-			return err
-		}
-
-		slog.Info("Waiting model engine " + engineName + " start 60s...")
-		for i := 60; i > 0; i-- {
-			time.Sleep(time.Second * 1)
-			err = engineProvider.HealthCheck()
-			if err == nil {
-				slog.Info("Start " + engineName + " completed...")
-				break
-			}
-			slog.Info("Waiting "+engineName+" start ...", strconv.Itoa(i), "s")
-		}
-	}
-
-	err = engineProvider.HealthCheck()
-	if err != nil {
-		slog.Error(engineName + " failed start, Please try again later...")
-		return err
-	}
-
-	slog.Info(engineName + " start successfully.")
-
-	engineProvider.UpgradeEngine()
-
-	return nil
-}
 
 // ListenModelEngineHealth monitors model engine health and keep alive
 func ListenModelEngineHealth() {

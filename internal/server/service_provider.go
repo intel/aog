@@ -108,6 +108,9 @@ func (s *ServiceProviderImpl) CreateServiceProvider(ctx context.Context, request
 	if request.ServiceSource == types.ServiceSourceLocal {
 		engineProvider := provider.GetModelEngine(request.ApiFlavor)
 		engineConfig := engineProvider.GetConfig()
+		if engineConfig == nil {
+			return nil, bcode.ErrEngineNotAvailable
+		}
 		if strings.Contains(request.Url, engineConfig.Host) {
 			parseUrl, err := url.Parse(request.Url)
 			if err != nil {

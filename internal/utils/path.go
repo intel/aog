@@ -29,7 +29,7 @@ func GetDownloadDir() (string, error) {
 			return xdgDownload, nil
 		}
 		downloadsDir := filepath.Join(currentUser.HomeDir, "Downloads")
-		if err := os.MkdirAll(downloadsDir, 0755); err != nil {
+		if err := os.MkdirAll(downloadsDir, 0o755); err != nil {
 			return "", fmt.Errorf("failed to create Downloads directory: %w", err)
 		}
 		return downloadsDir, nil

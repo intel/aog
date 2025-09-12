@@ -116,6 +116,10 @@ func NewOllamaProvider(config *types.EngineRecommendConfig) *OllamaProvider {
 
 	ollamaProvider := new(OllamaProvider)
 	ollamaProvider.EngineConfig = ollamaProvider.GetConfig()
+	if ollamaProvider.EngineConfig == nil {
+		logger.EngineLogger.Error("[Ollama] Ollama engine is not available")
+		return nil
+	}
 	ollamaProvider.processManager = process.NewEngineProcessManager("ollama", ollamaProvider.EngineConfig)
 
 	return ollamaProvider

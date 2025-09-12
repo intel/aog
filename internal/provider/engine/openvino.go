@@ -370,6 +370,10 @@ func NewOpenvinoProvider(config *types.EngineRecommendConfig) *OpenvinoProvider 
 
 	openvinoProvider := new(OpenvinoProvider)
 	openvinoProvider.EngineConfig = openvinoProvider.GetConfig()
+	if openvinoProvider.EngineConfig == nil {
+		logger.EngineLogger.Error("[OpenVINO] OpenVINO engine is not available")
+		return nil
+	}
 	openvinoProvider.processManager = process.NewEngineProcessManager("openvino", openvinoProvider.EngineConfig)
 
 	return openvinoProvider
@@ -475,6 +479,8 @@ func (o *OpenvinoProvider) GetConfig() *types.EngineRecommendConfig {
 		case "rhel", "centos", "rocky", "almalinux":
 			// RedHat-based distributions
 			downloadUrl = OVMSLinuxRedHatDownloadURL
+		case "deepin":
+			downloadUrl = OVMSLinuxUbuntu22DownloadURL
 		default:
 			slog.Error("Unsupported Linux distribution: " + distro)
 			logger.EngineLogger.Error("[OpenVINO] Unsupported Linux distribution: " + distro)

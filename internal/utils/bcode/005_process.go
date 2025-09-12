@@ -44,4 +44,6 @@ var (
 	ErrServiceNotReady = NewBcode(http.StatusServiceUnavailable, 50060, "Service manager not ready")
 	ErrNoEngineStarter = NewBcode(http.StatusInternalServerError, 50061, "No engine starter available")
 	ErrNoEngineStopper = NewBcode(http.StatusInternalServerError, 50062, "No engine stopper available")
+
+	ErrEngineNotAvailable = NewBcode(http.StatusServiceUnavailable, 50063, "Engine is not available")
 )
