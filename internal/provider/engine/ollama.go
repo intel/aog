@@ -577,22 +577,8 @@ func (o *OllamaProvider) installEngineWindows(file string, cover bool) error {
 // installEngineLinux Linux platform installation logic
 func (o *OllamaProvider) installEngineLinux(file string, cover bool) error {
 	logger.EngineLogger.Info("[Ollama] Installing engine on Linux platform")
-	targetPath := ""
 
-	if utils.IpexOllamaSupportGPUStatus() {
-		logger.EngineLogger.Info("[Ollama] Intel GPU detected, installing ipex-llm-ollama")
-		// Intel GPU: extract to ipex-llm-ollama folder in user directory
-		userDir, err := os.UserHomeDir()
-		if err != nil {
-			slog.Error("Get user home dir failed", "error", err)
-			return fmt.Errorf("failed to get user home dir: %v", err)
-		}
-		targetPath = filepath.Join(userDir, IpexLlamaDir)
-	} else {
-		logger.EngineLogger.Info("[Ollama] Non-Intel GPU, installing standard ollama")
-		// Non-Intel GPU: extract to configured execution path
-		targetPath = o.EngineConfig.ExecPath
-	}
+	targetPath := o.EngineConfig.ExecPath
 
 	// Delete target directory first when cover install
 	if cover {
