@@ -298,7 +298,8 @@ func (o *OllamaProvider) GetConfig() *types.EngineRecommendConfig {
 		enginePath = filepath.Join(dataDir, "engine/ollama")
 
 		// Determine GPU type and select appropriate download URL
-		switch utils.DetectGpuModel() {
+		gpuType := utils.DetectGpuModel()
+		switch gpuType {
 		case types.GPUTypeNvidia:
 			if arch == "arm64" {
 				downloadUrl = LinuxARMURL // CUDA for ARM64
@@ -306,12 +307,32 @@ func (o *OllamaProvider) GetConfig() *types.EngineRecommendConfig {
 				downloadUrl = LinuxNvidiaURL // CUDA for AMD64
 			}
 		case types.GPUTypeAmd:
-			downloadUrl = LinuxAMDURL // ROCm (AMD64 only)
+			if arch == "arm64" {
+				downloadUrl = LinuxARMBaseURL // Base for ARM64
+			} else {
+				downloadUrl = LinuxAMDURL // Base for AMD64
+			}
+		case types.GPUTypeNvidia + "," + types.GPUTypeAmd:
+			if arch == "arm64" {
+				downloadUrl = LinuxARMURL // CUDA for ARM64
+			} else {
+				downloadUrl = LinuxNvidiaURL // CUDA for AMD64
+			}
+		case types.GPUTypeIntelArc:
+			downloadUrl = LinuxIntelArcURL
 		case types.GPUTypeNone:
 			if arch == "arm64" {
 				downloadUrl = LinuxARMBaseURL // Base for ARM64
 			} else {
 				downloadUrl = LinuxBaseURL // Base for AMD64
+			}
+		default:
+			// Fallback for any other GPU types
+			logger.EngineLogger.Warn("[Ollama] Unknown GPU type: " + gpuType + ", using base download")
+			if arch == "arm64" {
+				downloadUrl = LinuxARMBaseURL
+			} else {
+				downloadUrl = LinuxBaseURL
 			}
 		}
 	case "darwin":
