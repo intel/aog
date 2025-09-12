@@ -9,7 +9,8 @@
     "auth_type": "none",
     "auth_key": "",
     "flavor": "ollama",
-    "url": "http://127.0.0.1:16677/api/tags"
+    "url": "http://127.0.0.1:16677/api/tags",
+    "scope": "system"
   },
   {
     "provider_name": "local_ollama_chat",
@@ -21,7 +22,8 @@
     "auth_type": "none",
     "auth_key": "",
     "flavor": "ollama",
-    "url": "http://127.0.0.1:16677/api/chat"
+    "url": "http://127.0.0.1:16677/api/chat",
+    "scope": "system"
   },
   {
     "provider_name": "local_ollama_generate",
@@ -33,7 +35,8 @@
     "auth_type": "none",
     "auth_key": "",
     "flavor": "ollama",
-    "url": "http://127.0.0.1:16677/api/generate"
+    "url": "http://127.0.0.1:16677/api/generate",
+    "scope": "system"
   },
   {
     "provider_name": "local_ollama_embed",
@@ -45,7 +48,21 @@
     "auth_type": "none",
     "auth_key": "",
     "flavor": "ollama",
-    "url": "http://127.0.0.1:16677/api/embed"
+    "url": "http://127.0.0.1:16677/api/embed",
+    "scope": "system"
+  },
+  {
+    "provider_name":"remote_deepseek_chat",
+    "desc": "Remote deepseek chat",
+    "service_name": "chat",
+    "service_source": "remote",
+    "api_flavor": "deepseek",
+    "method": "POST",
+    "auth_type": "none",
+    "auth_key": "",
+    "flavor": "deepseek",
+    "url": "https://api.deepseek.com/chat/completions",
+    "scope": "system"
   },
   {
     "provider_name": "remote_aliyun_text-to-image",
@@ -57,7 +74,8 @@
     "auth_type": "none",
     "auth_key": "",
     "flavor": "aliyun",
-    "url": "https://dashscope.aliyuncs.com/api/v1/services/aigc/text2image/image-synthesis"
+    "url": "https://dashscope.aliyuncs.com/api/v1/services/aigc/text2image/image-synthesis",
+    "scope": "system"
   },
   {
     "provider_name": "remote_aliyun_chat",
@@ -69,7 +87,8 @@
     "auth_type": "none",
     "auth_key": "",
     "flavor": "aliyun",
-    "url": "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
+    "url": "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",
+    "scope": "system"
   },
   {
     "provider_name": "remote_aliyun_embed",
@@ -81,7 +100,8 @@
     "auth_type": "none",
     "auth_key": "",
     "flavor": "aliyun",
-    "url": "https://dashscope.aliyuncs.com/compatible-mode/v1/embeddings"
+    "url": "https://dashscope.aliyuncs.com/compatible-mode/v1/embeddings",
+    "scope": "system"
   },
   {
     "provider_name": "remote_baidu_text-to-image",
@@ -93,7 +113,8 @@
     "auth_type": "none",
     "auth_key": "",
     "flavor": "baidu",
-    "url": "https://qianfan.baidubce.com/v2/images/generations"
+    "url": "https://qianfan.baidubce.com/v2/images/generations",
+    "scope": "system"
   },
   {
     "provider_name": "remote_baidu_chat",
@@ -105,7 +126,8 @@
     "auth_type": "none",
     "auth_key": "",
     "flavor": "baidu",
-    "url": "https://qianfan.baidubce.com/v2/chat/completions"
+    "url": "https://qianfan.baidubce.com/v2/chat/completions",
+    "scope": "system"
   },
   {
     "provider_name": "remote_baidu_embed",
@@ -117,7 +139,8 @@
     "auth_type": "none",
     "auth_key": "",
     "flavor": "baidu",
-    "url": "https://qianfan.baidubce.com/v2/embeddings"
+    "url": "https://qianfan.baidubce.com/v2/embeddings",
+    "scope": "system"
   },
   {
     "provider_name": "remote_tencent_text-to-image",
@@ -129,7 +152,8 @@
     "auth_type": "none",
     "auth_key": "",
     "flavor": "tencent",
-    "url": "https://hunyuan.tencentcloudapi.com/"
+    "url": "https://hunyuan.tencentcloudapi.com/",
+    "scope": "system"
   },
   {
     "provider_name": "remote_tencent_chat",
@@ -141,7 +165,8 @@
     "auth_type": "none",
     "auth_key": "",
     "flavor": "tencent",
-    "url": "https://api.hunyuan.cloud.tencent.com/v1/chat/completions"
+    "url": "https://api.hunyuan.cloud.tencent.com/v1/chat/completions",
+    "scope": "system"
   },
   {
     "provider_name": "remote_tencent_embed",
@@ -153,7 +178,8 @@
     "auth_type": "none",
     "auth_key": "",
     "flavor": "tencent",
-    "url": "https://api.hunyuan.cloud.tencent.com/v1/embeddings"
+    "url": "https://api.hunyuan.cloud.tencent.com/v1/embeddings",
+    "scope": "system"
   },
   {
     "provider_name": "local_openvino_text-to-image",
@@ -165,7 +191,8 @@
     "auth_type": "none",
     "auth_key": "",
     "flavor": "openvino",
-    "url": "127.0.0.1:9000"
+    "url": "127.0.0.1:9000",
+    "scope": "system"
   },
   {
     "provider_name": "local_openvino_speech-to-text",
@@ -177,7 +204,8 @@
     "auth_type": "none",
     "auth_key": "",
     "flavor": "openvino",
-    "url": "127.0.0.1:9000"
+    "url": "127.0.0.1:9000",
+    "scope": "system"
   },
   {
     "provider_name": "local_openvino_speech-to-text-ws",
@@ -189,7 +217,8 @@
     "auth_type": "none",
     "auth_key": "",
     "flavor": "openvino",
-    "url": "127.0.0.1:9000"
+    "url": "127.0.0.1:9000",
+    "scope": "system"
   },
   {
     "provider_name": "local_openvino_text-to-speech",
@@ -201,7 +230,8 @@
     "auth_type": "none",
     "auth_key": "",
     "flavor": "openvino",
-    "url": "127.0.0.1:9000"
+    "url": "127.0.0.1:9000",
+    "scope": "system"
   },
   {
     "provider_name": "remote_aliyun_text-to-speech",
@@ -213,7 +243,8 @@
     "auth_type": "apikey",
     "auth_key": "",
     "flavor": "aliyun",
-    "url": "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation"
+    "url": "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation",
+    "scope": "system"
   },
   {
     "provider_name": "remote_aliyun_speech-to-text-ws",
@@ -225,7 +256,8 @@
     "auth_type": "apikey",
     "auth_key": "",
     "flavor": "aliyun",
-    "url": "wss://dashscope.aliyuncs.com/api-ws/v1/inference"
+    "url": "wss://dashscope.aliyuncs.com/api-ws/v1/inference",
+    "scope": "system"
   },
   {
     "provider_name": "remote_aliyun_image-to-video",
@@ -237,7 +269,8 @@
     "auth_type": "apikey",
     "auth_key": "",
     "flavor": "aliyun",
-    "url": "https://dashscope.aliyuncs.com/api/v1/services/aigc/video-generation/video-synthesis"
+    "url": "https://dashscope.aliyuncs.com/api/v1/services/aigc/video-generation/video-synthesis",
+    "scope": "system"
   },
   {
     "provider_name": "remote_aliyun_image-to-image",
@@ -249,6 +282,7 @@
     "auth_type": "apikey",
     "auth_key": "",
     "flavor": "aliyun",
-    "url": "https://dashscope.aliyuncs.com/api/v1/services/aigc/image2image/image-synthesis"
+    "url": "https://dashscope.aliyuncs.com/api/v1/services/aigc/image2image/image-synthesis",
+    "scope": "system"
   }
 ]

@@ -2,7 +2,7 @@
 
 [中文](README.md) | English
 
-This is the preview version v0.5.0 of AOG. More features and stability are continuously being
+This is the preview version v0.6.0 of AOG. More features and stability are continuously being
 improved. Please submit Issues for any defects found.
 
 The current version supports chat, embed and text-to-image services, with ollama and OpenVINO model server supported at the lower level. More
@@ -262,7 +262,7 @@ application.
 
 ```json
 {
-  "version": "0.5",
+  "version": "0.6",
   "service": {
     "chat": {
       "models": ["qwen2.5:0.5b", "qwen2.5:7b"]

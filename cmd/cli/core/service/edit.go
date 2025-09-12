@@ -37,9 +37,16 @@ func NewEditServiceCommand() *cobra.Command {
 	var localProvider string
 
 	updateServiceCmd := &cobra.Command{
-		Use:    "service <service_name>",
-		Short:  "Edit service data",
-		Long:   "Edit service status and scheduler policy",
+		Use:   "service <service_name>",
+		Short: "Edit service configuration",
+		Long: `Edit service configuration including hybrid scheduling policy and provider settings.
+		
+Examples:
+  # Set chat service to always use local provider
+  aog edit service chat --hybrid_policy always_local
+
+  # Change remote provider for chat service
+  aog edit service chat --remote_provider remote_deepseek_chat`,
 		Args:   cobra.ExactArgs(1),
 		PreRun: common.CheckAOGServer,
 		Run: func(cmd *cobra.Command, args []string) {
@@ -80,13 +87,13 @@ func NewEditServiceCommand() *cobra.Command {
 			if resp.HTTPCode > 200 {
 				fmt.Println(resp.Message)
 			}
-			fmt.Printf("Service edit success!")
+			fmt.Printf("✅ Service configuration updated successfully!")
 		},
 	}
 
-	updateServiceCmd.Flags().StringVar(&hybridPolicy, "hybrid_policy", "default", "only support default/always_local/always_remote.")
-	updateServiceCmd.Flags().StringVarP(&remoteProvider, "remote_provider", "", "", "remote ai service provider")
-	updateServiceCmd.Flags().StringVarP(&localProvider, "local_provider", "", "", "local ai service provider")
+	updateServiceCmd.Flags().StringVar(&hybridPolicy, "hybrid_policy", "default", "Scheduling policy: default, always_local, or always_remote")
+	updateServiceCmd.Flags().StringVarP(&remoteProvider, "remote_provider", "", "", "Remote service provider name")
+	updateServiceCmd.Flags().StringVarP(&localProvider, "local_provider", "", "", "Local service provider name")
 
 	return updateServiceCmd
 }

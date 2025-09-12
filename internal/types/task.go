@@ -115,6 +115,7 @@ type ServiceRequest struct {
 	HTTP                  HTTPContent   `json:"-"`
 	OriginalRequest       *http.Request `json:"-"`
 	WebSocketConnID       string        `json:"-"` // WebSocket connection ID, used to associate multiple messages on the same connection
+	Think                 bool          `json:"think"`
 }
 
 func (sr *ServiceRequest) String() string {

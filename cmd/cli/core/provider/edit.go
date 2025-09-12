@@ -35,9 +35,15 @@ func NewEditProviderCommand() *cobra.Command {
 	var filePath string
 
 	editProviderCmd := &cobra.Command{
-		Use:    "provider <provider_name>",
-		Short:  "Edit service data",
-		Long:   "Edit service status and scheduler policy",
+		Use:   "provider <provider_name>",
+		Short: "Edit service provider configuration",
+		Long: `Edit service provider configuration from a JSON file.
+		
+Examples:
+  # Update provider configuration
+  aog edit provider local_ollama_chat --file provider-config.json
+
+The configuration file should contain provider settings in JSON format.`,
 		Args:   cobra.ExactArgs(1),
 		PreRun: common.CheckAOGServer,
 		Run: func(cmd *cobra.Command, args []string) {
@@ -58,7 +64,7 @@ func NewEditProviderCommand() *cobra.Command {
 		},
 	}
 
-	editProviderCmd.Flags().StringVarP(&filePath, "file", "f", "", "service provider config file path")
+	editProviderCmd.Flags().StringVarP(&filePath, "file", "f", "", "Path to JSON configuration file (required)")
 
 	return editProviderCmd
 }
@@ -104,7 +110,7 @@ func updateServiceProviderHandler(providerName, configFile string) error {
 		return fmt.Errorf(resp.Message)
 	}
 
-	fmt.Println("Service provider edit success!")
+	fmt.Println("✅ Service provider configuration updated successfully!")
 
 	return nil
 }

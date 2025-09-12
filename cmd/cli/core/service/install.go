@@ -21,15 +21,41 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/intel/aog/cmd/cli/core/common"
 	"github.com/intel/aog/internal/api/dto"
+	"github.com/intel/aog/internal/process"
 	"github.com/intel/aog/internal/schedule"
 	"github.com/intel/aog/internal/types"
 	"github.com/intel/aog/internal/utils/bcode"
 	"github.com/intel/aog/version"
 	"github.com/spf13/cobra"
 )
+
+// ensureServerRunning starts AOG server if not running
+func ensureServerRunning(cmd *cobra.Command, args []string) {
+	manager, err := process.GetAOGProcessManager()
+	if err != nil {
+		fmt.Printf("Failed to initialize AOG process manager: %v\n", err)
+		os.Exit(1)
+	}
+
+	if manager.IsProcessRunning() {
+		return
+	}
+
+	fmt.Println("Starting AOG server...")
+	if err := manager.StartProcessDaemon(); err != nil {
+		fmt.Printf("Failed to start AOG server: %v\n", err)
+		os.Exit(1)
+	}
+
+	if err := manager.WaitForReady(10 * time.Second); err != nil {
+		fmt.Printf("Server failed to become ready: %v\n", err)
+		os.Exit(1)
+	}
+}
 
 // NewInstallServiceCommand creates the install service command
 func NewInstallServiceCommand() *cobra.Command {
@@ -46,26 +72,36 @@ func NewInstallServiceCommand() *cobra.Command {
 	)
 
 	installServiceCmd := &cobra.Command{
-		Use:    "install <service>",
-		Short:  "Install a service or service provider",
-		Long:   `Install a service by name or a service provider from a file.`,
+		Use:   "install <service>",
+		Short: "Install and configure AI services",
+		Long: `Install and configure AI services such as chat, embed, or generate.
+		
+Examples:
+  # Install local chat service with default model
+  aog install chat
+
+  # Install remote chat service with DeepSeek API
+  aog install chat --remote --flavor deepseek --auth_type apikey
+
+  # Install local embedding service
+  aog install embed
+
+For more information about supported services and providers, visit: https://intel.github.io/aog/`,
 		Args:   cobra.ExactArgs(1),
-		PreRun: common.StartAOGServer,
-		Run: func(cmd *cobra.Command, args []string) {
-			InstallServiceHandler(cmd, args)
-		},
+		PreRun: ensureServerRunning,
+		Run:    InstallServiceHandler,
 	}
 
-	installServiceCmd.Flags().BoolVarP(&remoteFlag, "remote", "r", false, "Enable remote connect")
-	installServiceCmd.Flags().StringVar(&providerName, "name", "", "Give the service an alias")
-	installServiceCmd.Flags().StringVar(&remoteURL, "remote_url", "", "Remote URL for connect")
-	installServiceCmd.Flags().StringVar(&authType, "auth_type", "none", "Authentication type (apikey/token/none)")
-	installServiceCmd.Flags().StringVar(&method, "method", "POST", "HTTP method (default POST)")
-	installServiceCmd.Flags().StringVar(&authKey, "auth_key", "", "Authentication key json format")
-	installServiceCmd.Flags().StringVar(&flavor, "flavor", "", "Flavor (tencent/deepseek)")
+	installServiceCmd.Flags().BoolVarP(&remoteFlag, "remote", "r", false, "Install remote AI service instead of local")
+	installServiceCmd.Flags().StringVar(&providerName, "name", "", "Custom name for the service provider")
+	installServiceCmd.Flags().StringVar(&remoteURL, "remote_url", "", "Remote API endpoint URL")
+	installServiceCmd.Flags().StringVar(&authType, "auth_type", "none", "Authentication method: apikey, token, or none")
+	installServiceCmd.Flags().StringVar(&method, "method", "POST", "HTTP method for API requests")
+	installServiceCmd.Flags().StringVar(&authKey, "auth_key", "", "Authentication credentials in JSON format")
+	installServiceCmd.Flags().StringVar(&flavor, "flavor", "", "API provider: ollama, deepseek, openai, tencent")
+	installServiceCmd.Flags().BoolVar(&skipModelFlag, "skip_model", false, "Skip automatic model download during installation")
+	installServiceCmd.Flags().StringVar(&model, "model", "", "Specific model name to install")
 	installServiceCmd.Flags().StringP("file", "f", "", "Path to the service provider file (required for service_provider)")
-	installServiceCmd.Flags().BoolVarP(&skipModelFlag, "skip_model", "", false, "Skip the model download")
-	installServiceCmd.Flags().StringVarP(&model, "model_name", "m", "", "Pull model name")
 
 	return installServiceCmd
 }
@@ -98,17 +134,18 @@ func InstallServiceHandler(cmd *cobra.Command, args []string) {
 func installRegularService(cmd *cobra.Command, serviceName string) {
 	remote, err := cmd.Flags().GetBool("remote")
 	if err != nil {
-		fmt.Println("Error: failed to get remote flag")
+		fmt.Println("❌ Error: failed to get remote flag")
 		return
 	}
 	providerName, err := cmd.Flags().GetString("name")
 	if err != nil {
-		fmt.Println("Error: failed to get provider name")
+		fmt.Println("❌ Error: failed to get provider name")
 		return
 	}
 
 	if err := common.ValidateServiceName(serviceName); err != nil {
-		fmt.Printf("\r%s", err.Error())
+		fmt.Printf("❌ %s\n", err.Error())
+		fmt.Println("💡 Supported services: chat, embed, generate")
 		return
 	}
 
@@ -121,7 +158,10 @@ func installRegularService(cmd *cobra.Command, serviceName string) {
 			return
 		}
 	} else {
-		setupLocalService(&req, serviceName)
+		if err := setupLocalService(&req, serviceName); err != nil {
+			fmt.Printf("❌ Error: %s\n", err.Error())
+			return
+		}
 	}
 
 	skipModelFlag, err := cmd.Flags().GetBool("skip_model")
@@ -155,13 +195,11 @@ func installRegularService(cmd *cobra.Command, serviceName string) {
 		return
 	}
 
-	fmt.Printf("Service %s install success!", serviceName)
-	fmt.Println("Model is downloading in the background, please wait...")
-	fmt.Println("You can use the command `aog get models` to check if the model is downloaded successfully.")
-
-	if !remote && serviceName == types.ServiceChat {
-		handleChatServicePostInstall()
-	}
+	fmt.Printf("✅ Service %s installed successfully!\n", serviceName)
+	fmt.Println()
+	fmt.Println("⏳ Model is downloading in the background, please wait...")
+	fmt.Println("📊 Check download progress:")
+	fmt.Println("   aog get models")
 }
 
 // setupRemoteService configures remote service parameters
@@ -198,53 +236,21 @@ func setupRemoteService(cmd *cobra.Command, req *dto.CreateAIGCServiceRequest) e
 }
 
 // setupLocalService configures local service parameters
-func setupLocalService(req *dto.CreateAIGCServiceRequest, serviceName string) {
+func setupLocalService(req *dto.CreateAIGCServiceRequest, serviceName string) error {
 	req.ServiceSource = types.ServiceSourceLocal
 	req.ApiFlavor = types.FlavorOllama
+
+	if serviceName == types.ServiceImageToVideo || serviceName == types.ServiceImageToImage {
+		return fmt.Errorf("local %s service is not supported yet, please use remote services instead (e.g., aliyun)", serviceName)
+	}
+
 	if serviceName == types.ServiceTextToImage || serviceName == types.ServiceSpeechToText ||
 		serviceName == types.ServiceTextToSpeech || serviceName == types.ServiceSpeechToTextWS {
 		req.ApiFlavor = types.FlavorOpenvino
 	}
 	req.AuthType = types.AuthTypeNone
-}
 
-// handleChatServicePostInstall handles post-installation for chat service
-func handleChatServicePostInstall() {
-	askRes := common.AskEnableRemoteService()
-	if askRes {
-		fmt.Println("Please visit https://platform.deepseek.com/ to apply for an API KEY.")
-		apiKey := common.GetAPIKey()
-		if apiKey != "" {
-			fmt.Printf("\rYour entered API Key is: %s\n", apiKey)
-		}
-
-		req := &dto.CreateAIGCServiceRequest{
-			ServiceName:   "chat",
-			ServiceSource: "remote",
-			ApiFlavor:     "deepseek",
-			ProviderName:  "remote_deepseek_chat",
-			Desc:          "remote deepseek model service",
-			Method:        http.MethodPost,
-			Url:           "https://api.lkeap.cloud.tencent.com/v1/chat/completions",
-			AuthType:      "apikey",
-			AuthKey:       apiKey,
-			ExtraHeaders:  "{}",
-			ExtraJsonBody: "{}",
-			Properties:    `{"max_input_tokens": 131072,"supported_response_mode":["stream","sync"]}`,
-		}
-
-		resp := bcode.Bcode{}
-		c := common.NewAOGClient()
-		routerPath := fmt.Sprintf("/aog/%s/service/install", version.SpecVersion)
-
-		err := common.DoHTTPRequest(c, http.MethodPost, routerPath, req, &resp)
-		if err != nil {
-			fmt.Printf("\rService install failed: %s ", err.Error())
-			return
-		}
-	} else {
-		fmt.Println("You can enable remote DeepSeek service next time by running: aog install chat -r --flavor deepseek --auth_type apikey")
-	}
+	return nil
 }
 
 // installServiceProviderHandler handles service provider installation from file
@@ -285,6 +291,6 @@ func installServiceProviderHandler(configFile string) error {
 		return fmt.Errorf(resp.Message)
 	}
 
-	fmt.Println("Service provider install success!")
+	fmt.Println("✅ Service provider installed successfully!")
 	return nil
 }

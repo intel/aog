@@ -38,19 +38,24 @@ func NewDeleteModelCommand() *cobra.Command {
 	)
 
 	deleteModelCmd := &cobra.Command{
-		Use:    "model <model_name>",
-		Short:  "Remove a model for a specific service",
-		Long:   `Remove a model for a specific service with optional remote flag.`,
+		Use:   "model <model_name>",
+		Short: "Remove installed AI models",
+		Long: `Remove installed AI models from specific services.
+		
+Examples:
+  # Remove llama3.2 model from chat service
+  aog delete model llama3.2 --provider local_ollama_chat
+
+  # Remove remote model
+  aog delete model gpt-4 --provider remote_openai_chat --remote`,
 		Args:   cobra.ExactArgs(1),
 		PreRun: common.CheckAOGServer,
-		Run: func(cmd *cobra.Command, args []string) {
-			DeleteModelHandler(cmd, args)
-		},
+		Run:    DeleteModelHandler,
 	}
 
-	deleteModelCmd.Flags().StringVarP(&serviceName, "for", "f", "", "Name of the service to delete the model for, e.g: chat/embed (required)")
-	deleteModelCmd.Flags().StringVarP(&providerName, "provider", "p", "", "Name of the service provider to remove the model for, e.g: local_ollama_chat (required)") // -p is more common
-	deleteModelCmd.Flags().BoolVarP(&remote, "remote", "r", false, "delete the model from a remote source (default: false)")
+	deleteModelCmd.Flags().StringVarP(&serviceName, "for", "f", "", "Target service name: chat, embed, or generate")
+	deleteModelCmd.Flags().StringVarP(&providerName, "provider", "p", "", "Service provider name (required), e.g., local_ollama_chat")
+	deleteModelCmd.Flags().BoolVarP(&remote, "remote", "r", false, "Remove from remote source instead of local")
 
 	if err := deleteModelCmd.MarkFlagRequired("provider"); err != nil {
 		slog.Error("Error: --provider is required")
@@ -63,17 +68,17 @@ func NewDeleteModelCommand() *cobra.Command {
 func DeleteModelHandler(cmd *cobra.Command, args []string) {
 	remote, err := cmd.Flags().GetBool("remote")
 	if err != nil {
-		fmt.Println("Error: failed to get remote flag")
+		fmt.Println("❌ Error: failed to get remote flag")
 		return
 	}
 	serviceName, err := cmd.Flags().GetString("for")
 	if err != nil {
-		fmt.Println("Error: failed to get service name")
+		fmt.Println("❌ Error: failed to get service name")
 		return
 	}
 	providerName, err := cmd.Flags().GetString("provider")
 	if err != nil {
-		fmt.Println("Error: failed to get provider name")
+		fmt.Println("❌ Error: failed to get provider name")
 		return
 	}
 	modelName := args[0]
@@ -103,5 +108,5 @@ func DeleteModelHandler(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	fmt.Println("Delete model success!")
+	fmt.Println("✅ Model deleted successfully!")
 }

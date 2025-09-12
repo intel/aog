@@ -64,5 +64,5 @@ build.sh
 # fronted node_modules
 /fronted/**/node_modules/
 
-# 
-
+# ensure the .keep file in console/dist is not ignored
+!console/dist/.keep

@@ -22,7 +22,6 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"math/rand"
@@ -759,6 +758,7 @@ func (h *HTTPInvoker) handleAuthentication(req *http.Request, sp *types.ServiceP
 
 func (h *HTTPInvoker) handleSegmentedRequest(client *http.Client, resp *http.Response, sp *types.ServiceProvider, serviceDefaultInfo ServiceDefaultInfo) (*http.Response, error) {
 	defer resp.Body.Close()
+	logger.LogicLogger.Info("[Service] Handling segmented request", "taskid", h.task.Schedule.Id)
 
 	// 1. Read and parse initial response
 	taskID, err := h.parseInitialResponse(resp)
@@ -822,7 +822,7 @@ func (h *HTTPInvoker) pollTaskStatus(client *http.Client, sp *types.ServiceProvi
 		}
 
 		if resp.StatusCode != http.StatusOK {
-			return h.handleErrorStatusResponse(resp)
+			return h.handleErrorResponse(resp)
 		}
 
 		status, body, err := h.parseTaskStatusResponse(resp)
@@ -831,6 +831,7 @@ func (h *HTTPInvoker) pollTaskStatus(client *http.Client, sp *types.ServiceProvi
 		}
 
 		if h.isTaskComplete(status) {
+			logger.LogicLogger.Info("[Service] Segmented request completed", "taskid", h.task.Schedule.Id)
 			return &http.Response{
 				StatusCode: resp.StatusCode,
 				Header:     resp.Header.Clone(),
@@ -873,27 +874,6 @@ func (h *HTTPInvoker) authenticateStatusRequest(req *http.Request, sp *types.Ser
 	}
 
 	return authenticator.Authenticate()
-}
-
-// handleErrorStatusResponse Handle error status responses
-func (h *HTTPInvoker) handleErrorStatusResponse(resp *http.Response) (*http.Response, error) {
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read error response body: %w", err)
-	}
-
-	logger.LogicLogger.Warn("[Service] Service Provider returns Error",
-		"taskid", h.task.Schedule.Id,
-		"status_code", resp.StatusCode,
-		"body", string(body))
-
-	return nil, &types.HTTPErrorResponse{
-		StatusCode: resp.StatusCode,
-		Header:     resp.Header.Clone(),
-		Body:       body,
-	}
 }
 
 // parseTaskStatusResponse Parse the task status response
@@ -946,7 +926,11 @@ func (h *HTTPInvoker) handleErrorResponse(resp *http.Response) (*http.Response, 
 	logger.LogicLogger.Warn("[Service] Service Provider returns Error", "taskid", h.task.Schedule.Id,
 		"status_code", resp.StatusCode, "body", sbody)
 	resp.Body.Close()
-	return nil, errors.New("[Service] Service Provider API returns Error err: \n" + sbody)
+	return nil, &types.HTTPErrorResponse{
+		StatusCode: resp.StatusCode,
+		Header:     resp.Header.Clone(),
+		Body:       newBody,
+	}
 }
 
 // createHTTPClient Create an HTTP client

@@ -30,7 +30,7 @@ const (
 const (
 	RecommendModel           = "deepseek-r1:7b"
 	DefaultChatModelName     = "deepseek-r1:7b"
-	DefaultEmbedModelName    = "bge-m3"
+	DefaultEmbedModelName    = "bge-m3:567m"
 	DefaultTextToImageModel  = "OpenVINO/stable-diffusion-v1-5-fp16-ov"
 	DefaultSpeechToTextModel = "NamoLi/whisper-large-v3-ov"
 	DefaultTextToSpeechModel = "NamoLi/speecht5-tts"
@@ -66,4 +66,13 @@ const (
 	KibiByte = Byte * 1024
 	MebiByte = KibiByte * 1024
 	GibiByte = MebiByte * 1024
+)
+
+const (
+	RemoteDSURL             = "https://api.deepseek.com/chat/completions"
+	ProviderStatusHealthy   = "healthy"
+	ProviderStatusUnhealthy = "unhealthy"
+	ServiceStatusHealthy    = "healthy"
+	ServiceStatusUnhealthy  = "unhealthy"
+	ProviderScopeSystem     = "system"
 )

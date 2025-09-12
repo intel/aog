@@ -2,10 +2,12 @@
 
 中文 | [English](README_en.md)
 
-当前为 AOG 预览版 v0.5.0，更多功能和稳定性正在不断完善过程中。欢迎就发现的缺陷提交 Issues。
+当前为 AOG 预览版 v0.6.0，更多功能和稳定性正在不断完善过程中。欢迎就发现的缺陷提交 Issues。
 
 当前版本支持 chat、embed、text-to-image 服务，下层支持 ollama 和 openvino model server。更多服务如视频、音频相关，以及其他 AI 引擎，敬请
 期待正在开发的后续版本。
+
+**注意：** Linux 版本暂不支持 OpenVINO 引擎，因此不支持本地的文生图（text-to-image）、文本转语音（text-to-speech）、语音识别（speech-to-text）等服务。这些服务在 Linux 上需要使用远程服务提供商。
 
 详细中文文档请参见[此处](https://intel.github.io/aog/index.html)
 
@@ -179,6 +181,10 @@ AOG 包含前端 Control Panel 和后端命令行工具两个部分。为了确�
 - 如果是 Windows 环境：
   - [MSYS2](https://www.msys2.org) (用于 Make 等命令)
   - [MinGW-W64](https://github.com/niXman/mingw-builds-binaries/releases) (用于 CGO 支持)
+- 如果是 Linux 环境：
+  - build-essential 包 (Ubuntu/Debian: `sudo apt-get install build-essential`)
+  - 或 Development Tools 组 (CentOS/RHEL: `sudo yum groupinstall "Development Tools"`)
+  - SQLite 开发库 (Ubuntu/Debian: `sudo apt-get install libsqlite3-dev`; CentOS/RHEL: `sudo yum install sqlite-devel`)
 
 #### 构建步骤
 
@@ -202,14 +208,32 @@ AOG 包含前端 Control Panel 和后端命令行工具两个部分。为了确�
 
 4. **构建 AOG 可执行文件**
 
-   **Linux/macOS:**
+   **Linux:**
    ```sh
-   CGO_ENABLED=1 go build -o aog -ldflags="-s -w" cmd/cli/main.go
+   # 确保已安装构建依赖
+   # Ubuntu/Debian:
+   sudo apt-get update
+   sudo apt-get install build-essential libsqlite3-dev
+   
+   # CentOS/RHEL:
+   # sudo yum groupinstall "Development Tools"
+   # sudo yum install sqlite-devel
+   
+   # 构建AOG
+   SQLITE_VEC_DIR ?= $(abspath internal/datastore/sqlite/sqlite-vec)
+   CGO_ENABLED=1 CGO_CFLAGS=-I$(SQLITE_VEC_DIR) go build -o aog -ldflags="-s -w" cmd/cli/main.go
+   ```
+
+   **macOS:**
+   ```sh
+   SQLITE_VEC_DIR ?= $(abspath internal/datastore/sqlite/sqlite-vec)
+   CGO_ENABLED=1 CGO_CFLAGS=-I$(SQLITE_VEC_DIR go build -o aog -ldflags="-s -w" cmd/cli/main.go
    ```
 
    **Windows:**
    ```cmd
-   set CGO_ENABLED=1 && go build -o aog.exe -ldflags="-s -w" cmd/cli/main.go
+   set SQLITE_VEC_DIR=%cd%\internal\datastore\sqlite\sqlite-vec
+   set CGO_ENABLED=1 && set CGO_CFLAGS=-I%SQLITE_VEC_DIR% && go build -o aog.exe -ldflags="-s -w"  cmd/cli/main.go
    ```
 
 5. **验证构建结果**
@@ -244,9 +268,49 @@ echo "Step 1: Building frontend Control Panel..."
 
 # Step 2: Build AOG
 echo "Step 2: Building AOG command line tool..."
-CGO_ENABLED=1 go build -o aog -ldflags="-s -w" cmd/cli/main.go
+ SQLITE_VEC_DIR ?= $(abspath internal/datastore/sqlite/sqlite-vec)
+ CGO_ENABLED=1 CGO_CFLAGS=-I$(SQLITE_VEC_DIR go build -o aog -ldflags="-s -w" cmd/cli/main.go
 
 echo "Build completed successfully!"
+echo "You can now run: ./aog server start"
+```
+
+**Linux 构建说明:**
+
+Linux 平台构建 AOG 的步骤与 macOS 类似，但需要注意以下事项：
+
+```sh
+#!/bin/bash
+set -e
+
+echo "Building AOG on Linux - Complete Build Process"
+
+# 确保依赖已安装
+echo "Please ensure you have installed:"
+echo "- build-essential (Ubuntu/Debian) or Development Tools (CentOS/RHEL)"
+echo "- libsqlite3-dev (Ubuntu/Debian) or sqlite-devel (CentOS/RHEL)"
+
+# Step 1: Build frontend
+echo "Step 1: Building frontend Control Panel..."
+./build-frontend.sh
+
+# Step 2: Build AOG for Linux
+echo "Step 2: Building AOG command line tool for Linux..."
+
+# 计算 SQLITE_VEC_DIR 的绝对路径
+SQLITE_VEC_DIR="$(pwd)/internal/datastore/sqlite/sqlite-vec"
+
+# 检查目录是否存在
+if [ ! -d "$SQLITE_VEC_DIR" ]; then
+    echo "Error: SQLite vector directory not found at $SQLITE_VEC_DIR"
+    exit 1
+fi
+
+# 构建命令
+CGO_ENABLED=1 CGO_CFLAGS="-I$SQLITE_VEC_DIR" go build -o aog -ldflags="-s -w" cmd/cli/main.go
+
+echo "Linux build completed successfully!"
+echo "Note: OpenVINO features (text-to-image, text-to-speech, speech-to-text) are not supported on Linux"
 echo "You can now run: ./aog server start"
 ```
 
@@ -259,7 +323,8 @@ echo Step 1: Building frontend Control Panel...
 call build-frontend.bat
 
 echo Step 2: Building AOG command line tool...
-set CGO_ENABLED=1 && go build -o aog.exe -ldflags="-s -w" cmd/cli/main.go
+set SQLITE_VEC_DIR=%cd%\\internal\\datastore\\sqlite\\sqlite-vec
+set CGO_ENABLED=1 && set CGO_CFLAGS=-I%SQLITE_VEC_DIR% && go build -o aog -ldflags="-s -w" cmd/cli/main.go
 
 echo Build completed successfully!
 echo You can now run: aog.exe server start
@@ -303,7 +368,7 @@ AOG 有两个关键概念：**服务(Service)** 和 **服务提供商(Service Pr
 # AOG 将安装必要的 AI 堆栈（如 ollama/openvino）和 AOG 推荐的模型
 aog install chat
 aog install embed
-aog install text-to-image
+aog install text-to-image  # 注意：Linux平台不支持本地text-to-image服务
 
 # 除了默认的模型之外，您可以在服务中安装更多的模型
 aog pull <model_name> -for <service_name> --provider <provider_name>
@@ -372,7 +437,13 @@ AOG API 是一个 Restful API。您可以通过与调用云 AI 服务（如 Open
 规范请参见 [AOG API 规范](https://intel.github.io/aog/index.html).
 
 值得注意的是，当前 AOG 预览提供了基本的 chat 等服务，下一版本将会提供视频、音频相关的更多服务。
-当前版本的文生图服务基于 OpenVINO 实现（仅支持 Windows 系统），通过 modelscope 拉取openvino转换过的 IR 格式的文生图模型提供服务。 
+当前版本的文生图服务基于 OpenVINO 实现（仅支持 Windows 系统），通过 modelscope 拉取openvino转换过的 IR 格式的文生图模型提供服务。
+
+**Linux 平台注意事项：**
+- 文生图（text-to-image）服务：仅支持远程服务提供商
+- 文本转语音（text-to-speech）服务：仅支持远程服务提供商  
+- 语音识别（speech-to-text）服务：仅支持远程服务提供商
+- chat 和 embed 服务：完全支持本地和远程服务提供商 
 
 例如，您可以使用 `curl` 在 Windows 上测试聊天服务。
 
@@ -410,7 +481,7 @@ Windows 上是 `AOGChecker.dll` 。您不需要发布 AI 堆栈或模型。
 
 ```json
 {
-  "version": "0.5",
+  "version": "0.6",
   "service": {
     "chat": {
       "models": ["qwen2.5:0.5b", "qwen2.5:7b"]
@@ -434,7 +505,22 @@ Windows 上是 `AOGChecker.dll` 。您不需要发布 AI 堆栈或模型。
 
 ## 发布历史
 
-### v0.5.0 (当前版本)
+### v0.6.0 (当前版本)
+**发布日期：** 2025-09-11
+
+**新功能：**
+- RAG服务能力
+- Linux系统支持（暂仅支持ollama）
+- Engine跟随 AOG 版本自动升级（ollama/ovms）
+
+**改进：**
+- 修复了一些文档及稳定性bug
+
+
+
+---
+
+### v0.5.0
 **发布日期：** 2025-08-15
 
 **新功能：**

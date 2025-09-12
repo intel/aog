@@ -6,6 +6,9 @@
 
 AOG（AIPC Open Gateway）是一个运行时，旨在为开发者提供一个极其简单易用的基础设施，以便他们在开发环境中安装本地 AI 服务，并发布他们的 AI 应用程序，无需打包自己的 AI 堆栈和模型。
 
+.. note::
+   **Linux 平台注意事项：** Linux 版本暂不支持 OpenVINO 引擎，因此不支持本地的文生图（text-to-image）、文本转语音（text-to-speech）、语音识别（speech-to-text）等服务。这些服务在 Linux 上需要使用远程服务提供商。
+
 
 .. graphviz::
    :align: center
@@ -161,6 +164,12 @@ AOG 包含前端 Control Panel 和后端命令行工具两个部分。为了确�
   * `MSYS2 <https://www.msys2.org/>`_ (用于 Make 等命令)
   * `MinGW-W64 <https://github.com/niXman/mingw-builds-binaries/releases>`_ (用于 CGO 支持)
 
+* 如果是 Linux 环境：
+
+  * build-essential 包 (Ubuntu/Debian: ``sudo apt-get install build-essential``)
+  * 或 Development Tools 组 (CentOS/RHEL: ``sudo yum groupinstall "Development Tools"``)
+  * SQLite 开发库 (Ubuntu/Debian: ``sudo apt-get install libsqlite3-dev``; CentOS/RHEL: ``sudo yum install sqlite-devel``)
+
 构建步骤
 ~~~~~~~~~~~~
 
@@ -187,17 +196,36 @@ AOG 包含前端 Control Panel 和后端命令行工具两个部分。为了确�
 
 4. **构建 AOG 可执行文件**
 
-   **Linux/macOS:**
+   **Linux:**
 
    .. code-block:: bash
 
-       CGO_ENABLED=1 go build -o aog -ldflags="-s -w" cmd/cli/main.go
+       # 确保已安装构建依赖
+       # Ubuntu/Debian:
+       sudo apt-get update
+       sudo apt-get install build-essential libsqlite3-dev
+       
+       # CentOS/RHEL:
+       # sudo yum groupinstall "Development Tools"
+       # sudo yum install sqlite-devel
+       
+       # 构建AOG
+       SQLITE_VEC_DIR ?= $(abspath internal/datastore/sqlite/sqlite-vec)
+       CGO_ENABLED=1 CGO_CFLAGS=-I$(SQLITE_VEC_DIR go build -o aog -ldflags="-s -w" cmd/cli/main.go
+
+   **macOS:**
+
+   .. code-block:: bash
+
+       SQLITE_VEC_DIR ?= $(abspath internal/datastore/sqlite/sqlite-vec)
+       CGO_ENABLED=1 CGO_CFLAGS=-I$(SQLITE_VEC_DIR go build -o aog -ldflags="-s -w" cmd/cli/main.go
 
    **Windows:**
 
    .. code-block:: bash
 
-       set CGO_ENABLED=1 && go build -o aog.exe -ldflags="-s -w" cmd/cli/main.go
+        set SQLITE_VEC_DIR=%cd%\internal\datastore\sqlite\sqlite-vec
+        set CGO_ENABLED=1 && set CGO_CFLAGS=-I%SQLITE_VEC_DIR% && go build -o aog.exe -ldflags="-s -w"  cmd/cli/main.go
 
 5. **验证构建结果**
 
@@ -229,9 +257,39 @@ AOG 包含前端 Control Panel 和后端命令行工具两个部分。为了确�
 
     # Step 2: Build AOG
     echo "Step 2: Building AOG command line tool..."
-    CGO_ENABLED=1 go build -o aog -ldflags="-s -w" cmd/cli/main.go
+    SQLITE_VEC_DIR ?= $(abspath internal/datastore/sqlite/sqlite-vec)
+    CGO_ENABLED=1 CGO_CFLAGS=-I$(SQLITE_VEC_DIR go build -o aog -ldflags="-s -w" cmd/cli/main.go
 
     echo "Build completed successfully!"
+    echo "You can now run: ./aog server start"
+
+**Linux 构建说明:**
+
+Linux 平台构建 AOG 的步骤与 macOS 类似，但需要注意依赖安装和平台限制：
+
+.. code-block:: bash
+
+    #!/bin/bash
+    set -e
+
+    echo "Building AOG on Linux - Complete Build Process"
+
+    # 确保依赖已安装
+    echo "Please ensure you have installed:"
+    echo "- build-essential (Ubuntu/Debian) or Development Tools (CentOS/RHEL)"
+    echo "- libsqlite3-dev (Ubuntu/Debian) or sqlite-devel (CentOS/RHEL)"
+
+    # Step 1: Build frontend
+    echo "Step 1: Building frontend Control Panel..."
+    ./build-frontend.sh
+
+    # Step 2: Build AOG for Linux
+    echo "Step 2: Building AOG command line tool for Linux..."
+    SQLITE_VEC_DIR ?= $(abspath internal/datastore/sqlite/sqlite-vec)
+    CGO_ENABLED=1 CGO_CFLAGS=-I$(SQLITE_VEC_DIR go build -o aog -ldflags="-s -w" cmd/cli/main.go
+
+    echo "Linux build completed successfully!"
+    echo "Note: OpenVINO features (text-to-image, text-to-speech, speech-to-text) are not supported on Linux"
     echo "You can now run: ./aog server start"
 
 **Windows (build-all.bat):**
@@ -245,7 +303,8 @@ AOG 包含前端 Control Panel 和后端命令行工具两个部分。为了确�
     call build-frontend.bat
 
     echo Step 2: Building AOG command line tool...
-    set CGO_ENABLED=1 && go build -o aog.exe -ldflags="-s -w" cmd/cli/main.go
+    set SQLITE_VEC_DIR=%cd%\\internal\\datastore\\sqlite\\sqlite-vec
+    set CGO_ENABLED=1 && set CGO_CFLAGS=-I$(SQLITE_VEC_DIR go build -o aog -ldflags="-s -w" cmd/cli/main.go
 
     echo Build completed successfully!
     echo You can now run: aog.exe server start
@@ -308,12 +367,12 @@ AOG 有两个关键概念：**服务(Service)** 和 **服务提供商(Service Pr
     # AOG 将安装必要的 AI 堆栈（如 ollama）和 AOG 推荐的模型
     aog install chat
     aog install embed
-    aog install text-to-image
-    aog install speech-to-text
-    aog install image-to-image
-    aog install image-to-video
-    aog install speech-to-text-ws
-    aog install text-to-speech
+    aog install text-to-image      # 注意：Linux平台不支持本地text-to-image服务
+    aog install speech-to-text     # 注意：Linux平台不支持本地speech-to-text服务  
+    aog install image-to-image     # 注意：Linux平台不支持本地image-to-image服务
+    aog install image-to-video     # 注意：Linux平台不支持本地image-to-video服务
+    aog install speech-to-text-ws  # 注意：Linux平台不支持本地speech-to-text-ws服务
+    aog install text-to-speech     # 注意：Linux平台不支持本地text-to-speech服务
 
     # 除了默认的模型之外，您可以在服务中安装更多的模型
     # 当前版本暂仅支持基于 ollama 及 openvino（https://modelscope.cn/organization/OpenVINO）中的部分模型（文生图、语音识别）
@@ -436,7 +495,7 @@ AOG 提供了一个基于 Web 的图形化控制面板，您可以通过浏览�
 .. code-block:: json
 
     {
-        "version": "v0.5",
+        "version": "v0.6",
         "services": {
             "models": {
                 "service_providers": {
@@ -522,6 +581,12 @@ AOG API 是一个 Restful API。您可以通过与调用云 AI 服务（如 Open
 
 值得注意的是，当前AOG预览提供了基本的 chat 等服务，下一版本将会提供文生图以及语音相关的更多服务。
 
+.. note::
+   **Linux 平台服务支持情况：**
+   
+   * **完全支持本地和远程：** chat、embed 服务
+   * **仅支持远程服务：** text-to-image、text-to-speech、speech-to-text、image-to-image、image-to-video 等基于 OpenVINO 的服务
+
 例如，您可以使用 curl 在 Windows 上测试聊天服务。
 
 .. code-block:: bash
@@ -555,7 +620,7 @@ AOG API 是一个 Restful API。您可以通过与调用云 AI 服务（如 Open
 .. code-block:: json
 
     {
-        "version": "v0.5",
+        "version": "v0.6",
         "services": {
             "models": {
                 "service_providers": {
@@ -641,3 +706,46 @@ AOG API 是一个 Restful API。您可以通过与调用云 AI 服务（如 Open
 3. 将应用程序与 ``aog.dll`` 链接。
 
 4. 将应用程序与 ``.aog`` 文件以及与您的应用程序 ``.exe`` 文件在同一目录下的 ``AOGChecker.dll`` 文件一起发布。
+
+AOG RAG服务
+==================================
+AOG提供了一套以AOG基础服务为底座的RAG服务,基于AOG的基础模型服务中embed和generate服务，可以快速实现RAG整体的流程。
+
+使用RAG服务前准备
+--------------------------------------------
+需要确认AOG基础服务中有generate和embed服务且正常，如果有问题则可通过 aog install generate 和 aog install embed这两个命令进行安装。
+
+RAG 服务使用流程
+----------------
+
+1. 上传文件
+~~~~~~~~~~~
+
+- 调用文件上传接口::
+
+
+    POST http://localhost:16688/aog/v0.2/rag/file
+
+- 上传需要参与检索的资料，接口会返回一个 ``file_id``。
+
+2. 查看文件状态
+~~~~~~~~~~~~~~~
+
+- 文件上传后会进入异步处理（如加载、向量化等）。
+- 通过以下接口查询文件状态::
+
+
+    GET http://localhost:16688/aog/v0.2/rag/file?file_id={file_id}
+
+- 当返回结果中的 **状态值为 2** 时，表示文件处理完成，可参与检索。
+
+3. 执行检索操作
+~~~~~~~~~~~~~~~
+
+- 调用检索接口::
+
+
+    POST http://localhost:16688/aog/v0.2/rag/retrieval
+
+- 输入：检索问题 + 需要引用的文件列表。
+- 输出：基于指定文件的检索结果。

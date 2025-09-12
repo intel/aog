@@ -19,6 +19,9 @@ package dto
 import (
 	"time"
 
+	"github.com/intel/aog/internal/constants"
+	"github.com/intel/aog/internal/types"
+	"github.com/intel/aog/internal/utils"
 	"github.com/intel/aog/internal/utils/bcode"
 )
 
@@ -30,20 +33,95 @@ type GetProductInfoResponse struct {
 }
 
 type CreateAIGCServiceRequest struct {
-	ServiceName   string `json:"service_name" validate:"required"`
-	ServiceSource string `json:"service_source"`
-	ApiFlavor     string `json:"api_flavor"`
-	ProviderName  string `json:"provider_name"`
-	Desc          string `json:"desc"`
-	Method        string `json:"method"`
-	Url           string `json:"url"`
-	AuthType      string `json:"auth_type"`
-	AuthKey       string `json:"auth_key"`
-	ExtraHeaders  string `json:"extra_headers"`
-	ExtraJsonBody string `json:"extra_json_body"`
-	Properties    string `json:"properties"`
+	ServiceName   string `json:"service_name" validate:"required,supported_service"`
+	ServiceSource string `json:"service_source" validate:"omitempty,supported_service_source"`
+	ApiFlavor     string `json:"api_flavor" validate:"omitempty,supported_flavor"`
+	ProviderName  string `json:"provider_name" validate:"omitempty,max=200"`
+	Desc          string `json:"desc" validate:"omitempty,max=500"`
+	Method        string `json:"method" validate:"omitempty,supported_http_method"`
+	Url           string `json:"url" validate:"omitempty,url"`
+	AuthType      string `json:"auth_type" validate:"omitempty,supported_auth_type"`
+	AuthKey       string `json:"auth_key" validate:"required_with_auth"`
+	ExtraHeaders  string `json:"extra_headers" validate:"omitempty,json_format"`
+	ExtraJsonBody string `json:"extra_json_body" validate:"omitempty,json_format"`
+	Properties    string `json:"properties" validate:"omitempty,json_format"`
 	SkipModelFlag bool   `json:"skip_model"`
-	ModelName     string `json:"model_name"`
+	ModelName     string `json:"model_name" validate:"omitempty,min=1,max=200"`
+}
+
+// SetDefaults implements RequestDefaultSetter interface
+func (r *CreateAIGCServiceRequest) SetDefaults() {
+	if r.ServiceSource == "" {
+		r.ServiceSource = types.ServiceSourceLocal
+	}
+
+	if utils.Contains(types.SupportOnlyRemoteService, r.ServiceName) {
+		r.ServiceSource = types.ServiceSourceRemote
+	}
+
+	if r.ApiFlavor == "" {
+		recommendConfig := r.getRecommendConfig()
+		r.ApiFlavor = recommendConfig.ModelEngine
+	}
+
+	if r.AuthType == "" {
+		r.AuthType = types.AuthTypeNone
+	}
+}
+
+// getRecommendConfig gets recommended configuration
+func (r *CreateAIGCServiceRequest) getRecommendConfig() types.RecommendConfig {
+	switch r.ServiceName {
+	case types.ServiceChat:
+		return types.RecommendConfig{
+			ModelEngine: types.FlavorOllama,
+			ModelName:   constants.DefaultChatModelName,
+		}
+	case types.ServiceEmbed:
+		return types.RecommendConfig{
+			ModelEngine: types.FlavorOllama,
+			ModelName:   constants.DefaultEmbedModelName,
+		}
+	case types.ServiceModels:
+		return types.RecommendConfig{}
+	case types.ServiceGenerate:
+		return types.RecommendConfig{
+			ModelEngine: types.FlavorOllama,
+			ModelName:   constants.DefaultChatModelName,
+		}
+	case types.ServiceTextToImage:
+		return types.RecommendConfig{
+			ModelEngine: types.FlavorOpenvino,
+			ModelName:   constants.DefaultTextToImageModel,
+		}
+	case types.ServiceSpeechToText:
+		return types.RecommendConfig{
+			ModelEngine: types.FlavorOpenvino,
+			ModelName:   constants.DefaultSpeechToTextModel,
+		}
+	case types.ServiceSpeechToTextWS:
+		return types.RecommendConfig{
+			ModelEngine: types.FlavorOpenvino,
+			ModelName:   constants.DefaultSpeechToTextModel,
+		}
+	case types.ServiceTextToSpeech:
+		return types.RecommendConfig{
+			ModelEngine: types.FlavorOpenvino,
+			ModelName:   constants.DefaultTextToSpeechModel,
+		}
+	case types.ServiceImageToImage:
+		return types.RecommendConfig{
+			ModelEngine: types.FlavorAliYun,
+			ModelName:   constants.DefaultImageToImageModel,
+		}
+	case types.ServiceImageToVideo:
+		return types.RecommendConfig{
+			ModelEngine: types.FlavorAliYun,
+			ModelName:   constants.DefaultImageToVideoModel,
+		}
+	default:
+		return types.RecommendConfig{}
+	}
 }
 
 type UpdateAIGCServiceRequest struct {
@@ -94,6 +172,27 @@ type ImportServiceRequest struct {
 	ServiceProviders map[string]ServiceProviderEntry `json:"service_providers"`
 }
 
+// SetDefaults implements RequestDefaultSetter interface
+func (r *ImportServiceRequest) SetDefaults() {
+	for providerName, provider := range r.ServiceProviders {
+		if provider.AuthType == "" {
+			provider.AuthType = types.AuthTypeNone
+		}
+
+		if provider.Method == "" {
+			provider.Method = "POST"
+		}
+
+		if utils.Contains(types.SupportOnlyRemoteService, provider.ServiceName) {
+			provider.ServiceSource = types.ServiceSourceRemote
+		} else if provider.ServiceSource == "" {
+			provider.ServiceSource = types.ServiceSourceLocal
+		}
+
+		r.ServiceProviders[providerName] = provider
+	}
+}
+
 type ImportServiceResponse struct {
 	bcode.Bcode
 }
@@ -120,14 +219,12 @@ type GetAIGCServicesResponse struct {
 }
 
 type Service struct {
-	ServiceName    string    `json:"service_name"`
-	HybridPolicy   string    `json:"hybrid_policy"`
-	RemoteProvider string    `json:"remote_provider"`
-	LocalProvider  string    `json:"local_provider"`
-	Status         int       `json:"status"`
-	Avatar         string    `json:"avatar"`
-	CreatedAt      time.Time `json:"created_at"`
-	UpdatedAt      time.Time `json:"updated_at"`
+	ServiceName  string    `json:"service_name"`
+	HybridPolicy string    `json:"hybrid_policy"`
+	Status       int       `json:"status"`
+	Avatar       string    `json:"avatar"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
 }
 
 type CreateModelRequest struct {
@@ -397,4 +494,49 @@ type GetModelkeyRequest struct {
 type GetModelkeyResponse struct {
 	bcode.Bcode
 	ModelKey string `json:"model_key"`
+}
+
+type RagGetFileRequest struct {
+	FileId string `form:"file_id"`
+}
+
+type RagGetFileResponse struct {
+	bcode.Bcode
+	Data types.RagFile `json:"data"`
+}
+type RagGetFilesResponse struct {
+	bcode.Bcode
+	Data []types.RagFile `json:"files"`
+}
+
+type RagUploadFileResponseData struct {
+	FileId string `json:"file_id"`
+}
+
+type RagUploadFileResponse struct {
+	bcode.Bcode
+	Data RagUploadFileResponseData `json:"data"`
+}
+
+type RagDeleteFileRequest struct {
+	FileId string `form:"file_id"`
+}
+
+type RagDeleteFileResponse struct {
+	bcode.Bcode
+}
+
+type RagRetrievalRequest struct {
+	Model   string   `json:"model"`
+	FileIDs []string `json:"file_ids"`
+	Text    string   `json:"text"`
+}
+
+type RagRetrievalResponseData struct {
+	Model   string `json:"model"`
+	Content string `json:"content"`
+}
+type RagRetrievalResponse struct {
+	bcode.Bcode
+	Data RagRetrievalResponseData `json:"data"`
 }

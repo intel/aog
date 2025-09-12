@@ -7,9 +7,9 @@
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
 project = "AOG (AIPC Open Gateway)"
-copyright = "2024"
+copyright = "2025"
 author = "Jonathan Ding"
-release = "v0.5.0"
+release = "v0.6.0"
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration

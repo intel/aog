@@ -52,6 +52,20 @@ func RegisterConsoleRoutes(engine *gin.Engine) error {
 
 	// SPA路由兜底：所有未命中的GET路由都返回index.html
 	engine.NoRoute(func(c *gin.Context) {
+		// 需要排除的根路径接口
+		rootAPIs := map[string]bool{
+			"/":               true,
+			"/health":         true,
+			"/version":        true,
+			"/engine/health":  true,
+			"/engine/version": true,
+			"/update/status":  true,
+			"/update":         true,
+		}
+		if rootAPIs[c.Request.URL.Path] {
+			c.Status(http.StatusNotFound)
+			return
+		}
 		// 包含 /aog/ 并且不包含 /aog/{version} 的路由
 		if strings.HasPrefix(c.Request.URL.Path, "/aog/") && !strings.Contains(c.Request.URL.Path, "/aog/"+version.SpecVersion) {
 			c.Status(http.StatusNotFound)
@@ -80,7 +94,6 @@ func RegisterConsoleRoutes(engine *gin.Engine) error {
 		reader := bytes.NewReader(data)
 		http.ServeContent(c.Writer, c.Request, "index.html", fsStatModTime(file), reader)
 	})
-
 	return nil
 }
 

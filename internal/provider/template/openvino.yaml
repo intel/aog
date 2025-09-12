@@ -1,4 +1,4 @@
-version: "0.5"
+version: "0.6"
 name: openvino # the name should be aligned with file name
 services:
     text-to-image:
@@ -12,7 +12,7 @@ services:
         install_raw_routes: # also install routes without aog prefix in url path
         default_model: "OpenVINO/stable-diffusion-v1-5-fp16-ov"
         request_segments: 1 # request
-        extra_headers: ""
+        extra_headers: "{}"
         request_to_aog:
             conversion:
                 - converter: jsonata
@@ -71,7 +71,7 @@ services:
         install_raw_routes: # also install routes without aog prefix in url path
         default_model: "NamoLi/whisper-large-v3-ov"
         request_segments: 1 # request
-        extra_headers: ""
+        extra_headers: "{}"
         request_to_aog:
             conversion:
                 - converter: jsonata
@@ -127,7 +127,7 @@ services:
         install_raw_routes: # also install routes without aog prefix in url path
         default_model: "NamoLi/whisper-large-v3-ov"
         request_segments: 1 # request
-        extra_headers: ""
+        extra_headers: "{}"
         request_to_aog:
             conversion:
                 - converter: jsonata
@@ -184,7 +184,7 @@ services:
         install_raw_routes: # also install routes without aog prefix in url path
         default_model: "NamoLi/speecht5-tts"
         request_segments: 1 # request
-        extra_headers: ""
+        extra_headers: "{}"
         request_to_aog:
             conversion:
                 - converter: jsonata

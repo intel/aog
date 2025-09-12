@@ -20,7 +20,7 @@ import refreshIcon from '@/components/icons/refresh.svg';
 import ProductInfo from './components/product-info';
 import type { Status } from './components/product-info';
 import bg from '@/assets/list-title-bg.svg';
-import InfoIcon from '@/components/icons/info.svg?react';
+import InfoIcon from '@/components/icons/Info.svg?react';
 import { PlusOutlined } from '@ant-design/icons';
 import { useState } from 'react';
 import chatSvg from '@/assets/chat.svg';

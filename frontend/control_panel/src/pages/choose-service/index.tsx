@@ -18,7 +18,7 @@ import styles from './index.module.scss';
 import { Col, Row, Flex, Button, Spin } from 'antd';
 import { upFirstLetter } from '@/utils';
 
-import InfoIcon from '@/components/icons/info.svg?react';
+import InfoIcon from '@/components/icons/Info.svg?react';
 import { PlusOutlined } from '@ant-design/icons';
 import { useState } from 'react';
 import chatSvg from '@/assets/chat.svg';

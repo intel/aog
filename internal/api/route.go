@@ -17,31 +17,23 @@
 package api
 
 import (
-	"fmt"
 	"log/slog"
 	"net/http"
-	"os"
-	"path/filepath"
-	"runtime"
 
 	"github.com/gin-gonic/gin"
 	"github.com/intel/aog/config"
 	"github.com/intel/aog/internal/constants"
-	"github.com/intel/aog/internal/datastore"
-	"github.com/intel/aog/internal/provider"
-	"github.com/intel/aog/internal/types"
-	"github.com/intel/aog/internal/utils"
 	"github.com/intel/aog/version"
 )
 
 func InjectRouter(e *AOGCoreServer) {
 	e.Router.Handle(http.MethodGet, "/", rootHandler)
-	e.Router.Handle(http.MethodGet, "/health", healthHeader)
-	e.Router.Handle(http.MethodGet, "/engine/health", engineHealthHandler)
-	e.Router.Handle(http.MethodGet, "/version", getVersion)
-	e.Router.Handle(http.MethodGet, "/engine/version", getEngineVersion)
-	e.Router.Handle(http.MethodGet, "/update/status", updateAvailableHandler)
-	e.Router.Handle(http.MethodPost, "/update", updateHandler)
+	e.Router.Handle(http.MethodGet, "/health", HealthHeader)
+	e.Router.Handle(http.MethodGet, "/engine/health", EngineHealthHandler)
+	e.Router.Handle(http.MethodGet, "/version", GetVersion)
+	e.Router.Handle(http.MethodGet, "/engine/version", GetEngineVersion)
+	e.Router.Handle(http.MethodGet, "/update/status", UpdateAvailableHandler)
+	e.Router.Handle(http.MethodPost, "/update", UpdateHandler)
 
 	r := e.Router.Group("/" + constants.AppName + "/" + version.SpecVersion)
 
@@ -73,118 +65,16 @@ func InjectRouter(e *AOGCoreServer) {
 	r.Handle(http.MethodGet, "/control_panel/about", e.GetProductInfoHandler)
 	r.Handle(http.MethodPost, "/control_panel/modelkey", e.GetModelkeyHandler)
 
+	// rag service
+	r.Handle(http.MethodGet, "/rag/file/detail", e.RagGetFile)
+	r.Handle(http.MethodGet, "/rag/file", e.RagGetFiles)
+	r.Handle(http.MethodPost, "/rag/file", e.RagUploadFile)
+	r.Handle(http.MethodDelete, "/rag/file", e.RagDeleteFile)
+	r.Handle(http.MethodPost, "/rag/retrieval", e.RagRetrieval)
+
 	slog.Info("Gateway started", "host", config.GlobalEnvironment.ApiHost)
 }
 
 func rootHandler(c *gin.Context) {
 	c.String(http.StatusOK, "AIPC Open Gateway")
-}
-
-func healthHeader(c *gin.Context) {
-	c.JSON(http.StatusOK, map[string]string{"status": "UP"})
-}
-
-func engineHealthHandler(c *gin.Context) {
-	data := make(map[string]string)
-	for _, modelEngineName := range types.SupportModelEngine {
-		engine := provider.GetModelEngine(modelEngineName)
-		err := engine.HealthCheck()
-		if err != nil {
-			data[modelEngineName] = "DOWN"
-			continue
-		}
-		data[modelEngineName] = "UP"
-	}
-	c.JSON(http.StatusOK, data)
-}
-
-func getVersion(c *gin.Context) {
-	c.JSON(http.StatusOK, map[string]string{"version": version.AOGVersion})
-}
-
-func getEngineVersion(c *gin.Context) {
-	ctx := c.Request.Context()
-	data := make(map[string]string)
-	for _, modelEngineName := range types.SupportModelEngine {
-		engine := provider.GetModelEngine(modelEngineName)
-		var respData types.EngineVersionResponse
-		resp, err := engine.GetVersion(ctx, &respData)
-		if err != nil {
-			data[modelEngineName] = "get version failed"
-			continue
-		}
-		data[modelEngineName] = resp.Version
-	}
-
-	c.JSON(http.StatusOK, data)
-}
-
-func updateAvailableHandler(c *gin.Context) {
-	ctx := c.Request.Context()
-	status, updateResp := version.IsNewVersionAvailable(ctx)
-	if status {
-		c.JSON(http.StatusOK, map[string]string{"message": fmt.Sprintf("Ollama version %s is ready to install", updateResp.UpdateVersion)})
-	} else {
-		c.JSON(http.StatusOK, map[string]string{"message": ""})
-	}
-}
-
-func updateHandler(c *gin.Context) {
-	// check server
-	status := utils.IsServerRunning()
-	if status {
-		// stop server
-		pidFilePath := filepath.Join(config.GlobalEnvironment.RootDir, "aog.pid")
-		err := utils.StopAOGServer(pidFilePath)
-		if err != nil {
-			c.JSON(http.StatusOK, map[string]string{"message": err.Error()})
-		}
-	}
-	// rm old version file
-	aogFileName := "aog.exe"
-	if runtime.GOOS != "windows" {
-		aogFileName = "aog"
-	}
-	aogFilePath := filepath.Join(config.GlobalEnvironment.RootDir, aogFileName)
-	err := os.Remove(aogFilePath)
-	if err != nil {
-		slog.Error("[Update] Failed to remove aog file %s: %v\n", aogFilePath, err)
-		c.JSON(http.StatusOK, map[string]string{"message": err.Error()})
-	}
-	// install new version
-	downloadPath := filepath.Join(config.GlobalEnvironment.RootDir, "download", aogFileName)
-	err = os.Rename(downloadPath, aogFilePath)
-	if err != nil {
-		slog.Error("[Update] Failed to rename aog file %s: %v\n", downloadPath, err)
-		c.JSON(http.StatusOK, map[string]string{"message": err.Error()})
-	}
-	// start server
-	logPath := config.GlobalEnvironment.ConsoleLog
-	rootDir := config.GlobalEnvironment.RootDir
-	err = utils.StartAOGServer(logPath, rootDir)
-	if err != nil {
-		slog.Error("[Update] Failed to start aog log %s: %v\n", logPath, err)
-		c.JSON(http.StatusOK, map[string]string{"message": err.Error()})
-	}
-	ds := datastore.GetDefaultDatastore()
-	ctx := c.Request.Context()
-	vr := &types.VersionUpdateRecord{}
-	sortOption := []datastore.SortOption{
-		{Key: "created_at", Order: -1},
-	}
-	versionRecoreds, err := ds.List(ctx, vr, &datastore.ListOptions{SortBy: sortOption})
-	if err != nil {
-		slog.Error("[Update] Failed to list versions: %v\n", err)
-		c.JSON(http.StatusOK, map[string]string{"message": err.Error()})
-	}
-	versionRecord := versionRecoreds[0].(*types.VersionUpdateRecord)
-	if versionRecord.Status == types.VersionRecordStatusInstalled {
-		versionRecord.Status = types.VersionRecordStatusUpdated
-	}
-	err = ds.Put(ctx, versionRecord)
-	if err != nil {
-		slog.Error("[Update] Failed to update versions: %v\n", err)
-		c.JSON(http.StatusOK, map[string]string{"message": err.Error()})
-	}
-	c.JSON(http.StatusOK, map[string]string{"message": ""})
 }

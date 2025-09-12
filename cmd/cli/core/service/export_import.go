@@ -33,9 +33,16 @@ import (
 // NewImportServiceCommand creates the import service command
 func NewImportServiceCommand() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:    "import <file_path>",
-		Short:  "Import service configuration from a file",
-		Long:   "Import service configuration from a file and send it to the API.",
+		Use:   "import <file_path>",
+		Short: "Import service configuration",
+		Long: `Import service configuration from a JSON file to restore services, providers and models.
+		
+Examples:
+  # Import configuration from file
+  aog import service-backup.json
+
+The import file should contain service configurations exported using 'aog export'.`,
+		Args:   cobra.ExactArgs(1),
 		PreRun: common.CheckAOGServer,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) != 1 {
@@ -77,8 +84,8 @@ func NewImportServiceCommand() *cobra.Command {
 func NewExportServiceCommand() *cobra.Command {
 	exportCmd := &cobra.Command{
 		Use:   "export",
-		Short: "Export service",
-		Long:  "Export service",
+		Short: "Export service configurations",
+		Long:  "Export service configurations to files or stdout for backup and migration purposes.",
 	}
 
 	// 添加子命令
@@ -93,9 +100,16 @@ func NewExportServiceToFileCommand() *cobra.Command {
 	var filePath, service, provider, model string
 
 	cmd := &cobra.Command{
-		Use:    "to-file",
-		Short:  "Export service to file",
-		Long:   "Export service to file",
+		Use:   "to-file",
+		Short: "Export service configuration to file",
+		Long: `Export service configuration to a JSON file for backup or migration.
+		
+Examples:
+  # Export all configurations
+  aog export to-file --file backup.json
+
+  # Export specific service
+  aog export to-file --file chat-backup.json --service chat`,
 		PreRun: common.CheckAOGServer,
 		Run: func(cmd *cobra.Command, args []string) {
 			req := &dto.ExportServiceRequest{
@@ -130,10 +144,10 @@ func NewExportServiceToFileCommand() *cobra.Command {
 	}
 
 	// 在子命令上定义所有参数
-	cmd.Flags().StringVarP(&filePath, "file", "f", "./.aog", "Output file path")
-	cmd.Flags().StringVar(&service, "service", "", "Service name")
-	cmd.Flags().StringVar(&provider, "provider", "", "Provider name")
-	cmd.Flags().StringVar(&model, "model", "", "Model name")
+	cmd.Flags().StringVarP(&filePath, "file", "f", "./.aog", "Output file path (default: ./.aog)")
+	cmd.Flags().StringVar(&service, "service", "", "Export specific service: chat, embed, or generate")
+	cmd.Flags().StringVar(&provider, "provider", "", "Export specific provider")
+	cmd.Flags().StringVar(&model, "model", "", "Export specific model")
 
 	return cmd
 }
@@ -143,9 +157,16 @@ func NewExportServiceToStdoutCommand() *cobra.Command {
 	var service, provider, model string
 
 	cmd := &cobra.Command{
-		Use:    "to-stdout",
-		Short:  "Export service to stdout",
-		Long:   "Export service to stdout",
+		Use:   "to-stdout",
+		Short: "Export service configuration to stdout",
+		Long: `Export service configuration as JSON to standard output.
+		
+Examples:
+  # Export all configurations to stdout
+  aog export to-stdout
+
+  # Export specific service to stdout
+  aog export to-stdout --service chat`,
 		PreRun: common.CheckAOGServer,
 		Run: func(cmd *cobra.Command, args []string) {
 			req := &dto.ExportServiceRequest{
@@ -174,9 +195,9 @@ func NewExportServiceToStdoutCommand() *cobra.Command {
 	}
 
 	// 在子命令上定义参数
-	cmd.Flags().StringVar(&service, "service", "", "Service name")
-	cmd.Flags().StringVar(&provider, "provider", "", "Provider name")
-	cmd.Flags().StringVar(&model, "model", "", "Model name")
+	cmd.Flags().StringVar(&service, "service", "", "Export specific service: chat, embed, or generate")
+	cmd.Flags().StringVar(&provider, "provider", "", "Export specific provider")
+	cmd.Flags().StringVar(&model, "model", "", "Export specific model")
 
 	return cmd
 }

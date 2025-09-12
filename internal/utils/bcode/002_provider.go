@@ -34,4 +34,6 @@ var (
 	ErrProviderAuthInfoLost = NewBcode(http.StatusBadRequest, 20006, "provider api auth info lost")
 
 	ErrProviderServiceUrlNotFormat = NewBcode(http.StatusBadRequest, 20007, "provider service url is irregular")
+
+	ErrSystemProviderCannotDelete = NewBcode(http.StatusBadRequest, 20008, "system provider cannot be deleted")
 )

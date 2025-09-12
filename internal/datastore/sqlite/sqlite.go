@@ -68,6 +68,9 @@ func (ds *SQLite) Init() error {
 		&types.Model{},
 		&types.VersionUpdateRecord{},
 		&types.DataMigrateVersion{},
+		// RAG tables
+		&types.RagFile{},
+		&types.RagChunk{},
 	); err != nil {
 		return fmt.Errorf("failed to initialize database tables: %v", err)
 	}
@@ -443,6 +446,11 @@ func (ds *SQLite) IsExist(ctx context.Context, entity datastore.Entity) (bool, e
 // Commit commits the transaction
 func (ds *SQLite) Commit(ctx context.Context) error {
 	return nil
+}
+
+// GetDB exposes the underlying *gorm.DB for advanced queries (e.g., vector search)
+func (ds *SQLite) GetDB() *gorm.DB {
+	return ds.db
 }
 
 // getEntityFieldsAndValues gets the fields and values of an entity

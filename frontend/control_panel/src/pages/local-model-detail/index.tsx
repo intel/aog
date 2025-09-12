@@ -17,7 +17,7 @@
 import CustomBreadcrumb from '@/components/custom-breadcrumb';
 import { Flex, Button, notification, FloatButton, Skeleton } from 'antd';
 import ModelCard from '@/components/model-card';
-import InfoIcon from '@/components/icons/info.svg?react';
+import InfoIcon from '@/components/icons/Info.svg?react';
 import { useState, useEffect } from 'react';
 
 import DownloadModal from '@/components/dowload-modal';

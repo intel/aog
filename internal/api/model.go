@@ -145,13 +145,7 @@ func (t *AOGCoreServer) CreateModelStream(c *gin.Context) {
 						return
 					}
 				}
-				// 数据通道关闭，发送结束标记
-
-				// fmt.Fprintf(w, "\n[DONE]\n\n")
-				// flusher.Flush()
-				// 通道中没有数据，再结束推送
 				if data == nil {
-					fmt.Fprintf(w, "data: {\"status\": \"success\"}\n\n")
 					return
 				}
 			}

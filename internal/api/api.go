@@ -31,6 +31,7 @@ type AOGCoreServer struct {
 	Model           server.Model
 	ServiceProvider server.ServiceProvider
 	ControlPanel    server.ControlPanel
+	RagService      server.RagService
 }
 
 // NewAOGCoreServer is the constructor of the server structure
@@ -56,4 +57,5 @@ func (t *AOGCoreServer) Register() {
 	t.ServiceProvider = server.NewServiceProvider()
 	t.Model = server.NewModel()
 	t.ControlPanel = server.NewControlPanel()
+	t.RagService = server.NewRagService()
 }

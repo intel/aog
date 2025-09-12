@@ -219,7 +219,7 @@ func DownloadNewVersion(ctx context.Context, updateResponse UpdateResponse) erro
 	if err != nil {
 		return err
 	}
-	_, err = utils.DownloadFile(updateResponse.UpdateURL, downloadDir)
+	_, err = utils.DownloadFile(updateResponse.UpdateURL, downloadDir, false)
 	if err != nil {
 		return err
 	}

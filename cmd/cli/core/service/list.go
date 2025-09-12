@@ -25,6 +25,7 @@ import (
 	"github.com/intel/aog/cmd/cli/core/common"
 	"github.com/intel/aog/config"
 	"github.com/intel/aog/internal/api/dto"
+	"github.com/intel/aog/internal/constants"
 	"github.com/intel/aog/version"
 	"github.com/spf13/cobra"
 )
@@ -32,9 +33,16 @@ import (
 // NewListServicesCommand creates the list services command
 func NewListServicesCommand() *cobra.Command {
 	listServiceCmd := &cobra.Command{
-		Use:    "services <service_name>",
-		Short:  "Display all available service information.",
-		Long:   `Display all available service information.`,
+		Use:   "services [service_name]",
+		Short: "List installed AI services",
+		Long: `Display information about all installed AI services or a specific service.
+		
+Examples:
+  # List all services
+  aog get services
+
+  # Get details for chat service
+  aog get services chat`,
 		Args:   cobra.MaximumNArgs(1),
 		PreRun: common.CheckAOGServer,
 		Run: func(cmd *cobra.Command, args []string) {
@@ -54,19 +62,17 @@ func NewListServicesCommand() *cobra.Command {
 				return
 			}
 
-			fmt.Printf("%-10s %-15s %-15s %-15s %-5s %-15s %-15s\n", "SERVICE NAME", "HYBRID POLICY", "REMOTE PROVIDER", "LOCAL PROVIDER", "STATUS", "CREATE AT", "UPDATE AT") // Table header
+			fmt.Printf("%-12s %-15s %-8s %-15s %-15s\n", "SERVICE", "HYBRID POLICY", "STATUS", "CREATED", "UPDATED") // Table header
 
 			for _, service := range resp.Data {
-				serviceStatus := "healthy"
+				serviceStatus := constants.ServiceStatusHealthy
 				if service.Status == 0 {
-					serviceStatus = "unhealthy"
+					serviceStatus = constants.ServiceStatusUnhealthy
 				}
 
-				fmt.Printf("%-10s %-15s %-15s %-15s %-5s %-15s %-15s\n",
+				fmt.Printf("%-12s %-15s %-8s %-15s %-15s\n",
 					service.ServiceName,
 					service.HybridPolicy,
-					service.RemoteProvider,
-					service.LocalProvider,
 					serviceStatus,
 					service.CreatedAt.Format(time.RFC3339),
 					service.UpdatedAt.Format(time.RFC3339),

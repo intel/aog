@@ -26,10 +26,28 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// NewCommand will contain all commands
+// NewCommand creates the root AOG command with all subcommands
 func NewCommand() *cobra.Command {
 	cmds := &cobra.Command{
-		Use: constants.AppName,
+		Use:   constants.AppName,
+		Short: "AOG (AIPC Open Gateway) - AI service management platform",
+		Long: `AOG (AIPC Open Gateway) provides unified AI services on AI PCs.
+
+AOG decouples AI applications from AI service providers, offering:
+- One-click AI service installation
+- Automatic API adaptation for popular providers
+- Hybrid scheduling between local and cloud services
+- Shared AI services to reduce resource consumption
+
+For detailed documentation, visit: https://intel.github.io/aog/
+
+Common commands:
+  aog server start          Start the AOG server
+  aog install chat          Install chat service
+  aog get services          List installed services
+  aog get models            List installed models
+
+Use 'aog <command> --help' for more information about a command.`,
 	}
 
 	cmds.AddCommand(
@@ -60,7 +78,8 @@ func NewCommand() *cobra.Command {
 func NewGetCommand() *cobra.Command {
 	getCmd := &cobra.Command{
 		Use:   "get",
-		Short: "Get resources",
+		Short: "Display resource information",
+		Long:  "Display information about services, models, and providers installed in AOG.",
 	}
 	getCmd.AddCommand(
 		service.NewListServicesCommand(),
@@ -75,7 +94,8 @@ func NewGetCommand() *cobra.Command {
 func NewEditCommand() *cobra.Command {
 	editCmd := &cobra.Command{
 		Use:   "edit",
-		Short: "Edit resources",
+		Short: "Modify resource configurations",
+		Long:  "Edit configurations for services and providers.",
 	}
 	editCmd.AddCommand(
 		service.NewEditServiceCommand(),
@@ -89,7 +109,8 @@ func NewEditCommand() *cobra.Command {
 func NewDeleteCommand() *cobra.Command {
 	deleteCmd := &cobra.Command{
 		Use:   "delete",
-		Short: "Delete resources",
+		Short: "Remove resources",
+		Long:  "Remove models and providers from AOG. Use with caution as this operation cannot be undone.",
 	}
 	deleteCmd.AddCommand(
 		model.NewDeleteModelCommand(),

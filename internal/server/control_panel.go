@@ -27,10 +27,8 @@ import (
 	"github.com/intel/aog/internal/datastore"
 	"github.com/intel/aog/internal/schedule"
 	"github.com/intel/aog/internal/types"
-	"github.com/intel/aog/version"
-
-	// "github.com/intel/aog/internal/utils"
 	"github.com/intel/aog/internal/utils/bcode"
+	"github.com/intel/aog/version"
 )
 
 type ControlPanel interface {
@@ -54,7 +52,6 @@ func NewControlPanel() *ControlPanelImpl {
 }
 
 func (c *ControlPanelImpl) GetSupportModelListCombine(ctx context.Context, request *dto.GetSupportModelRequest) (*dto.GetSupportModelResponse, error) {
-
 	if request.ServiceName == types.ServiceGenerate {
 		request.ServiceName = types.ServiceChat
 	}
@@ -344,7 +341,6 @@ func (c *ControlPanelImpl) SetDefaultModel(ctx context.Context, req *dto.SetDefa
 }
 
 func (c *ControlPanelImpl) GetDashboard(ctx context.Context) (*dto.DashboardResponse, error) {
-
 	// 获取所有模型
 	modelList, err := c.Ds.List(ctx, &types.Model{}, &datastore.ListOptions{
 		Page: 0, PageSize: 1000,
@@ -411,14 +407,12 @@ func (c *ControlPanelImpl) GetDashboard(ctx context.Context) (*dto.DashboardResp
 	for _, v := range serviceList {
 		s := v.(*types.Service)
 		services = append(services, dto.Service{
-			ServiceName:    s.Name,
-			LocalProvider:  s.LocalProvider,
-			RemoteProvider: s.RemoteProvider,
-			HybridPolicy:   s.HybridPolicy,
-			Status:         s.Status,
-			Avatar:         s.Avatar,
-			CreatedAt:      s.CreatedAt,
-			UpdatedAt:      s.UpdatedAt,
+			ServiceName:  s.Name,
+			HybridPolicy: s.HybridPolicy,
+			Status:       s.Status,
+			Avatar:       s.Avatar,
+			CreatedAt:    s.CreatedAt,
+			UpdatedAt:    s.UpdatedAt,
 		})
 	}
 
@@ -438,7 +432,6 @@ func (c *ControlPanelImpl) GetProductInfo(ctx context.Context) (*dto.GetProductI
 }
 
 func (c *ControlPanelImpl) GetModelkey(ctx context.Context, req *dto.GetModelkeyRequest) (*dto.GetModelkeyResponse, error) {
-
 	// 构造查询条件
 	sp := &types.ServiceProvider{
 		ProviderName: req.ProviderName,

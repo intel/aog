@@ -226,28 +226,23 @@ func (ss *BasicServiceScheduler) dispatch(task *ServiceTask) (*types.ServiceTarg
 		return nil, bcode.ErrServiceRecordNotFound
 	}
 
-	if service.LocalProvider == "" && service.RemoteProvider == "" {
-		logger.LogicLogger.Error("[Schedule] Service ", task.Request.Service, " does not have local or remote provider")
-		return nil, bcode.ErrNotExistDefaultProvider
-	}
-
-	m := &types.Model{
-		ModelName: task.Request.Model,
-	}
+	m := &types.Model{}
 
 	// Provider Selection
 	// ================
-	providerName := service.LocalProvider
-	if model == "" {
-		if location == types.ServiceSourceRemote {
-			if service.RemoteProvider == "" {
-				providerName = service.LocalProvider
-			} else {
-				providerName = service.RemoteProvider
-			}
-		} else if service.LocalProvider == "" {
-			providerName = service.RemoteProvider
+	var providerName string
+	if model != "" {
+		m.ModelName = model
+		err = ds.Get(context.Background(), m)
+		if err != nil {
+			logger.LogicLogger.Error("[Schedule] Failed to get model", "error", err, "model", model)
+			return nil, bcode.ErrModelRecordNotFound
 		}
+		if m.Status != "downloaded" {
+			logger.LogicLogger.Error("[Schedule] model is available", "error", err, "model", model)
+			return nil, bcode.ErrModelRecordNotFound
+		}
+
 	} else {
 		sortOption := []datastore.SortOption{
 			{Key: "updated_at", Order: -1},
@@ -256,6 +251,7 @@ func (ss *BasicServiceScheduler) dispatch(task *ServiceTask) (*types.ServiceTarg
 			FilterOptions: datastore.FilterOptions{
 				Queries: []datastore.FuzzyQueryOption{
 					{Key: "service_name", Query: task.Request.Service},
+					{Key: "status", Query: "downloaded"},
 				},
 			},
 			SortBy: sortOption,
@@ -265,13 +261,8 @@ func (ss *BasicServiceScheduler) dispatch(task *ServiceTask) (*types.ServiceTarg
 			return nil, bcode.ErrModelRecordNotFound
 		}
 		m = ms[0].(*types.Model)
-		if m.Status != "downloaded" {
-			logger.LogicLogger.Error("[Schedule] model installing", "model", task.Request.Model, "status", m.Status)
-			return nil, bcode.ErrModelUnDownloaded
-		}
-
-		providerName = m.ProviderName
 	}
+	providerName = m.ProviderName
 
 	sp := &types.ServiceProvider{
 		ProviderName: providerName,

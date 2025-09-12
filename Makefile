@@ -1,6 +1,7 @@
 # Get GOOS and GOARCH
 GOOS := $(shell go env GOOS)
 GOARCH := $(shell go env GOARCH)
+SQLITE_VEC_DIR ?= $(abspath internal/datastore/sqlite/sqlite-vec)
 
 build-all:
 ifeq ($(GOOS),windows)
@@ -19,16 +20,16 @@ endif
 
 
 build-cli-win:
-	set CGO_ENABLED=1 && go build -o aog.exe -ldflags="-s -w"  cmd/cli/main.go
+	set CGO_ENABLED=1 && set CGO_CFLAGS=-I%SQLITE_VEC_DIR% && go build -o aog.exe -ldflags="-s -w"  cmd/cli/main.go
 
 build-cli-darwin:
-	CGO_ENABLED=1 GOOS=darwin GOARCH=amd64  go build -o aog -ldflags="-s -w"  cmd/cli/main.go
+	CGO_ENABLED=1 GOOS=darwin GOARCH=amd64  CGO_CFLAGS=-I$(SQLITE_VEC_DIR) go build -o aog -ldflags="-s -w"  cmd/cli/main.go
 
 build-cli-darwin-arm:
-	CGO_ENABLED=1 GOOS=darwin GOARCH=arm64  go build -o aog -ldflags="-s -w"  cmd/cli/main.go
+	CGO_ENABLED=1 GOOS=darwin GOARCH=arm64  CGO_CFLAGS=-I$(SQLITE_VEC_DIR) go build -o aog -ldflags="-s -w"  cmd/cli/main.go
 
 build-cli-linux:
-	CGO_ENABLED=1 GOOS=linux GOARCH=amd64  go build -o aog -ldflags="-s -w"  cmd/cli/main.go
+	CGO_ENABLED=1 GOOS=linux GOARCH=amd64 CGO_CFLAGS=-I$(SQLITE_VEC_DIR) go build -o aog -ldflags="-s -w"  cmd/cli/main.go
 
 build-dll-win:
 	CGO_ENABLED=1 GOOS=windows GOARCH=amd64 go build -o AogChecker.dll -buildmode=c-shared checker/AogChecker.go

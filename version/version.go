@@ -17,7 +17,7 @@
 package version
 
 const (
-	AOGVersion = "v0.5"
+	AOGVersion = "v0.6"
 
 	SpecVersion = "v0.2"
 

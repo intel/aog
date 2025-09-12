@@ -34,9 +34,16 @@ func NewListModelsCommand() *cobra.Command {
 	var providerName string
 
 	listModelCmd := &cobra.Command{
-		Use:    "models",
-		Short:  "List models for a specific service",
-		Long:   `List models for a specific service.`,
+		Use:   "models",
+		Short: "List installed AI models",
+		Long: `Display information about all installed AI models.
+		
+Examples:
+  # List all models
+  aog get models
+
+  # List models for a specific provider
+  aog get models --provider local_ollama_chat`,
 		PreRun: common.CheckAOGServer,
 		Run: func(cmd *cobra.Command, args []string) {
 			req := dto.GetModelsRequest{}
@@ -55,20 +62,24 @@ func NewListModelsCommand() *cobra.Command {
 				return
 			}
 
-			fmt.Printf("%-30s %-25s %-10s %-25s\n", "MODEL NAME", "PROVIDER NAME", "STATUS", "CREATE AT") // Table header
+			fmt.Printf("%-30s %-25s %-15s %-15s %-15s %-10v %-25s\n",
+				"MODEL NAME", "PROVIDER", "STATUS", "SERVICE NAME", "SERVICE SOURCE", "IS DEFAULT", "CREATED AT") // Table header
 
 			for _, model := range resp.Data {
-				fmt.Printf("%-30s %-20s %-15s %-25s\n",
+				fmt.Printf("%-30s %-25s %-15s %-15s %-15s %-10v %-25s\n",
 					model.ModelName,
 					model.ProviderName,
 					model.Status,
+					model.ServiceName,
+					model.ServiceSource,
+					model.IsDefault,
 					model.CreatedAt.Format(time.RFC3339),
 				)
 			}
 		},
 	}
 
-	listModelCmd.Flags().StringVarP(&providerName, "provider", "p", "", "Name of the service provider, e.g: local_ollama_chat")
+	listModelCmd.Flags().StringVarP(&providerName, "provider", "p", "", "Filter by service provider name, e.g., local_ollama_chat")
 
 	return listModelCmd
 }

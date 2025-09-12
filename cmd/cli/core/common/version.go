@@ -27,11 +27,10 @@ import (
 func NewVersionCommand() *cobra.Command {
 	ver := &cobra.Command{
 		Use:   "version",
-		Short: "Prints build version information.",
-		Long:  "Prints build version information.",
+		Short: "Display version information",
+		Long:  "Display version information for AOG (AIPC Open Gateway) and its API specification.",
 		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Printf(`AOG Version: %s`,
-				version.AOGVersion)
+			fmt.Printf("AOG Version: %s\nSpec Version: %s\n", version.AOGVersion, version.SpecVersion)
 		},
 	}
 

@@ -22,7 +22,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"log/slog"
 	"runtime"
 	"strings"
 
@@ -68,7 +67,7 @@ func (s *ModelImpl) CreateModel(ctx context.Context, request *dto.CreateModelReq
 	if err != nil {
 		return nil, bcode.ErrServiceRecordNotFound
 	}
-	if service.Status != 0 {
+	if service.Status == -1 {
 		return nil, bcode.ErrModelServiceNotAvailable
 	}
 
@@ -250,6 +249,15 @@ func (s *ModelImpl) CreateModelStream(ctx context.Context, request *dto.CreateMo
 	defer close(newErrChan)
 	ds := datastore.GetDefaultDatastore()
 	sp := new(types.ServiceProvider)
+
+	service := &types.Service{}
+	service.Name = request.ServiceName
+
+	err := ds.Get(ctx, service)
+	if err != nil {
+		newErrChan <- err
+		return newDataChan, newErrChan
+	}
 	if request.ProviderName != "" {
 		sp.ProviderName = request.ProviderName
 	} else {
@@ -258,21 +266,6 @@ func (s *ModelImpl) CreateModelStream(ctx context.Context, request *dto.CreateMo
 		if request.ServiceName != types.ServiceChat && request.ServiceName != types.ServiceGenerate && request.ServiceName != types.ServiceEmbed && request.ServiceName != types.ServiceTextToImage && request.ServiceName != types.ServiceSpeechToText {
 			newErrChan <- bcode.ErrServer
 			return newDataChan, newErrChan
-		}
-
-		service := &types.Service{}
-		service.Name = request.ServiceName
-
-		err := ds.Get(ctx, service)
-		if err != nil {
-			newErrChan <- err
-			return newDataChan, newErrChan
-		}
-
-		if request.ServiceSource == types.ServiceSourceLocal && service.LocalProvider != "" {
-			sp.ProviderName = service.LocalProvider
-		} else if request.ServiceSource == types.ServiceSourceRemote && service.RemoteProvider != "" {
-			sp.ProviderName = service.RemoteProvider
 		}
 	}
 
@@ -298,7 +291,7 @@ func (s *ModelImpl) CreateModelStream(ctx context.Context, request *dto.CreateMo
 		}
 	}
 
-	err := ds.Get(ctx, sp)
+	err = ds.Get(ctx, sp)
 	if err != nil && !errors.Is(err, datastore.ErrEntityInvalid) {
 		// todo debug log output
 		newErrChan <- err
@@ -372,37 +365,25 @@ func (s *ModelImpl) CreateModelStream(ctx context.Context, request *dto.CreateMo
 
 				if resp.Completed > 0 || resp.Status == "success" {
 					if resp.Status == "success" {
+						logger.LogicLogger.Error("[Pull Model Stream] accept success label")
 						m.Status = "downloaded"
 						err = ds.Put(ctx, m)
 						if err != nil {
 							newErrorCh <- err
+							logger.LogicLogger.Error("[Pull Model Stream] put model status failed")
 							return
 						}
-						if request.ServiceName == types.ServiceChat {
-							generateM := new(types.Model)
-							generateM.ModelName = m.ModelName
-							generateM.ProviderName = strings.Replace(m.ProviderName, "chat", "generate", -1)
-							generateM.Status = m.Status
-							generateM.ServiceName = types.ServiceGenerate
-							generateM.ServiceSource = m.ServiceSource
-							generateM.IsDefault = m.IsDefault
-							err = ds.Get(ctx, generateM)
-							if err != nil && !errors.Is(err, datastore.ErrEntityInvalid) {
-								newErrorCh <- err
-								return
-							} else if errors.Is(err, datastore.ErrEntityInvalid) {
-								err = ds.Add(ctx, generateM)
-								if err != nil {
-									newErrorCh <- err
-								}
-								return
-							}
-							err = ds.Put(ctx, generateM)
-							if err != nil {
-								newErrorCh <- err
-								return
-							}
+						if service.Status != 1 {
+							service.Status = 1
+							_ = ds.Put(ctx, service)
 						}
+						err = createRelatedModels(ctx, s.Ds, sp, m, service, false)
+						if err != nil {
+							newErrorCh <- err
+							return
+						}
+						logger.LogicLogger.Error("[Pull Model Stream] put model status success")
+
 					}
 					newDataCh <- data
 				}
@@ -411,7 +392,7 @@ func (s *ModelImpl) CreateModelStream(ctx context.Context, request *dto.CreateMo
 				if !ok {
 					return
 				}
-				log.Printf("Error: %v", err)
+				logger.LogicLogger.Info(fmt.Sprintf("Error: %v", err))
 				client.ModelClientMap[request.ModelName] = nil
 				if err != nil && strings.Contains(err.Error(), "context cancel") {
 					if strings.Contains(err.Error(), "context cancel") {
@@ -494,12 +475,12 @@ func AsyncPullModel(sp *types.ServiceProvider, m *types.Model, pullReq *types.Pu
 		}
 	}
 
-	service.Status = 0
 	if hasDefault {
 		// 只校验默认模型状态
 		checkServer := ChooseCheckServer(*sp, defaultModel.ModelName)
 		if checkServer != nil && checkServer.CheckServer() {
 			service.Status = 1
+			sp.Status = 1
 		}
 	} else {
 		// 没有默认模型则依次校验
@@ -508,6 +489,7 @@ func AsyncPullModel(sp *types.ServiceProvider, m *types.Model, pullReq *types.Pu
 			checkServer := ChooseCheckServer(*sp, model.ModelName)
 			if checkServer != nil && checkServer.CheckServer() {
 				service.Status = 1
+				sp.Status = 1
 				break
 			}
 		}
@@ -518,53 +500,84 @@ func AsyncPullModel(sp *types.ServiceProvider, m *types.Model, pullReq *types.Pu
 		logger.LogicLogger.Error("[Pull model] Update service status error:", err.Error())
 	}
 
-	if sp.Status == 0 {
-		checkServer := ChooseCheckServer(*sp, m.ModelName)
-		if checkServer == nil {
-			logger.LogicLogger.Error("[Pull model] Update service provider error: service_name is not unavailable")
-			return
-		}
-		checkServerStatus := checkServer.CheckServer()
-		if !checkServerStatus {
-			logger.LogicLogger.Error("[Pull model] Update service provider error: server is unavailable")
-			return
-		}
-		err = ds.Get(ctx, sp)
-		if err != nil {
-			logger.LogicLogger.Error("[Pull model] Update service provider error: ", err.Error())
-			return
-		}
-		sp.Status = 1
-		err = ds.Put(ctx, sp)
-		if err != nil {
-			logger.LogicLogger.Error("[Pull model] Update service provider error: ", err.Error())
-			return
-		}
+	err = ds.Put(ctx, sp)
+	if err != nil {
+		logger.LogicLogger.Error("[Pull model] Update service provider error: ", err.Error())
+		return
 	}
 
+	if err := createRelatedModels(ctx, ds, sp, m, service, false); err != nil {
+		return
+	}
+}
+
+// create models for related services
+func createRelatedModels(ctx context.Context, ds datastore.Datastore, sp *types.ServiceProvider, m *types.Model, service *types.Service, skipModel bool) error {
 	currentServiceInfo := schedule.GetProviderServiceDefaultInfo(sp.Flavor, sp.ServiceName)
 	providerServices := schedule.GetProviderServices(sp.Flavor)
 
 	for serviceName, serviceInfo := range providerServices {
 		if serviceInfo.TaskType == currentServiceInfo.TaskType && serviceName != sp.ServiceName {
-			relatedM := &types.Model{}
-			relatedM.ModelName = m.ModelName
-			relatedM.ProviderName = strings.Replace(sp.ProviderName, sp.ServiceName, serviceName, -1)
-			relatedM.Status = "downloaded"
+			if !skipModel {
+				relatedM := &types.Model{
+					ModelName:     m.ModelName,
+					ProviderName:  strings.Replace(sp.ProviderName, sp.ServiceName, serviceName, 1),
+					ServiceName:   serviceName,
+					ServiceSource: sp.ServiceSource,
+					Status:        m.Status,
+				}
 
-			relatedMIsExist, err := ds.IsExist(ctx, relatedM)
-			if err != nil {
-				relatedMIsExist = false
-			}
-			if !relatedMIsExist {
-				err = ds.Add(ctx, relatedM)
+				err := ds.Put(ctx, relatedM)
 				if err != nil {
-					logger.LogicLogger.Error("Add model error: %s", err.Error())
-					return
+					logger.LogicLogger.Error("Add related model error: %s", err.Error())
+					return err
 				}
 			}
+			// update relate service
+			relatedS := &types.Service{
+				Name:         serviceName,
+				Status:       service.Status,
+				HybridPolicy: service.HybridPolicy,
+				CanInstall:   service.CanInstall,
+				Avatar:       service.Avatar,
+			}
+			err := ds.Put(ctx, relatedS)
+			if err != nil {
+				logger.LogicLogger.Error("Add related service error: %s", err.Error())
+				return err
+			}
+
+			// update relate service_provider
+			relatedSp := &types.ServiceProvider{
+				ProviderName: strings.Replace(sp.ProviderName, sp.ServiceName, serviceName, 1),
+			}
+			err = ds.Get(ctx, relatedSp)
+			if err != nil && !errors.Is(err, datastore.ErrRecordNotExist) {
+				logger.LogicLogger.Error("Add related service error: %s", err.Error())
+				return err
+			} else if errors.Is(err, datastore.ErrRecordNotExist) {
+				relatedSp.Scope = sp.Scope
+				relatedSp.ServiceName = serviceName
+				relatedSp.Flavor = sp.Flavor
+				relatedSp.ExtraJSONBody = "{}"
+				relatedSp.URL = serviceInfo.RequestUrl
+				relatedSp.ExtraHeaders = serviceInfo.ExtraHeaders
+				err := ds.Add(ctx, relatedSp)
+				if err != nil {
+					logger.LogicLogger.Error("Add related service provider error: %s", err.Error())
+					return err
+				}
+			}
+			relatedSp.Status = sp.Status
+			err = ds.Put(ctx, relatedS)
+			if err != nil {
+				logger.LogicLogger.Error("Add related service provider error: %s", err.Error())
+				return err
+			}
+
 		}
 	}
+	return nil
 }
 
 type RecommendServicesInfo struct {
@@ -600,7 +613,7 @@ func RecommendModels() (map[string][]dto.RecommendModelData, error) {
 	if runtime.GOOS == "windows" {
 		windowsVersion := utils.GetSystemVersion()
 		if windowsVersion < 10 {
-			slog.Error("[Model] windows version < 10")
+			logger.LogicLogger.Error("[Model] windows version < 10")
 			return nil, bcode.ErrNoRecommendModel
 		}
 		memoryTypeStatus := false

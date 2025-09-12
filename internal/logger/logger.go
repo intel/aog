@@ -17,6 +17,7 @@
 package logger
 
 import (
+	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -106,7 +107,7 @@ func (lm *LogManager) AddLogger(c LogConfig, name string) {
 	// Get file date
 	fileInfo, err := os.Stat(c.LogPath)
 	if err != nil && !os.IsExist(err) {
-		_ = os.MkdirAll(c.LogPath, 0750)
+		_ = os.MkdirAll(c.LogPath, 0o750)
 	}
 	if _, err := os.Stat(lumberjackLogger.Filename); os.IsNotExist(err) {
 		_, err = os.Create(lumberjackLogger.Filename)
@@ -123,8 +124,10 @@ func (lm *LogManager) AddLogger(c LogConfig, name string) {
 		lj:      lumberjackLogger,
 		lastDay: day,
 	}
+	// Create a multi-writer to write to both file and stdout
+	mw := io.MultiWriter(cl, os.Stdout)
 	// Create a log handler in JSON format
-	jsonHandler := slog.NewJSONHandler(cl, &slog.HandlerOptions{
+	jsonHandler := slog.NewJSONHandler(mw, &slog.HandlerOptions{
 		Level: logLevel,
 	})
 	logger := slog.New(jsonHandler)

@@ -36,7 +36,8 @@ func (t *AOGCoreServer) CreateAIGCService(c *gin.Context) {
 		return
 	}
 
-	if err := validate.Struct(request); err != nil {
+	if err := ValidateAndSetDefaults(request); err != nil {
+		logger.ApiLogger.Warn("[API] CreateAIGCService validation failed:", err)
 		bcode.ReturnError(c, err)
 		return
 	}
@@ -137,7 +138,8 @@ func (t *AOGCoreServer) ImportService(c *gin.Context) {
 		return
 	}
 
-	if err := validate.Struct(request); err != nil {
+	if err := ValidateAndSetDefaults(request); err != nil {
+		logger.ApiLogger.Warn("[API] ImportService validation failed:", err)
 		bcode.ReturnError(c, err)
 		return
 	}

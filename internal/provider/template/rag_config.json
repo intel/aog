@@ -1,0 +1,8 @@
+{
+  "chunk_size": 512,
+  "chunk_overlap": 50,
+  "top_k": 10,
+  "score_threshold": 0.8,
+  "embed_model": "bge-m3:567m",
+  "duplication_threshold": 0.1
+}

@@ -18,6 +18,8 @@ package types
 
 import (
 	"time"
+
+	"github.com/intel/aog/internal/datastore"
 )
 
 const (
@@ -27,14 +29,18 @@ const (
 	TableModel              = "aog_model"
 	TableVersionUpdate      = "aog_version_update_record"
 	TableDataMigrateVersion = "aog_data_migration_version"
+	// RAG tables
+	TableRagFile   = "aog_rag_file"
+	TableRagChunk  = "aog_rag_chunk"
+	TableRagVector = "aog_rag_vector"
 )
 
 // Service  table structure
 type Service struct {
 	Name           string    `gorm:"primaryKey;column:name" json:"name"`
 	HybridPolicy   string    `gorm:"column:hybrid_policy;not null;default:default" json:"hybrid_policy"`
-	RemoteProvider string    `gorm:"column:remote_provider;not null;default:''" json:"remote_provider"`
-	LocalProvider  string    `gorm:"column:local_provider;not null;default:''" json:"local_provider"`
+	RemoteProvider string    `gorm:"column:remote_provider;not null;default:''" json:"remote_provider"` // v0.6 deprecated
+	LocalProvider  string    `gorm:"column:local_provider;not null;default:''" json:"local_provider"`   // v0.6 deprecated
 	Status         int       `gorm:"column:status;not null;default:1" json:"status"`
 	CanInstall     int       `gorm:"column:can_install;not null;default:0" json:"can_install"`
 	Avatar         string    `gorm:"column:avatar;not null;default:''" json:"avatar"`
@@ -83,6 +89,7 @@ type ServiceProvider struct {
 	ExtraJSONBody string    `gorm:"column:extra_json_body;default:'{}'" json:"extra_json_body"`
 	Properties    string    `gorm:"column:properties;default:'{}'" json:"properties"`
 	Status        int       `gorm:"column:status;not null;default:0" json:"status"`
+	Scope         string    `gorm:"column:scope;default:system" json:"scope"` // 'system' or 'custom'
 	CreatedAt     time.Time `gorm:"column:created_at;default:CURRENT_TIMESTAMP" json:"created_at"`
 	UpdatedAt     time.Time `gorm:"column:updated_at;default:CURRENT_TIMESTAMP" json:"updated_at"`
 }
@@ -235,4 +242,58 @@ func (t *DataMigrateVersion) Index() map[string]interface{} {
 	}
 
 	return index
+}
+
+// RagFile represents an uploaded document for RAG
+type RagFile struct {
+	ID         int       `gorm:"primaryKey;column:id;autoIncrement" json:"id"`
+	FileName   string    `gorm:"column:file_name" json:"file_name"`
+	FileID     string    `gorm:"column:file_id" json:"file_id"`
+	FileType   string    `gorm:"column:file_type" json:"file_type"`
+	FilePath   string    `gorm:"column:file_path" json:"file_path"`
+	Status     int       `gorm:"column:status" json:"status"` // 1-processing | 2-done | 3-failed
+	EmbedModel string    `gorm:"column:embed_model" json:"embed_model"`
+	CreatedAt  time.Time `gorm:"column:created_at;default:CURRENT_TIMESTAMP" json:"created_at"`
+	UpdatedAt  time.Time `gorm:"column:updated_at;default:CURRENT_TIMESTAMP" json:"updated_at"`
+}
+
+func (t *RagFile) SetCreateTime(tm time.Time) { t.CreatedAt = tm }
+func (t *RagFile) SetUpdateTime(tm time.Time) { t.UpdatedAt = tm }
+func (t *RagFile) PrimaryKey() string         { return "id" }
+func (t *RagFile) TableName() string          { return TableRagFile }
+func (t *RagFile) Index() map[string]interface{} {
+	idx := make(map[string]interface{})
+	if t.FileName != "" {
+		idx["file_name"] = t.FileName
+	}
+	if t.FileID != "" {
+		idx["file_id"] = t.FileID
+	}
+	return idx
+}
+
+// RagChunk represents a text chunk of a RagFile
+type RagChunk struct {
+	ID         string                `json:"id"`
+	FileID     string                `json:"file_id"`
+	Content    string                `json:"content"`
+	ChunkIndex int                   `json:"index"`
+	Embedding  datastore.Float32List `json:"embedding"`
+	CreatedAt  time.Time             `json:"created_at"`
+	UpdatedAt  time.Time             `json:"updated_at"`
+}
+
+func (t *RagChunk) SetCreateTime(tm time.Time) { t.CreatedAt = tm }
+func (t *RagChunk) SetUpdateTime(tm time.Time) { t.UpdatedAt = tm }
+func (t *RagChunk) PrimaryKey() string         { return "id" }
+func (t *RagChunk) TableName() string          { return TableRagChunk }
+func (t *RagChunk) Index() map[string]interface{} {
+	idx := make(map[string]interface{})
+	if t.ID != "" {
+		idx["id"] = t.ID
+	}
+	if t.FileID != "" {
+		idx["file_id"] = t.FileID
+	}
+	return idx
 }

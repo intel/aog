@@ -115,6 +115,15 @@ const (
 
 	LanguageZh = "zh"
 	LanguageEn = "en"
+
+	RagServiceFileTypeTXT  = ".txt"
+	RagServiceFileTypeMD   = ".md"
+	RagServiceFileTypePDF  = ".pdf"
+	RagServiceFileTypeHTML = ".html"
+	RagServiceFileTypeDOCX = ".docx"
+	RagServiceFileTypeXLSX = ".xlsx"
+
+	RagServiceFileSize = 10 * 1024 * 1024
 )
 
 var (
@@ -138,6 +147,7 @@ var (
 		ServiceImageToVideo:   ServiceImageToVideoAvatar,
 		ServiceImageToImage:   ServiceImageToImageAvatar,
 	}
+	SupportRagServiceFileType = []string{RagServiceFileTypeTXT, RagServiceFileTypeMD, RagServiceFileTypePDF, RagServiceFileTypeHTML, RagServiceFileTypeDOCX, RagServiceFileTypeXLSX}
 )
 
 type HTTPContent struct {
@@ -191,9 +201,8 @@ type ServiceProviderProperties struct {
 }
 
 type RecommendConfig struct {
-	ModelEngine       string `json:"model_engine"`
-	ModelName         string `json:"model_name"`
-	EngineDownloadUrl string `json:"engine_download_url"`
+	ModelEngine string `json:"model_engine"`
+	ModelName   string `json:"model_name"`
 }
 
 // ListResponse is the response from [Client.List].
@@ -251,6 +260,9 @@ type ProgressResponse struct {
 	Completed int64  `json:"completed,omitempty"`
 }
 
+// PullProgressFunc is a function that [Client.Pull] invokes every time there
+// is progress with a "pull" request sent to the service. If this function
+// returns an error, [Client.Pull] will stop the process and return this error.
 type PullProgressFunc func(ProgressResponse) error
 
 type EngineRecommendConfig struct {
@@ -292,4 +304,14 @@ type OllamaUnloadModelRequest struct {
 
 type OllamaLoadModelRequest struct {
 	Model string `json:"model"`
+}
+
+type RagServiceConfig struct {
+	ChunkSize            int     `json:"chunk_size"`
+	ChunkOverlap         int     `json:"chunk_overlap"`
+	EmbeddingDim         int     `json:"embedding_dim"`
+	TopK                 int     `json:"top_k"`
+	ScoreThreshold       float64 `json:"score_threshold"`
+	EmbedModel           string  `json:"embed_model"`
+	DuplicationThreshold float64 `json:"duplication_threshold"`
 }

@@ -12,7 +12,7 @@ services:
         default_model: ""
         request_segments: 1 # request
         install_raw_routes: true # also install routes without aog prefix in url path
-        extra_headers: ""
+        extra_headers: "{}"
         response_to_aog:
             conversion:
                 - converter: jsonata

@@ -3,8 +3,8 @@ name: deepseek # the name should be aligned with file name
 services:
     chat: # service name defined by AOG
         protocol: "HTTP"
-        url: "https://api.lkeap.cloud.tencent.com/v1/chat/completions"
-        endpoints: [ "POST /v1/chat/completions" ]  # request to this will use this flavor
+        url: "https://api.deepseek.com/chat/completions"
+        endpoints: [ "POST /chat/completions" ]  # request to this will use this flavor
         extra_url: ""
         auth_type: "apikey"
         default_model: deepseek-chat

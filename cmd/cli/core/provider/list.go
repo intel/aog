@@ -25,6 +25,7 @@ import (
 	"github.com/intel/aog/cmd/cli/core/common"
 	"github.com/intel/aog/config"
 	"github.com/intel/aog/internal/api/dto"
+	"github.com/intel/aog/internal/constants"
 	"github.com/intel/aog/internal/types"
 	"github.com/intel/aog/version"
 	"github.com/spf13/cobra"
@@ -37,9 +38,19 @@ func NewListProvidersCommand() *cobra.Command {
 	var remote string
 
 	listProviderCmd := &cobra.Command{
-		Use:    "service_providers",
-		Short:  "List models for a specific service",
-		Long:   `List models for a specific service.`,
+		Use:   "service_providers",
+		Short: "List service providers",
+		Long: `Display information about all service providers including their status and configuration.
+		
+Examples:
+  # List all providers
+  aog get service_providers
+
+  # List providers for chat service
+  aog get service_providers --service chat
+
+  # List only remote providers
+  aog get service_providers --remote remote`,
 		PreRun: common.CheckAOGServer,
 		Run: func(cmd *cobra.Command, args []string) {
 			req := dto.GetServiceProvidersRequest{}
@@ -64,15 +75,15 @@ func NewListProvidersCommand() *cobra.Command {
 				return
 			}
 
-			fmt.Printf("%-20s %-10s %-10s %-10s %-10s %-15s %-25s\n", "PROVIDER NAME", "SERVICE NAME", "SERVICE SOURCE", "FLAVOR", "AUTH TYPE", "STATUS", "UPDATE AT") // Table header
+			fmt.Printf("%-20s %-12s %-10s %-10s %-10s %-10s %-25s\n", "PROVIDER", "SERVICE", "SOURCE", "FLAVOR", "AUTH", "STATUS", "UPDATED") // Table header
 
 			for _, p := range resp.Data {
-				providerStatus := "healthy"
+				providerStatus := constants.ProviderStatusHealthy
 				if p.Status == 0 {
-					providerStatus = "unhealthy"
+					providerStatus = constants.ProviderStatusUnhealthy
 				}
 
-				fmt.Printf("%-20s %-10s %-10s %-10s %-10s %-15s %-25s\n",
+				fmt.Printf("%-20s %-12s %-10s %-10s %-10s %-10s %-25s\n",
 					p.ProviderName,
 					p.ServiceName,
 					p.ServiceSource,
@@ -85,9 +96,9 @@ func NewListProvidersCommand() *cobra.Command {
 		},
 	}
 
-	listProviderCmd.Flags().StringVarP(&serviceName, "service", "s", "", "Name of the service to list models for, e.g: chat/embed ")
-	listProviderCmd.Flags().StringVarP(&providerName, "provider", "p", "", "Name of the service provider, e.g: local_ollama_chat")
-	listProviderCmd.Flags().StringVarP(&remote, "remote", "r", "", "")
+	listProviderCmd.Flags().StringVarP(&serviceName, "service", "s", "", "Filter by service name: chat, embed, or generate")
+	listProviderCmd.Flags().StringVarP(&providerName, "provider", "p", "", "Filter by specific provider name")
+	listProviderCmd.Flags().StringVarP(&remote, "remote", "r", "", "Filter by source type: local or remote")
 
 	return listProviderCmd
 }

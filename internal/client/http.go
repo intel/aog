@@ -88,7 +88,6 @@ func (c *Client) Do(ctx context.Context, method, path string, reqData, respData 
 	if err != nil {
 		return err
 	}
-
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("Accept", "application/json")
 	// request.Header.Set("User-Agent", fmt.Sprintf("ollama/%s (%s %s) Go/%s", version.Version, runtime.GOARCH, runtime.GOOS, runtime.Version()))

@@ -54,4 +54,6 @@ var (
 	ErrUnSupportAuthType = NewBcode(http.StatusBadRequest, 10018, "unsupport auth type")
 
 	ErrEngineUnSupportService = NewBcode(http.StatusBadRequest, 10019, "engine unsupport current service")
+
+	ErrServiceIsInstalled = NewBcode(http.StatusBadRequest, 10020, "service is installed")
 )

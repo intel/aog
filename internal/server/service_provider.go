@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"github.com/intel/aog/internal/api/dto"
+	"github.com/intel/aog/internal/constants"
 	"github.com/intel/aog/internal/datastore"
 	"github.com/intel/aog/internal/logger"
 	"github.com/intel/aog/internal/provider"
@@ -233,11 +234,6 @@ func (s *ServiceProviderImpl) CreateServiceProvider(ctx context.Context, request
 
 	}
 
-	err = DefaultProviderProcess(ctx, sp.ServiceName, sp.ServiceSource, sp.ProviderName)
-	if err != nil {
-		return nil, err
-	}
-
 	return &dto.CreateServiceProviderResponse{
 		Bcode: *bcode.ServiceProviderCode,
 	}, nil
@@ -254,6 +250,10 @@ func (s *ServiceProviderImpl) DeleteServiceProvider(ctx context.Context, request
 	err := ds.Get(ctx, sp)
 	if err != nil {
 		return nil, err
+	}
+
+	if sp.Scope == constants.ProviderScopeSystem {
+		return nil, bcode.ErrSystemProviderCannotDelete
 	}
 
 	m := new(types.Model)
@@ -556,6 +556,10 @@ type ModelServiceManager interface {
 	CheckServer() bool
 }
 
+type CheckLocalServer struct {
+	ServiceProvider types.ServiceProvider
+}
+
 type CheckModelsServer struct {
 	ServiceProvider types.ServiceProvider
 }
@@ -604,6 +608,15 @@ type CheckImageToVideoServer struct {
 type CheckImageToImageServer struct {
 	ServiceProvider types.ServiceProvider
 	ModelName       string
+}
+
+func (l *CheckLocalServer) CheckServer() bool {
+	engine := provider.GetModelEngine(l.ServiceProvider.Flavor)
+	status := true
+	if err := engine.HealthCheck(); err != nil {
+		status = false
+	}
+	return status
 }
 
 func (m *CheckModelsServer) CheckServer() bool {
@@ -845,32 +858,36 @@ func (g *CheckImageToImageServer) CheckServer() bool {
 
 func ChooseCheckServer(sp types.ServiceProvider, modelName string) ModelServiceManager {
 	var server ModelServiceManager
-	switch sp.ServiceName {
-	case types.ServiceModels:
-		server = &CheckModelsServer{ServiceProvider: sp}
-	case types.ServiceChat:
-		server = &CheckChatServer{ServiceProvider: sp, ModelName: modelName}
-	case types.ServiceGenerate:
-		server = &CheckGenerateServer{ServiceProvider: sp, ModelName: modelName}
-	case types.ServiceEmbed:
-		server = &CheckEmbeddingServer{ServiceProvider: sp, ModelName: modelName}
-	case types.ServiceTextToImage:
-		server = &CheckTextToImageServer{ServiceProvider: sp, ModelName: modelName}
-	case types.ServiceTextToSpeech:
-		server = &CheckTextToSpeechServer{ServiceProvider: sp, ModelName: modelName}
-	case types.ServiceSpeechToText:
-		server = &CheckSpeechToTextServer{ServiceProvider: sp, ModelName: modelName}
-	case types.ServiceSpeechToTextWS:
-		server = &CheckSpeechToTextWSServer{ServiceProvider: sp, ModelName: modelName}
-	case types.ServiceTextToVideo:
-		server = &CheckTextToSpeechServer{ServiceProvider: sp, ModelName: modelName}
-	case types.ServiceImageToVideo:
-		server = &CheckTextToSpeechServer{ServiceProvider: sp, ModelName: modelName}
-	case types.ServiceImageToImage:
-		server = &CheckTextToSpeechServer{ServiceProvider: sp, ModelName: modelName}
-	default:
-		logger.LogicLogger.Error("[Schedule] Unknown service name", "error", sp.ServiceName)
-		return nil
+	if sp.ServiceSource == types.ServiceSourceLocal {
+		server = &CheckLocalServer{ServiceProvider: sp}
+	} else {
+		switch sp.ServiceName {
+		case types.ServiceModels:
+			server = &CheckModelsServer{ServiceProvider: sp}
+		case types.ServiceChat:
+			server = &CheckChatServer{ServiceProvider: sp, ModelName: modelName}
+		case types.ServiceGenerate:
+			server = &CheckGenerateServer{ServiceProvider: sp, ModelName: modelName}
+		case types.ServiceEmbed:
+			server = &CheckEmbeddingServer{ServiceProvider: sp, ModelName: modelName}
+		case types.ServiceTextToImage:
+			server = &CheckTextToImageServer{ServiceProvider: sp, ModelName: modelName}
+		case types.ServiceTextToSpeech:
+			server = &CheckTextToSpeechServer{ServiceProvider: sp, ModelName: modelName}
+		case types.ServiceSpeechToText:
+			server = &CheckSpeechToTextServer{ServiceProvider: sp, ModelName: modelName}
+		case types.ServiceSpeechToTextWS:
+			server = &CheckSpeechToTextWSServer{ServiceProvider: sp, ModelName: modelName}
+		case types.ServiceTextToVideo:
+			server = &CheckTextToSpeechServer{ServiceProvider: sp, ModelName: modelName}
+		case types.ServiceImageToVideo:
+			server = &CheckTextToSpeechServer{ServiceProvider: sp, ModelName: modelName}
+		case types.ServiceImageToImage:
+			server = &CheckTextToSpeechServer{ServiceProvider: sp, ModelName: modelName}
+		default:
+			logger.LogicLogger.Error("[Schedule] Unknown service name", "error", sp.ServiceName)
+			return nil
+		}
 	}
 	return server
 }
@@ -881,8 +898,9 @@ func CheckServerRequest(req *http.Request, serviceProvider types.ServiceProvider
 		IdleConnTimeout:    30 * time.Second,
 		DisableCompression: true,
 	}
-	if serviceProvider.ExtraHeaders != "{}" {
+	if serviceProvider.ExtraHeaders != "{}" && serviceProvider.ExtraHeaders != "" {
 		var extraHeader map[string]interface{}
+		logger.LogicLogger.Info("ExtraHeaders: " + serviceProvider.ExtraHeaders)
 		err := json.Unmarshal([]byte(serviceProvider.ExtraHeaders), &extraHeader)
 		if err != nil {
 			logger.LogicLogger.Error("Error parsing JSON:", err.Error())
@@ -910,6 +928,7 @@ func CheckServerRequest(req *http.Request, serviceProvider types.ServiceProvider
 			return false
 		}
 	}
+	logger.LogicLogger.Info("Request: "+req.URL.String(), "method", req.Method, "body", reqBodyString)
 	resp, err := client.Do(req)
 	if err != nil {
 		logger.LogicLogger.Error("[Schedule] Failed to request", "error", err)

@@ -21,10 +21,9 @@ import (
 	// "io"
 	"net/http"
 
+	"github.com/gin-gonic/gin"
 	"github.com/intel/aog/internal/api/dto"
 	"github.com/intel/aog/internal/utils/bcode"
-
-	"github.com/gin-gonic/gin"
 )
 
 func (t *AOGCoreServer) GetDashBoardHandler(c *gin.Context) {

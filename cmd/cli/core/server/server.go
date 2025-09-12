@@ -20,15 +20,18 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
+	"syscall"
+	"time"
 
-	"github.com/fatih/color"
-	"github.com/intel/aog/cmd/cli/core/common"
+	"github.com/gin-gonic/gin"
 	"github.com/intel/aog/config"
 	"github.com/intel/aog/console"
 	"github.com/intel/aog/internal/api"
@@ -39,17 +42,22 @@ import (
 	"github.com/intel/aog/internal/datastore/sqlite"
 	"github.com/intel/aog/internal/logger"
 	"github.com/intel/aog/internal/manager"
+	"github.com/intel/aog/internal/process"
+	"github.com/intel/aog/internal/provider"
 	"github.com/intel/aog/internal/schedule"
 	"github.com/intel/aog/internal/types"
 	"github.com/spf13/cobra"
 )
 
+// Global AOG service manager for graceful shutdown
+var globalServiceManager *process.AOGServiceManager
+
 // NewApiserverCommand creates the server management command
 func NewApiserverCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "server",
-		Short: "Manage " + constants.AppName + " server",
-		Long:  "Manage " + constants.AppName + " server (start, stop, etc.)",
+		Short: "Manage the AOG server lifecycle",
+		Long:  "Start, stop, and manage the AOG (AIPC Open Gateway) server for AI services.",
 	}
 
 	cmd.AddCommand(
@@ -66,8 +74,8 @@ func NewStartApiServerCommand() *cobra.Command {
 	logger.InitLogger(logger.LogConfig{LogLevel: config.LogLevelWarn, LogPath: config.GlobalEnvironment.LogDir})
 	cmd := &cobra.Command{
 		Use:   "start",
-		Short: "apiserver is a aipc open gateway",
-		Long:  "apiserver is a aipc open gateway",
+		Short: "Start the AOG server",
+		Long:  "Start the AOG (AIPC Open Gateway) server to provide AI services.",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			isDaemon, err := cmd.Flags().GetBool("daemon")
 			if err != nil {
@@ -83,35 +91,32 @@ func NewStartApiServerCommand() *cobra.Command {
 			if isDebug {
 				logLevel = config.LogLevelDebug
 			} else if isDaemon {
-				logLevel = config.LogLevelWarn
-			} else {
-				logLevel = config.LogLevelError
+				logLevel = config.DefaultLogLevel
 			}
 
 			config.GlobalEnvironment.LogLevel = logLevel
 			logger.InitLogger(logger.LogConfig{LogLevel: logLevel, LogPath: config.GlobalEnvironment.LogDir})
 
-			if isDaemon {
-				common.StartAOGServer(cmd, args)
-				return nil
-			}
-
-			startMode := types.EngineStartModeDaemon
+			var startMode string
 			if isDebug {
 				startMode = types.EngineStartModeStandard
+			} else {
+				startMode = types.EngineStartModeDaemon
 			}
 
-			err = StartModelEngine("openvino", startMode)
-			if err != nil {
-				return err
+			// daemon模式：让进程在后台运行
+			if isDaemon {
+				if err := detachProcess(); err != nil {
+					logger.EngineLogger.Error(fmt.Sprintf("Failed to detach process: %v", err))
+					return fmt.Errorf("failed to start in daemon mode: %v", err)
+				}
 			}
 
-			err = StartModelEngine("ollama", startMode)
-			if err != nil {
-				return err
-			}
+			// Initialize global AOG service manager and inject engine manager
+			globalServiceManager = process.GetAOGServiceManager()
+			globalServiceManager.SetEngineManager(provider.GetEngineManager())
 
-			return Run(context.Background())
+			return Run(context.Background(), startMode)
 		},
 	}
 
@@ -124,15 +129,114 @@ func NewStartApiServerCommand() *cobra.Command {
 func NewStopApiServerCommand() *cobra.Command {
 	return &cobra.Command{
 		Use:   "stop",
-		Short: "Stop daemon server.",
-		Long:  "Stop daemon server.",
+		Short: "Stop the AOG server",
+		Long:  "Stop the running AOG (AIPC Open Gateway) server process.",
 		Args:  cobra.ExactArgs(0),
 		RunE:  stopAogServer,
 	}
 }
 
-// stopAogServer stops the AOG server
+// stopAogServer stops the AOG server gracefully
 func stopAogServer(cmd *cobra.Command, args []string) error {
+	fmt.Println("Stopping AOG server gracefully...")
+
+	// Send graceful shutdown signal to running AOG process
+	if err := sendShutdownSignal(); err != nil {
+		fmt.Printf("Warning: Failed to send graceful shutdown signal: %v\n", err)
+		fmt.Println("Falling back to process termination...")
+
+		// Fallback to process termination
+		return stopAOGProcesses()
+	}
+
+	// Check if the process actually stopped after graceful shutdown
+	if runtime.GOOS == "windows" {
+		// On Windows, check if the process actually terminated
+		pidFile := filepath.Join(config.GlobalEnvironment.RootDir, constants.AppName+".pid")
+		for i := 0; i < 10; i++ { // Check for up to 10 seconds
+			if _, err := os.Stat(pidFile); os.IsNotExist(err) {
+				fmt.Println("AOG server stopped successfully")
+				return nil
+			}
+			time.Sleep(1 * time.Second)
+		}
+
+		fmt.Println("Warning: Process may not have stopped completely, checking manually...")
+		// If still running, fallback to force termination
+		return stopAOGProcesses()
+	}
+
+	fmt.Println("Graceful shutdown signal sent successfully")
+	return nil
+}
+
+// sendShutdownSignal sends a graceful shutdown signal to running AOG process (cross-platform)
+func sendShutdownSignal() error {
+	if runtime.GOOS == "windows" {
+		return sendWindowsShutdownSignal()
+	}
+	return sendUnixShutdownSignal()
+}
+
+// sendUnixShutdownSignal sends SIGTERM signal on Unix-like systems
+func sendUnixShutdownSignal() error {
+	pidFile := filepath.Join(config.GlobalEnvironment.RootDir, constants.AppName+".pid")
+	if _, err := os.Stat(pidFile); os.IsNotExist(err) {
+		return fmt.Errorf("no running AOG process found")
+	}
+
+	pidData, err := os.ReadFile(pidFile)
+	if err != nil {
+		return fmt.Errorf("failed to read PID file: %v", err)
+	}
+
+	pid, err := strconv.Atoi(strings.TrimSpace(string(pidData)))
+	if err != nil {
+		return fmt.Errorf("invalid PID format: %v", err)
+	}
+
+	process, err := os.FindProcess(pid)
+	if err != nil {
+		return fmt.Errorf("failed to find process: %v", err)
+	}
+
+	// Send SIGTERM for graceful shutdown
+	if err := process.Signal(syscall.SIGTERM); err != nil {
+		return fmt.Errorf("failed to send SIGTERM: %v", err)
+	}
+
+	return nil
+}
+
+// sendWindowsShutdownSignal sends shutdown signal on Windows using HTTP endpoint
+func sendWindowsShutdownSignal() error {
+	// Use HTTP API to trigger graceful shutdown
+	client := &http.Client{Timeout: 5 * time.Second}
+
+	// Try default API endpoint for graceful shutdown
+	shutdownURL := fmt.Sprintf("http://%s/_internal/shutdown", config.GlobalEnvironment.ApiHost)
+
+	resp, err := client.Post(shutdownURL, "application/json", strings.NewReader("{}"))
+	if err != nil {
+		return fmt.Errorf("failed to send shutdown request: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("shutdown request failed with status: %d", resp.StatusCode)
+	}
+
+	fmt.Println("Graceful shutdown signal sent via HTTP API")
+
+	// Wait a moment to allow graceful shutdown to complete
+	fmt.Println("Waiting for graceful shutdown to complete...")
+	time.Sleep(1 * time.Second)
+
+	return nil
+}
+
+// stopAOGProcesses forcefully stops AOG processes (fallback method)
+func stopAOGProcesses() error {
 	files, err := filepath.Glob(filepath.Join(config.GlobalEnvironment.RootDir, "*.pid"))
 	if err != nil {
 		return fmt.Errorf("failed to list pid files: %v", err)
@@ -143,109 +247,172 @@ func stopAogServer(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	// Traverse all pid files.
+	// Stop processes using PID files (fallback only)
 	for _, pidFile := range files {
-		pidData, err := os.ReadFile(pidFile)
-		if err != nil {
-			fmt.Printf("Failed to read PID file %s: %v\n", pidFile, err)
-			continue
-		}
-
-		pid, err := strconv.Atoi(strings.TrimSpace(string(pidData)))
-		if err != nil {
-			fmt.Printf("Invalid PID in file %s: %v\n", pidFile, err)
-			continue
-		}
-
-		process, err := os.FindProcess(pid)
-		if err != nil {
-			fmt.Printf("Failed to find process with PID %d: %v\n", pid, err)
-			continue
-		}
-
-		if err := process.Kill(); err != nil {
-			if strings.Contains(err.Error(), "process already finished") {
-				fmt.Printf("Process with PID %d is already stopped\n", pid)
-			} else {
-				fmt.Printf("Failed to kill process with PID %d: %v\n", pid, err)
-				continue
-			}
-		} else {
-			fmt.Printf("Successfully stopped process with PID %d\n", pid)
-		}
-
-		// remove pid file
-		if err := os.Remove(pidFile); err != nil {
-			fmt.Printf("Failed to remove PID file %s: %v\n", pidFile, err)
+		if err := stopProcessByPIDFile(pidFile); err != nil {
+			fmt.Printf("Warning: %v\n", err)
 		}
 	}
+
+	// Clean up remaining processes on Windows
 	if runtime.GOOS == "windows" {
-		extraProcessName := "ollama-lib.exe"
-		extraCmd := exec.Command("taskkill", "/IM", extraProcessName, "/F")
-		_, err := extraCmd.CombinedOutput()
-		if err != nil {
-			// fmt.Printf("failed to kill process: %s", extraProcessName)
-			return nil
-		}
-
-		ovmsProcessName := "ovms.exe"
-		ovmsCmd := exec.Command("taskkill", "/IM", ovmsProcessName, "/F")
-		_, err = ovmsCmd.CombinedOutput()
-		if err != nil {
-			// fmt.Printf("failed to kill process: %s", ovmsProcessName)
-			return nil
-		}
-
-		fmt.Printf("Successfully killed process: %s\n", extraProcessName)
+		cleanupWindowsProcesses()
 	}
 
 	return nil
 }
 
-// Run starts the AOG server
-func Run(ctx context.Context) error {
+// stopProcessByPIDFile stops a process using its PID file
+func stopProcessByPIDFile(pidFile string) error {
+	pidData, err := os.ReadFile(pidFile)
+	if err != nil {
+		return fmt.Errorf("failed to read PID file %s: %v", pidFile, err)
+	}
+
+	pid, err := strconv.Atoi(strings.TrimSpace(string(pidData)))
+	if err != nil {
+		return fmt.Errorf("invalid PID in file %s: %v", pidFile, err)
+	}
+
+	// Check if process actually exists before trying to kill
+	process, err := os.FindProcess(pid)
+	if err != nil {
+		// Process not found, just clean up the PID file
+		os.Remove(pidFile)
+		return nil
+	}
+
+	// Try to kill the process
+	if err := process.Kill(); err != nil {
+		if strings.Contains(err.Error(), "process already finished") ||
+			strings.Contains(err.Error(), "parameter is incorrect") {
+			// Process already stopped, just clean up
+			os.Remove(pidFile)
+			return nil
+		} else {
+			return fmt.Errorf("failed to kill process with PID %d: %v", pid, err)
+		}
+	} else {
+		fmt.Printf("Successfully stopped process with PID %d\n", pid)
+	}
+
+	// Remove PID file
+	if err := os.Remove(pidFile); err != nil && !os.IsNotExist(err) {
+		fmt.Printf("Warning: Failed to remove PID file %s: %v\n", pidFile, err)
+	}
+
+	return nil
+}
+
+// cleanupWindowsProcesses cleans up remaining processes on Windows
+func cleanupWindowsProcesses() {
+	processes := []string{"ollama-lib.exe", "ovms.exe"}
+
+	for _, processName := range processes {
+		cmd := exec.Command("taskkill", "/IM", processName, "/F")
+		if err := cmd.Run(); err == nil {
+			fmt.Printf("Successfully killed process: %s\n", processName)
+		}
+	}
+}
+
+// Run starts AOG server with graceful shutdown support
+func Run(ctx context.Context, startMode string) error {
+	// Start AOG internal services with engines
+	logger.EngineLogger.Info("[AOGService] Starting AOG internal services with engines...")
+	if err := globalServiceManager.StartServices(ctx, true, startMode); err != nil {
+		logger.EngineLogger.Warn(fmt.Sprintf("Some engines failed to start: %v", err))
+		// Continue with HTTP server startup even if some engines fail
+	}
+
+	// Initialize all other components (datastore, API server, etc.)
+	aogServer, err := initializeAOGServer(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to initialize AOG server: %v", err)
+	}
+
+	// Create HTTP server for graceful shutdown support
+	httpServer := &http.Server{
+		Addr:    config.GlobalEnvironment.ApiHost,
+		Handler: aogServer.Router,
+	}
+
+	// Register HTTP server with service manager for graceful shutdown
+	globalServiceManager.SetHTTPServer(httpServer)
+
+	// Set up signal handling for graceful shutdown
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+
+	// Start HTTP server in a goroutine
+	serverErrCh := make(chan error, 1)
+	go func() {
+		logger.EngineLogger.Info("Starting HTTP server...")
+		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			serverErrCh <- fmt.Errorf("HTTP server error: %v", err)
+		}
+	}()
+
+	// Write PID file (only for external stop command compatibility)
+	pidFile := filepath.Join(config.GlobalEnvironment.RootDir, constants.AppName+".pid")
+	if err := os.WriteFile(pidFile, []byte(fmt.Sprintf("%d", os.Getpid())), 0o644); err != nil {
+		logger.EngineLogger.Warn(fmt.Sprintf("Failed to write PID file: %v", err))
+	}
+
+	// Wait for shutdown signal or server error
+	select {
+	case sig := <-sigCh:
+		logger.EngineLogger.Info(fmt.Sprintf("Received signal %v, initiating graceful shutdown...", sig))
+		return performGracefulShutdown(ctx)
+	case err := <-serverErrCh:
+		logger.EngineLogger.Error(fmt.Sprintf("HTTP server error: %v", err))
+		return performGracefulShutdown(ctx)
+	case <-globalServiceManager.WaitForShutdown():
+		logger.EngineLogger.Info("Shutdown signal received from service manager")
+		return performGracefulShutdown(ctx)
+	}
+}
+
+// initializeAOGServer initializes all AOG server components
+func initializeAOGServer(ctx context.Context) (*api.AOGCoreServer, error) {
 	// Initialize the datastore
 	ds, err := sqlite.New(config.GlobalEnvironment.Datastore)
 	if err != nil {
 		slog.Error("[Init] Failed to load datastore", "error", err)
-		return err
+		return nil, err
 	}
-	// migrate data
+
+	// Migrate data
 	vm := sqlite.NewSQLiteVersionManager(ds)
 	err = sqlite.MigrateToLatest(vm, ds)
 	if err != nil {
-		fmt.Printf("Failed to initialize database: %v\n", err)
-		return err
+		return nil, fmt.Errorf("failed to initialize database: %v", err)
 	}
 
 	datastore.SetDefaultDatastore(ds)
 
 	// Initialize control panel
 	jds := jsonds.NewJSONDatastore(jsondsTemplate.JsonDataStoreFS)
-
 	err = jds.Init()
 	if err != nil {
 		fmt.Printf("Failed to initialize json file store: %v\n", err)
 	}
 	datastore.SetDefaultJsonDatastore(jds)
 
-	// Initialize core core app server
-	// 注意：logger已在命令初始化时根据参数设置完成，此处不再重复初始化
+	// Initialize core app server
 	aogServer := api.NewAOGCoreServer()
 	aogServer.Register()
 
 	logger.LogicLogger.Info("start_app")
 
-	// load all flavors
-	// this loads all config based API Flavors. You need to manually
-	// create and RegisterAPIFlavor for costimized API Flavors
+	// Load all flavors
 	err = schedule.InitAPIFlavors()
 	if err != nil {
 		slog.Error("[Init] Failed to load API Flavors", "error", err)
-		return nil
+		return nil, err
 	}
 
-	// start
+	// Start scheduler
 	schedule.StartScheduler("basic")
 
 	// Initialize the model memory manager
@@ -259,32 +426,182 @@ func Run(ctx context.Context) error {
 	// Inject the router
 	api.InjectRouter(aogServer)
 
-	// Inject all flavors to the router
 	// Setup flavors
 	for _, flavor := range schedule.AllAPIFlavors() {
 		flavor.InstallRoutes(aogServer.Router)
 		schedule.InitProviderDefaultModelTemplate(flavor)
 	}
 
+	// Register console routes
+	err = console.RegisterConsoleRoutes(aogServer.Router)
+	if err != nil {
+		fmt.Println("[Warn] Console static files not found, skip console panel:", err)
+	}
+
+	// Register internal shutdown endpoint for Windows graceful shutdown
+	aogServer.Router.POST("/_internal/shutdown", handleGracefulShutdown)
+
+	return aogServer, nil
+}
+
+// handleGracefulShutdown handles HTTP-based graceful shutdown requests (for Windows)
+func handleGracefulShutdown(c *gin.Context) {
+	logger.EngineLogger.Info("Received graceful shutdown request via HTTP API")
+
+	// Send success response immediately
+	c.JSON(http.StatusOK, gin.H{"message": "Graceful shutdown initiated"})
+
+	// Trigger graceful shutdown asynchronously
+	go func() {
+		// Small delay to ensure response is sent
+		time.Sleep(100 * time.Millisecond)
+
+		if globalServiceManager != nil {
+			ctx := context.Background()
+			logger.EngineLogger.Info("Initiating graceful shutdown via HTTP API...")
+			_ = performGracefulShutdown(ctx)
+			// Exit the process after graceful shutdown
+			os.Exit(0)
+		}
+	}()
+}
+
+// performGracefulShutdown performs graceful shutdown of all components
+func performGracefulShutdown(ctx context.Context) error {
+	logger.EngineLogger.Info("Performing graceful shutdown...")
+
+	// Stop AOG internal services (includes engines)
+	if globalServiceManager != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		if err := globalServiceManager.StopServices(ctx); err != nil {
+			logger.EngineLogger.Error(fmt.Sprintf("Error during AOG service shutdown: %v", err))
+		}
+	}
+
+	// Clean up PID file
 	pidFile := filepath.Join(config.GlobalEnvironment.RootDir, constants.AppName+".pid")
-	err = os.WriteFile(pidFile, []byte(fmt.Sprintf("%d", os.Getpid())), 0o644)
-	if err != nil {
-		slog.Error("[Run] Failed to write pid file", "error", err)
-		return err
+	if err := os.Remove(pidFile); err != nil && !os.IsNotExist(err) {
+		logger.EngineLogger.Warn(fmt.Sprintf("Failed to remove PID file: %v", err))
 	}
 
-	_ = console.RegisterConsoleRoutes(aogServer.Router)
+	logger.EngineLogger.Info("Graceful shutdown completed")
+	return nil
+}
 
-	go ListenModelEngineHealth()
+// detachProcess detaches the current process to run in background (daemon mode)
+func detachProcess() error {
+	if runtime.GOOS == "windows" {
+		// Windows doesn't have fork, we'll implement a different approach
+		return detachWindowsProcess()
+	} else {
+		// Unix-like systems: fork and exit parent
+		return detachUnixProcess()
+	}
+}
 
-	// Run the server
-	err = aogServer.Run(ctx, config.GlobalEnvironment.ApiHost)
+// detachWindowsProcess handles daemon mode on Windows
+func detachWindowsProcess() error {
+	// On Windows, we create a new process and exit the parent
+	execPath, err := os.Executable()
 	if err != nil {
-		slog.Error("[Run] Failed to run server", "error", err)
-		return err
+		return fmt.Errorf("failed to get executable path: %v", err)
 	}
 
-	_, _ = color.New(color.FgHiGreen).Println("AOG Gateway starting on port", config.GlobalEnvironment.ApiHost)
+	// Build arguments without the -d flag to avoid infinite recursion
+	args := []string{"server", "start"}
+	for _, arg := range os.Args[1:] {
+		if arg != "-d" && arg != "--daemon" {
+			args = append(args, arg)
+		}
+	}
 
+	// Create command
+	cmd := exec.Command(execPath, args...)
+
+	// Redirect outputs to log file
+	logPath := config.GlobalEnvironment.ConsoleLog
+	logFile, err := os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
+	if err != nil {
+		return fmt.Errorf("failed to open log file: %v", err)
+	}
+	defer logFile.Close()
+
+	cmd.Stdout = logFile
+	cmd.Stderr = logFile
+	cmd.Stdin = nil
+
+	// Start the background process
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("failed to start background process: %v", err)
+	}
+
+	fmt.Printf("AOG server started in background with PID: %d\n", cmd.Process.Pid)
+
+	// Write PID file for compatibility
+	pidFile := filepath.Join(config.GlobalEnvironment.RootDir, constants.AppName+".pid")
+	if err := os.WriteFile(pidFile, []byte(fmt.Sprintf("%d", cmd.Process.Pid)), 0o644); err != nil {
+		logger.EngineLogger.Warn(fmt.Sprintf("Failed to write PID file: %v", err))
+	}
+
+	// Exit parent process
+	os.Exit(0)
+	return nil
+}
+
+// detachUnixProcess handles daemon mode on Unix-like systems
+func detachUnixProcess() error {
+	// Check if we're already detached (to avoid double fork)
+	if os.Getppid() == 1 {
+		// We're already running as a daemon (parent PID is init)
+		return nil
+	}
+
+	// Fork to create child process
+	execPath, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("failed to get executable path: %v", err)
+	}
+
+	// Build arguments without the -d flag to avoid infinite recursion
+	args := []string{"server", "start"}
+	for _, arg := range os.Args[1:] {
+		if arg != "-d" && arg != "--daemon" {
+			args = append(args, arg)
+		}
+	}
+
+	// Create child process
+	cmd := exec.Command(execPath, args...)
+	// For Unix-like systems, detach from parent process
+	cmd.SysProcAttr = &syscall.SysProcAttr{}
+
+	// Redirect outputs to log file
+	logPath := config.GlobalEnvironment.ConsoleLog
+	logFile, err := os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
+	if err != nil {
+		return fmt.Errorf("failed to open log file: %v", err)
+	}
+	defer logFile.Close()
+
+	cmd.Stdout = logFile
+	cmd.Stderr = logFile
+	cmd.Stdin = nil // Close stdin
+
+	// Start the background process
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("failed to start background process: %v", err)
+	}
+
+	fmt.Printf("AOG server started in background with PID: %d\n", cmd.Process.Pid)
+
+	// Write PID file for compatibility
+	pidFile := filepath.Join(config.GlobalEnvironment.RootDir, constants.AppName+".pid")
+	if err := os.WriteFile(pidFile, []byte(fmt.Sprintf("%d", cmd.Process.Pid)), 0o644); err != nil {
+		logger.EngineLogger.Warn(fmt.Sprintf("Failed to write PID file: %v", err))
+	}
+
+	// Exit parent process
+	os.Exit(0)
 	return nil
 }

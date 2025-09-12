@@ -17,6 +17,7 @@
 package engine
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"crypto/sha256"
@@ -31,9 +32,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
@@ -41,8 +42,10 @@ import (
 	"github.com/intel/aog/internal/client"
 	"github.com/intel/aog/internal/constants"
 	"github.com/intel/aog/internal/logger"
+	"github.com/intel/aog/internal/process"
 	"github.com/intel/aog/internal/types"
 	"github.com/intel/aog/internal/utils"
+	"github.com/intel/aog/version"
 )
 
 const (
@@ -63,12 +66,20 @@ const (
 	OpenvinoDefaultModel = "stable-diffusion-v-1-5-ov-fp16"
 
 	// Download URLs
-	OVMSWindowsDownloadURL = constants.BaseDownloadURL + constants.UrlDirPathWindows + "/ovms_windows.zip"
-	ScriptsDownloadURL     = constants.BaseDownloadURL + constants.UrlDirPathWindows + "/scripts.zip"
+	OVMSWindowsDownloadURL       = constants.BaseDownloadURL + constants.UrlDirPathWindows + "/" + version.AOGVersion + "/ovms_windows.zip"
+	OVMSLinuxRedHatDownloadURL   = constants.BaseDownloadURL + constants.UrlDirPathLinux + "/" + version.AOGVersion + "/ovms_redhat_python_on.tar.gz"
+	OVMSLinuxUbuntu22DownloadURL = constants.BaseDownloadURL + constants.UrlDirPathLinux + "/" + version.AOGVersion + "/ovms_ubuntu22_python_on.tar.gz"
+	OVMSLinuxUbuntu24DownloadURL = constants.BaseDownloadURL + constants.UrlDirPathLinux + "/" + version.AOGVersion + "/ovms_ubuntu24_python_on.tar.gz"
+
+	ScriptsDownloadURL = constants.BaseDownloadURL + constants.UrlDirPathWindows + "/" + version.AOGVersion + "/scripts.zip"
+
+	// Required Version
+	OpenvinoMinVersion = "2025.2.0"
 )
 
 type OpenvinoProvider struct {
-	EngineConfig *types.EngineRecommendConfig
+	EngineConfig   *types.EngineRecommendConfig
+	processManager *process.EngineProcessManager
 }
 
 func QuotePlus(s string) string {
@@ -213,14 +224,6 @@ func AsyncDownloadModelFile(ctx context.Context, a AsyncDownloadModelFileData, e
 		return
 	}
 
-	// logger.EngineLogger.Debug("[OpenVINO] Adding model to config: " + a.ModelName)
-	// if err := engine.addModelToConfig(a.ModelName, a.ModelType); err != nil {
-	// 	slog.Error("Failed to add model to config", "error", err)
-	// 	logger.EngineLogger.Error("[OpenVINO] Failed to add model to config: " + err.Error())
-	// 	a.ErrCh <- errors.New("Failed to add model to config: " + err.Error())
-	// 	return
-	// }
-
 	logger.EngineLogger.Info("[OpenVINO] Pull model completed: " + a.ModelName)
 	resp := types.ProgressResponse{Status: "success"}
 	if data, err := json.Marshal(resp); err == nil {
@@ -285,23 +288,23 @@ func downloadSingleFile(ctx context.Context, a AsyncDownloadModelFileData, fileD
 		select {
 		case data, ok := <-reqDataCh:
 			if !ok {
-				// 检查文件完整性
+				// Check file integrity
 				if partSize != fileData.Size {
 					return fmt.Errorf("file %s incomplete: got %d bytes, expected %d", fileData.Name, partSize, fileData.Size)
 				}
 
-				// 先检查下载过程中计算的 digest
+				// First check the digest calculated during download
 				downloadHash := hex.EncodeToString(digest.Sum(nil))
 				if downloadHash != fileData.Digest {
 					logger.EngineLogger.Warn("[OpenVINO] Download digest mismatch for file %s, recalculating from file: expected %s, got %s",
 						fileData.Name, fileData.Digest, downloadHash)
 
-					// 重新读取文件计算 digest
+					// Re-read file to calculate digest
 					if CheckFileDigest(fileData.Digest, filePath) {
 						logger.EngineLogger.Info("[OpenVINO] File digest verification passed after recalculation for file: %s", fileData.Name)
 						return nil
 					} else {
-						// 删除损坏文件，重新下载
+						// Delete corrupted file and re-download
 						logger.EngineLogger.Error("[OpenVINO] File digest verification failed after recalculation for file: %s, will retry download", fileData.Name)
 						_ = os.Remove(filePath)
 						return downloadSingleFile(ctx, a, fileData)
@@ -309,7 +312,7 @@ func downloadSingleFile(ctx context.Context, a AsyncDownloadModelFileData, fileD
 				}
 
 				logger.EngineLogger.Debug("[OpenVINO] File download completed successfully: %s", fileData.Name)
-				return nil // 完成
+				return nil // Completed
 			}
 			if len(data) == 0 {
 				continue
@@ -321,7 +324,7 @@ func downloadSingleFile(ctx context.Context, a AsyncDownloadModelFileData, fileD
 			digest.Write(data)
 			partSize += int64(n)
 
-			// 写入进度
+			// Write progress
 			progress := types.ProgressResponse{
 				Status:    fmt.Sprintf("pulling %s", fileData.Name),
 				Digest:    fileData.Digest,
@@ -343,9 +346,11 @@ func downloadSingleFile(ctx context.Context, a AsyncDownloadModelFileData, fileD
 
 func NewOpenvinoProvider(config *types.EngineRecommendConfig) *OpenvinoProvider {
 	if config != nil {
-		return &OpenvinoProvider{
+		provider := &OpenvinoProvider{
 			EngineConfig: config,
 		}
+		provider.processManager = process.NewEngineProcessManager("openvino", config)
+		return provider
 	}
 
 	AOGDir, err := utils.GetAOGDataDir()
@@ -365,6 +370,7 @@ func NewOpenvinoProvider(config *types.EngineRecommendConfig) *OpenvinoProvider 
 
 	openvinoProvider := new(OpenvinoProvider)
 	openvinoProvider.EngineConfig = openvinoProvider.GetConfig()
+	openvinoProvider.processManager = process.NewEngineProcessManager("openvino", openvinoProvider.EngineConfig)
 
 	return openvinoProvider
 }
@@ -380,122 +386,37 @@ func (o *OpenvinoProvider) GetDefaultClient() *client.GRPCClient {
 }
 
 func (o *OpenvinoProvider) StartEngine(mode string) error {
-	logger.EngineLogger.Info("[OpenVINO] Start engine mode: " + mode)
-	// Currently only supports Windows
-	if runtime.GOOS != "windows" {
-		logger.EngineLogger.Error("[OpenVINO] Unsupported OS: " + runtime.GOOS)
-		return fmt.Errorf("unsupported OS: %s", runtime.GOOS)
-	}
-	rootPath, err := utils.GetAOGDataDir()
-	if err != nil {
-		logger.EngineLogger.Error("[OpenVINO] Get AOG data dir failed: " + err.Error())
-		return fmt.Errorf("failed get aog dir: %v", err)
+	// Always use new process manager
+	if o.processManager == nil {
+		o.processManager = process.NewEngineProcessManager("openvino", o.EngineConfig)
 	}
 
-	modelDir := fmt.Sprintf("%s/models", o.EngineConfig.EnginePath)
-	pidFile := fmt.Sprintf("%s/ovms.pid", rootPath)
-
-	batchContent := fmt.Sprintf(`
-	@echo on
-	call "%s\\setupvars.bat"
-	set PATH=%s\\python\\Scripts;%%PATH%%
-	set HF_HOME=%s\\.cache
-	set HF_ENDPOINT=https://hf-mirror.com
-	%s --port 9000 --grpc_bind_address 127.0.0.1 --config_path %s\\config.json
-	`,
-		o.EngineConfig.ExecPath,
-		o.EngineConfig.ExecPath,
-		o.EngineConfig.EnginePath,
-		o.EngineConfig.ExecFile,
-		modelDir,
-	)
-
-	logger.EngineLogger.Debug("[OpenVINO] Batch content: " + batchContent)
-
-	// 确保批处理文件目录存在
-	if _, err := os.Stat(o.EngineConfig.ExecPath); os.IsNotExist(err) {
-		if err := os.MkdirAll(o.EngineConfig.ExecPath, 0o750); err != nil {
-			logger.EngineLogger.Error("[OpenVINO] Failed to create batch file directory: " + err.Error())
-			return fmt.Errorf("failed to create batch file directory: %v", err)
+	if err := o.processManager.StartEngine(mode, o.HealthCheck); err != nil {
+		// If engine not found, this is expected behavior - just log and return success
+		if strings.Contains(err.Error(), "executable not found") {
+			logger.EngineLogger.Info("[OpenVINO] Engine not installed, skipping startup")
+			return nil
 		}
+		// For other errors, return the error directly
+		return fmt.Errorf("failed to start openvino engine: %v", err)
 	}
 
-	BatchFile := filepath.Join(o.EngineConfig.ExecPath, "start_ovms.bat")
-	if _, err = os.Stat(BatchFile); err != nil {
-		if err = os.WriteFile(BatchFile, []byte(batchContent), 0o644); err != nil {
-			logger.EngineLogger.Error("[OpenVINO] Failed to create batch file: " + err.Error())
-			return fmt.Errorf("failed to create temp batch file: %v", err)
-		}
-	}
-
-	cmd := exec.Command("cmd", "/C", BatchFile)
-	if mode == types.EngineStartModeStandard {
-		cmd = exec.Command("cmd", "/C", "start", BatchFile)
-	}
-	cmd.Dir = o.EngineConfig.EnginePath
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-
-	err = cmd.Start()
-	if err != nil {
-		logger.EngineLogger.Error("[OpenVINO] Failed to start OpenVINO Model Server: " + err.Error())
-		return err
-	}
-	time.Sleep(500 * time.Microsecond)
-
-	pid := cmd.Process.Pid
-	if err := os.WriteFile(pidFile, []byte(strconv.Itoa(pid)), 0o644); err != nil {
-		logger.EngineLogger.Error("[OpenVINO] Failed to write PID to file: " + err.Error())
-		if killErr := cmd.Process.Kill(); killErr != nil {
-			logger.EngineLogger.Error("[OpenVINO] Failed to kill process after PID write error: " + killErr.Error())
-		}
-		return err
-	}
-
-	go func() {
-		cmd.Wait()
-	}()
-
-	logger.EngineLogger.Info("[OpenVINO] OpenVINO Model Server started successfully")
 	return nil
 }
 
 func (o *OpenvinoProvider) StopEngine() error {
-	pidFile := "ovms.pid"
-	data, err := os.ReadFile(pidFile)
-	if err != nil {
-		slog.Error("Failed to read PID file", "error", err)
-		logger.EngineLogger.Error("[OpenVINO] Failed to read PID file: " + err.Error())
-		return err
-	}
-	pid, err := strconv.Atoi(string(data))
-	if err != nil {
-		slog.Error("Failed to parse PID", "error", err)
-		logger.EngineLogger.Error("[OpenVINO] Invalid PID format: " + err.Error())
-		return err
+	// Always use new process manager
+	if o.processManager != nil {
+		return o.processManager.StopEngine()
 	}
 
-	process, err := os.FindProcess(pid)
-	if err != nil {
-		slog.Error("Failed to find process", "error", err)
-		logger.EngineLogger.Error("[OpenVINO] Failed to find process: " + err.Error())
-		return err
-	}
-	err = process.Kill()
-	if err != nil {
-		slog.Error("Failed to kill process", "error", err)
-		logger.EngineLogger.Error("[OpenVINO] Failed to kill process: " + err.Error())
-		return err
-	}
-
-	err = os.Remove(pidFile)
-	if err != nil {
-		slog.Error("Failed to remove PID file", "error", err)
-		logger.EngineLogger.Error("[OpenVINO] Failed to remove PID file: " + err.Error())
-		return err
-	}
-
+	// If process manager is not initialized, nothing to stop
 	return nil
+}
+
+// SetProcessManager sets the process manager for the provider
+func (o *OpenvinoProvider) SetProcessManager(pm *process.EngineProcessManager) {
+	o.processManager = pm
 }
 
 func (o *OpenvinoProvider) GetConfig() *types.EngineRecommendConfig {
@@ -526,11 +447,39 @@ func (o *OpenvinoProvider) GetConfig() *types.EngineRecommendConfig {
 		downloadUrl = OVMSWindowsDownloadURL
 		enginePath = fmt.Sprintf("%s/%s", AOGDir, "engine/openvino")
 	case "linux":
-		// todo 这里需要区分 centos 和 ubuntu(22/24) 的版本 后续实现
 		execFile = "ovms"
-		execPath = fmt.Sprintf("%s/%s", AOGDir, "engine/openvino/ovms")
-		downloadUrl = ""
+		execPath = "/opt/aog/engine/openvino"
 		enginePath = fmt.Sprintf("%s/%s", AOGDir, "engine/openvino")
+
+		// Detect Linux distribution and version
+		distro, version, err := detectLinuxDistribution()
+		if err != nil {
+			slog.Error("Failed to detect Linux distribution: " + err.Error())
+			logger.EngineLogger.Error("[OpenVINO] Failed to detect Linux distribution: " + err.Error())
+			return nil
+		}
+
+		// Select download URL based on distribution and version
+		switch distro {
+		case "ubuntu":
+			switch version {
+			case "22.04":
+				downloadUrl = OVMSLinuxUbuntu22DownloadURL
+			case "24.04":
+				downloadUrl = OVMSLinuxUbuntu24DownloadURL
+			default:
+				slog.Error("Unsupported Ubuntu version: " + version)
+				logger.EngineLogger.Error("[OpenVINO] Unsupported Ubuntu version: " + version)
+				return nil
+			}
+		case "rhel", "centos", "rocky", "almalinux":
+			// RedHat-based distributions
+			downloadUrl = OVMSLinuxRedHatDownloadURL
+		default:
+			slog.Error("Unsupported Linux distribution: " + distro)
+			logger.EngineLogger.Error("[OpenVINO] Unsupported Linux distribution: " + distro)
+			return nil
+		}
 	case "darwin":
 		execFile = "ovms"
 		execPath = fmt.Sprintf("%s/%s", AOGDir, "engine/openvino/ovms")
@@ -568,13 +517,151 @@ func (o *OpenvinoProvider) HealthCheck() error {
 }
 
 func (o *OpenvinoProvider) GetVersion(ctx context.Context, resp *types.EngineVersionResponse) (*types.EngineVersionResponse, error) {
-	return &types.EngineVersionResponse{
-		Version: OpenvinoVersion,
-	}, nil
+	// Add to PATH
+	setupVarsPath := filepath.Join(o.EngineConfig.ExecPath, "setupvars.bat")
+	ovmsExePath := filepath.Join(o.EngineConfig.ExecPath, o.EngineConfig.ExecFile)
+
+	batchContent := fmt.Sprintf(`@echo off
+call "%s"
+"%s" --version
+`, setupVarsPath, ovmsExePath)
+
+	tmpBatchFile := filepath.Join(os.TempDir(), "get_ovms_version.bat")
+	if err := os.WriteFile(tmpBatchFile, []byte(batchContent), 0o644); err != nil {
+		return nil, fmt.Errorf("failed to create temp batch file: %v", err)
+	}
+	defer os.Remove(tmpBatchFile)
+
+	cmd := exec.Command("cmd", "/C", tmpBatchFile)
+	cmd.Dir = o.EngineConfig.ExecPath
+
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	cmd.Stderr = &out
+
+	if err := cmd.Run(); err != nil {
+		logger.EngineLogger.Error("[OpenVINO] GetVersion command failed: " + err.Error() + ", output: " + out.String())
+		return nil, fmt.Errorf("failed to get ovms version: %v, output: %s", err, out.String())
+	}
+
+	lines := strings.Split(out.String(), "\n")
+	versionStr := ""
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "OpenVINO backend") {
+			parts := strings.Fields(line)
+			if len(parts) >= 3 {
+				rawVer := parts[2]
+				verParts := strings.Split(rawVer, ".")
+				if len(verParts) >= 3 {
+					versionStr = fmt.Sprintf("%s.%s.%s", verParts[0], verParts[1], verParts[2])
+				} else {
+					versionStr = rawVer
+				}
+				break
+			}
+		}
+	}
+	if versionStr == "" {
+		logger.EngineLogger.Error("[OpenVINO] Failed to parse version from output: " + out.String())
+		return nil, fmt.Errorf("failed to parse version from output: %s", out.String())
+	}
+
+	resp.Version = versionStr
+	return resp, nil
 }
 
-func (o *OpenvinoProvider) InstallEngine() error {
+// CheckEngine checks if OpenVINO engine is installed
+func (o *OpenvinoProvider) CheckEngine() bool {
+	if o.EngineConfig == nil {
+		return false
+	}
+
+	// Only supports Windows and Linux
+	if runtime.GOOS != "windows" && runtime.GOOS != "linux" {
+		return false
+	}
+
+	// Check if model directory exists
 	modelDir := fmt.Sprintf("%s/models", o.EngineConfig.EnginePath)
+	if _, err := os.Stat(modelDir); os.IsNotExist(err) {
+		return false
+	}
+
+	// Check if config file exists
+	configFile := fmt.Sprintf("%s/config.json", modelDir)
+	if _, err := os.Stat(configFile); os.IsNotExist(err) {
+		return false
+	}
+
+	// Check if executable file exists (use correct path and filename based on platform)
+	var execPath string
+	switch runtime.GOOS {
+	case "windows":
+		// Windows: ExecPath + ovms.exe
+		execPath = filepath.Join(o.EngineConfig.ExecPath, o.EngineConfig.ExecFile)
+	case "linux":
+		// Linux: ExecPath + ovms/bin/ovms
+		execPath = filepath.Join(o.EngineConfig.ExecPath, "ovms", "bin", o.EngineConfig.ExecFile)
+	}
+
+	if _, err := os.Stat(execPath); os.IsNotExist(err) {
+		return false
+	}
+
+	// Additional check for Python script dependencies (Linux specific)
+	if runtime.GOOS == "linux" {
+		pythonDir := filepath.Join(o.EngineConfig.ExecPath, "ovms", "lib", "python")
+		if _, err := os.Stat(pythonDir); os.IsNotExist(err) {
+			return false
+		}
+	}
+
+	return true
+}
+
+func (o *OpenvinoProvider) InstallEngine(cover bool) error {
+	modelDir := fmt.Sprintf("%s/models", o.EngineConfig.EnginePath)
+
+	if runtime.GOOS == "linux" {
+		logger.EngineLogger.Error("[OpenVINO] Install models on Linux is not supported currently")
+		return fmt.Errorf("openVINO Model Server installation is only supported on Windows currently")
+	}
+	// When cover installing, first delete the entire EnginePath directory (including models, ovms, scripts, etc.)
+	if cover {
+		if _, err := os.Stat(o.EngineConfig.EnginePath); err == nil {
+			maxRetry := 5
+			wait := time.Second
+			var lastErr error
+			for i := 0; i < maxRetry; i++ {
+				lastErr = removeDirWithSkipLockedFiles(o.EngineConfig.EnginePath)
+				if lastErr == nil {
+					break
+				}
+				if strings.Contains(lastErr.Error(), "Access is denied") {
+					logger.EngineLogger.Warn(fmt.Sprintf("[OpenVINO] RemoveAll Access is denied, retrying... (%d/%d)", i+1, maxRetry))
+					time.Sleep(wait)
+					continue
+				}
+				break
+			}
+			if lastErr != nil {
+				slog.Error("Failed to remove old engine directory", "error", lastErr)
+				logger.EngineLogger.Error("[OpenVINO] Failed to remove old engine directory: " + lastErr.Error())
+				return fmt.Errorf("failed to remove old engine directory: %v", lastErr)
+			}
+		}
+	}
+
+	// Recreate models directory
+	if _, err := os.Stat(modelDir); os.IsNotExist(err) {
+		err := os.MkdirAll(modelDir, 0o750)
+		if err != nil {
+			slog.Error("Failed to create models directory", "error", err)
+			logger.EngineLogger.Error("[OpenVINO] Failed to create models directory: " + err.Error())
+			return err
+		}
+	}
 	if _, err := os.Stat(modelDir); os.IsNotExist(err) {
 		err := os.MkdirAll(modelDir, 0o750)
 		if err != nil {
@@ -584,7 +671,7 @@ func (o *OpenvinoProvider) InstallEngine() error {
 		}
 	}
 
-	// 新建 config.json 空 文件
+	// Create empty config.json file
 	configFile := fmt.Sprintf("%s/config.json", modelDir)
 	_, err := os.Create(configFile)
 	if err != nil {
@@ -592,7 +679,7 @@ func (o *OpenvinoProvider) InstallEngine() error {
 		logger.EngineLogger.Error("[OpenVINO] Failed to create config.json: " + err.Error())
 		return fmt.Errorf("failed to create config.json: %v", err)
 	}
-	// 写入默认config配置
+	// Write default config configuration
 	defaultConfig := OpenvinoModelServerConfig{
 		MediapipeConfigList: []ModelConfig{},
 		ModelConfigList:     []interface{}{},
@@ -604,32 +691,35 @@ func (o *OpenvinoProvider) InstallEngine() error {
 		return fmt.Errorf("failed to save config.json: %v", err)
 	}
 
-	file, err := utils.DownloadFile(o.EngineConfig.DownloadUrl, o.EngineConfig.DownloadPath)
+	file, err := utils.DownloadFile(o.EngineConfig.DownloadUrl, o.EngineConfig.DownloadPath, cover)
 	if err != nil {
 		slog.Error("Failed to download OpenVINO Model Server", "error", err)
 		logger.EngineLogger.Error("[OpenVINO] Failed to download OpenVINO Model Server: " + err.Error())
 		return fmt.Errorf("failed to download ovms: %v", err)
 	}
 
-	// 解压ovms文件
-	err = utils.UnzipFile(file, o.EngineConfig.EnginePath)
+	// Extract ovms files
+	if runtime.GOOS == "linux" {
+		err = utils.UnzipFile(file, o.EngineConfig.ExecPath)
+	} else {
+		err = utils.UnzipFile(file, o.EngineConfig.EnginePath)
+	}
 	if err != nil {
 		slog.Error("Failed to unzip OpenVINO Model Server", "error", err)
 		logger.EngineLogger.Error("[OpenVINO] Failed to unzip OpenVINO Model Server: " + err.Error())
 		return fmt.Errorf("failed to unzip ovms: %v", err)
 	}
 
-	// 下载py 脚本文件压缩包
-	// scriptZipUrl := "https://smartvision-aipc-open.oss-cn-hangzhou.aliyuncs.com/byze/windows/scripts.zip"
+	// Download Python script file archive
 	scriptZipUrl := ScriptsDownloadURL
-	scriptZipFile, err := utils.DownloadFile(scriptZipUrl, o.EngineConfig.EnginePath)
+	scriptZipFile, err := utils.DownloadFile(scriptZipUrl, o.EngineConfig.EnginePath, cover)
 	if err != nil {
 		slog.Error("Failed to download scripts.zip", "error", err)
 		logger.EngineLogger.Error("[OpenVINO] Failed to download scripts.zip: " + err.Error())
 		return fmt.Errorf("failed to download scripts.zip: %v", err)
 	}
 
-	// 解压py 脚本文件
+	// Extract Python script files
 	err = utils.UnzipFile(scriptZipFile, o.EngineConfig.EnginePath)
 	if err != nil {
 		slog.Error("Failed to unzip scripts.zip", "error", err)
@@ -637,42 +727,98 @@ func (o *OpenvinoProvider) InstallEngine() error {
 		return fmt.Errorf("failed to unzip scripts.zip: %v", err)
 	}
 
-	execPath := strings.Replace(o.EngineConfig.ExecPath, "/", "\\", -1)
-	enginePath := strings.Replace(o.EngineConfig.EnginePath, "/", "\\", -1)
-
-	// 1. 构造批处理命令（确保所有命令在同一个会话中执行）
-	batchContent := fmt.Sprintf(`
-	@echo on
-	call "%s\\setupvars.bat"
-	set PATH=%s\\python\\Scripts;%%PATH%%
-	python -m pip install -r "%s\\scripts\\requirements.txt" -i https://mirrors.aliyun.com/pypi/simple/
-	`, execPath, execPath, enginePath)
-
-	logger.EngineLogger.Debug("[OpenVINO] Batch content: " + batchContent)
-
-	// 2. 创建临时批处理文件
-	tmpBatchFile := filepath.Join(os.TempDir(), "run_install.bat")
-	if err := os.WriteFile(tmpBatchFile, []byte(batchContent), 0o644); err != nil {
-		slog.Error("Failed to create temp batch file", "error", err)
-		logger.EngineLogger.Error("[OpenVINO] Failed to create temp batch file: " + err.Error())
-		return fmt.Errorf("failed to create temp batch file: %v", err)
-	}
-	defer os.Remove(tmpBatchFile) // 执行后删除临时文件
-
-	// 3. 执行批处理文件
-	cmd := exec.Command("cmd", "/C", tmpBatchFile)
-	cmd.Dir = enginePath
-
+	// Cross-platform handling: choose different script execution methods based on operating system
+	var cmd *exec.Cmd
+	var tmpScriptFile string
 	var stdout, stderr bytes.Buffer
 
-	// 实时输出 stdout 和 stderr
-	cmd.Stdout = io.MultiWriter(os.Stdout, &stdout) // 同时输出到控制台和缓冲区
-	cmd.Stderr = io.MultiWriter(os.Stderr, &stderr) // 同时输出到控制台和缓冲区
+	if runtime.GOOS == "windows" {
+		// Windows processing logic
+		execPath := strings.Replace(o.EngineConfig.ExecPath, "/", "\\", -1)
+		enginePath := strings.Replace(o.EngineConfig.EnginePath, "/", "\\", -1)
+
+		// 1. Construct batch commands (ensure all commands execute in the same session)
+		batchContent := fmt.Sprintf(InitShellWin, execPath, execPath, enginePath)
+
+		logger.EngineLogger.Debug("[OpenVINO] Batch content: " + batchContent)
+
+		// 2. Create temporary batch file
+		tmpScriptFile = filepath.Join(os.TempDir(), "run_install.bat")
+		if err := os.WriteFile(tmpScriptFile, []byte(batchContent), 0o644); err != nil {
+			slog.Error("Failed to create temp batch file", "error", err)
+			logger.EngineLogger.Error("[OpenVINO] Failed to create temp batch file: " + err.Error())
+			return fmt.Errorf("failed to create temp batch file: %v", err)
+		}
+
+		// 3. Execute batch file
+		cmd = exec.Command("cmd", "/C", tmpScriptFile)
+		cmd.Dir = o.EngineConfig.EnginePath
+	} else {
+		// Linux processing logic
+		execPath := o.EngineConfig.ExecPath
+		enginePath := o.EngineConfig.EnginePath
+
+		libPath := fmt.Sprintf("%s/ovms/lib", execPath)
+		envPath := fmt.Sprintf("%s/ovms/bin", execPath)
+		pythonPath := fmt.Sprintf("%s/python", libPath)
+
+		// Detect Linux distribution and version
+		distro, version, err := detectLinuxDistribution()
+		if err != nil {
+			slog.Error("Failed to detect Linux distribution: " + err.Error())
+			logger.EngineLogger.Error("[OpenVINO] Failed to detect Linux distribution: " + err.Error())
+			return nil
+		}
+
+		// 1. Construct shell script commands (ensure all commands execute in the same session)
+		shellContent := ""
+
+		// Select download URL based on distribution and version
+		switch distro {
+		case "ubuntu":
+			switch version {
+			case "22.04":
+				shellContent = fmt.Sprintf(InitShellLinuxUbuntu2204, libPath, envPath, pythonPath, enginePath)
+			case "24.04":
+				shellContent = fmt.Sprintf(InitShellLinuxUbuntu2404, libPath, envPath, pythonPath, enginePath)
+			default:
+				slog.Error("Unsupported Ubuntu version: " + version)
+				logger.EngineLogger.Error("[OpenVINO] Unsupported Ubuntu version: " + version)
+				return nil
+			}
+		case "rhel", "centos", "rocky", "almalinux":
+			shellContent = fmt.Sprintf(InitShellLinuxREHL96, libPath, envPath, pythonPath, enginePath)
+		default:
+			slog.Error("Unsupported Linux distribution: " + distro)
+			logger.EngineLogger.Error("[OpenVINO] Unsupported Linux distribution: " + distro)
+			return nil
+		}
+
+		logger.EngineLogger.Debug("[OpenVINO] Shell content: " + shellContent)
+
+		// 2. Create temporary shell script file
+		tmpScriptFile = filepath.Join(os.TempDir(), "run_install.sh")
+		if err := os.WriteFile(tmpScriptFile, []byte(shellContent), 0o755); err != nil {
+			slog.Error("Failed to create temp shell script", "error", err)
+			logger.EngineLogger.Error("[OpenVINO] Failed to create temp shell script: " + err.Error())
+			return fmt.Errorf("failed to create temp shell script: %v", err)
+		}
+
+		// 3. Execute shell script file
+		cmd = exec.Command("/bin/bash", tmpScriptFile)
+		cmd.Dir = enginePath
+	}
+
+	defer os.Remove(tmpScriptFile) // Delete temporary file after execution
+
+	// Real-time output of stdout and stderr
+	cmd.Stdout = io.MultiWriter(os.Stdout, &stdout) // Output to both console and buffer
+	cmd.Stderr = io.MultiWriter(os.Stderr, &stderr) // Output to both console and buffer
 
 	if err := cmd.Run(); err != nil {
-		slog.Error("Failed to run batch script", "error", err)
-		logger.EngineLogger.Error("[OpenVINO] Failed to run batch script: " + err.Error())
-		return fmt.Errorf("failed to run batch script: %v\nStdout: %s\nStderr: %s",
+		slog.Error("Failed to run script", "error", err)
+		logger.EngineLogger.Error("[OpenVINO] Failed to run script: " + err.Error())
+		return fmt.Errorf("failed to run script: %v\nStdout: %s\nStderr: %s",
 			err, stdout.String(), stderr.String())
 	}
 
@@ -682,8 +828,36 @@ func (o *OpenvinoProvider) InstallEngine() error {
 	return nil
 }
 
+func removeDirWithSkipLockedFiles(dir string) error {
+	var firstErr error
+	filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			if firstErr == nil {
+				firstErr = err
+			}
+			return nil
+		}
+		if info.IsDir() {
+			return nil
+		}
+		e := os.Remove(path)
+		if e != nil {
+			if strings.Contains(e.Error(), "Access is denied") {
+				logger.EngineLogger.Warn("[OpenVINO] Skip locked file: " + path)
+				return nil
+			}
+			if firstErr == nil {
+				firstErr = e
+			}
+		}
+		return nil
+	})
+	_ = os.RemoveAll(dir)
+	return firstErr
+}
+
 func (o *OpenvinoProvider) InitEnv() error {
-	// todo  set env
+	// TODO: set env
 	return nil
 }
 
@@ -911,22 +1085,22 @@ func (o *OpenvinoProvider) PullModel(ctx context.Context, req *types.PullModelRe
 	}
 	go AsyncDownloadModelFile(ctx, *AsyncDownloadFuncParams, o)
 
-	// 用于标记是否成功完成下载
+	// Flag to mark if download completed successfully
 	downloadDone := false
 
 	for {
 		select {
 		case data, ok := <-newDataCh:
 			if !ok {
-				// dataCh 关闭 -> 下载完成
+				// dataCh closed -> download completed
 				if data == nil {
 					downloadDone = true
 				}
 			}
-			// data 可用于进度通知
+			// data can be used for progress notification
 			if fn != nil && data != nil {
-				// fn(data) // 进度回调
-				fmt.Printf("进度回调")
+				// fn(data) // Progress callback
+				fmt.Printf("Progress callback")
 			}
 		case err, ok := <-newErrorCh:
 			if ok && err != nil {
@@ -936,7 +1110,7 @@ func (o *OpenvinoProvider) PullModel(ctx context.Context, req *types.PullModelRe
 			return nil, ctx.Err()
 		}
 
-		// 下载完成且错误通道关闭了
+		// Download completed and error channel closed
 		if downloadDone && len(newErrorCh) == 0 {
 			break
 		}
@@ -1007,6 +1181,46 @@ node {
     }
   }
 }`
+
+	InitShellWin = `@echo on
+call "%s\setupvars.bat"
+set PATH=%s\python\Scripts;%%PATH%%
+python -m pip install -r "%s\scripts\requirements.txt" -i https://mirrors.aliyun.com/pypi/simple/`
+
+	InitShellLinuxUbuntu2204 = `#!/bin/bash
+export LD_LIBRARY_PATH=%s
+export PATH=$PATH:%s
+export PYTHONPATH=%s
+sudo apt -y install libpython3.10
+python3 -m pip install "Jinja2==3.1.6" "MarkupSafe==3.0.2"
+python3 -m pip install -r "%s/scripts/requirements.txt" -i https://mirrors.aliyun.com/pypi/simple/`
+
+	InitShellLinuxUbuntu2404 = `#!/bin/bash
+export LD_LIBRARY_PATH=%s
+export PATH=$PATH:%s
+export PYTHONPATH=%s
+sudo apt -y install libpython3.12
+python3 -m pip install "Jinja2==3.1.6" "MarkupSafe==3.0.2"
+python3 -m pip install -r "%s/scripts/requirements.txt" -i https://mirrors.aliyun.com/pypi/simple/`
+	InitShellLinuxREHL96 = `#!/bin/bash
+export LD_LIBRARY_PATH=%s
+export PATH=$PATH:%s
+export PYTHONPATH=%s
+sudo yum install -y python39-libs
+python3 -m pip install "Jinja2==3.1.6" "MarkupSafe==3.0.2"
+python3 -m pip install -r "%s/scripts/requirements.txt" -i https://mirrors.aliyun.com/pypi/simple/`
+
+	StartShellWin = `@echo on
+	call "%s\\setupvars.bat"
+	set PATH=%s\\python\\Scripts;%%PATH%%
+	set HF_HOME=%s\\.cache
+	set HF_ENDPOINT=https://hf-mirror.com
+	%s --port 9000 --grpc_bind_address 127.0.0.1 --config_path %s\\config.json`
+	StartShellLinux = `#!/bin/bash
+export LD_LIBRARY_PATH=%s
+export PATH=$PATH:%s
+export PYTHONPATH=%s
+ovms --port 9000 --grpc_bind_address 127.0.0.1 --config_path %s/config.json`
 )
 
 func (o *OpenvinoProvider) checkModelMetadata(modelName string) (err error) {
@@ -1080,18 +1294,18 @@ func (o *OpenvinoProvider) LoadModel(ctx context.Context, req *types.LoadRequest
 	}
 
 	// Check whether the model has been successfully loaded from the OVMS loading.
-	// 添加超时机制，避免无限等待
+	// Add timeout mechanism to avoid infinite waiting
 	timeout := 5 * time.Minute
 	startTime := time.Now()
 
 	for {
-		// 检查超时
+		// Check timeout
 		if time.Since(startTime) > timeout {
 			logger.EngineLogger.Error("[OpenVINO] Timeout waiting for model to load: " + req.Model)
 			return fmt.Errorf("timeout waiting for model %s to load after %v", req.Model, timeout)
 		}
 
-		// 检查上下文取消
+		// Check context cancellation
 		select {
 		case <-ctx.Done():
 			logger.EngineLogger.Warn("[OpenVINO] Context cancelled while waiting for model to load: " + req.Model)
@@ -1106,7 +1320,7 @@ func (o *OpenvinoProvider) LoadModel(ctx context.Context, req *types.LoadRequest
 
 		logger.EngineLogger.Debug("[OpenVINO] Waiting for model to be loaded from OVMS: " + req.Model)
 
-		// 使用可中断的睡眠
+		// Use interruptible sleep
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
@@ -1139,18 +1353,18 @@ func (o *OpenvinoProvider) UnloadModel(ctx context.Context, req *types.UnloadMod
 				}
 
 				// Check whether the model has been successfully unloaded from the OVMS loading.
-				// 添加超时机制，避免无限等待
+				// Add timeout mechanism to avoid infinite waiting
 				timeout := 2 * time.Minute
 				startTime := time.Now()
 
 				for {
-					// 检查超时
+					// Check timeout
 					if time.Since(startTime) > timeout {
 						logger.EngineLogger.Error("[OpenVINO] Timeout waiting for model to unload: " + reqModel)
 						return fmt.Errorf("timeout waiting for model %s to unload after %v", reqModel, timeout)
 					}
 
-					// 检查上下文取消
+					// Check context cancellation
 					select {
 					case <-ctx.Done():
 						logger.EngineLogger.Warn("[OpenVINO] Context cancelled while waiting for model to unload: " + reqModel)
@@ -1165,7 +1379,7 @@ func (o *OpenvinoProvider) UnloadModel(ctx context.Context, req *types.UnloadMod
 
 					logger.EngineLogger.Debug("[OpenVINO] Waiting for model to be unloaded from OVMS: " + reqModel)
 
-					// 使用可中断的睡眠
+					// Use interruptible sleep
 					select {
 					case <-ctx.Done():
 						return ctx.Err()
@@ -1180,4 +1394,138 @@ func (o *OpenvinoProvider) UnloadModel(ctx context.Context, req *types.UnloadMod
 	}
 
 	return nil
+}
+
+// detectLinuxDistribution detects the Linux distribution and version
+func detectLinuxDistribution() (string, string, error) {
+	// Try to read /etc/os-release first (standard method)
+	if file, err := os.Open("/etc/os-release"); err == nil {
+		defer file.Close()
+		scanner := bufio.NewScanner(file)
+
+		var id, versionID string
+		for scanner.Scan() {
+			line := scanner.Text()
+			if strings.HasPrefix(line, "ID=") {
+				id = strings.Trim(strings.TrimPrefix(line, "ID="), `"`)
+			} else if strings.HasPrefix(line, "VERSION_ID=") {
+				versionID = strings.Trim(strings.TrimPrefix(line, "VERSION_ID="), `"`)
+			}
+		}
+
+		if id != "" {
+			return normalizeDistroName(id), versionID, nil
+		}
+	}
+
+	// Fallback to /etc/lsb-release (Ubuntu/Debian)
+	if file, err := os.Open("/etc/lsb-release"); err == nil {
+		defer file.Close()
+		scanner := bufio.NewScanner(file)
+
+		var distroID, release string
+		for scanner.Scan() {
+			line := scanner.Text()
+			if strings.HasPrefix(line, "DISTRIB_ID=") {
+				distroID = strings.Trim(strings.TrimPrefix(line, "DISTRIB_ID="), `"`)
+			} else if strings.HasPrefix(line, "DISTRIB_RELEASE=") {
+				release = strings.Trim(strings.TrimPrefix(line, "DISTRIB_RELEASE="), `"`)
+			}
+		}
+
+		if distroID != "" {
+			return normalizeDistroName(distroID), release, nil
+		}
+	}
+
+	// Fallback to checking specific release files
+	releaseFiles := map[string]string{
+		"/etc/redhat-release":    "rhel",
+		"/etc/centos-release":    "centos",
+		"/etc/rocky-release":     "rocky",
+		"/etc/almalinux-release": "almalinux",
+	}
+
+	for file, distro := range releaseFiles {
+		if content, err := os.ReadFile(file); err == nil {
+			// Extract version number from release file
+			re := regexp.MustCompile(`(\d+)\.(\d+)`)
+			matches := re.FindStringSubmatch(string(content))
+			if len(matches) >= 2 {
+				version := matches[1] + "." + matches[2]
+				return distro, version, nil
+			}
+			return distro, "", nil
+		}
+	}
+
+	return "", "", fmt.Errorf("unable to detect Linux distribution")
+}
+
+// normalizeDistroName normalizes distribution names to standard format
+func normalizeDistroName(name string) string {
+	name = strings.ToLower(name)
+	switch name {
+	case "ubuntu":
+		return "ubuntu"
+	case "rhel", "redhat":
+		return "rhel"
+	case "centos":
+		return "centos"
+	case "rocky":
+		return "rocky"
+	case "almalinux", "alma":
+		return "almalinux"
+	default:
+		return name
+	}
+}
+
+func (o *OpenvinoProvider) UpgradeEngine() error {
+	// Get current engine version
+	var resp types.EngineVersionResponse
+	verResp, err := o.GetVersion(context.Background(), &resp)
+	if err != nil {
+		logger.EngineLogger.Error("[Ollama] GetVersion failed: " + err.Error())
+		return fmt.Errorf("get current engine version failed: %v", err)
+	}
+	currentVersion := verResp.Version
+	minVersion := OpenvinoMinVersion
+	slog.Info("Openvino version check", "current_version", currentVersion, "min_version", minVersion)
+
+	// Check if upgrade is needed
+	if VersionCompare(currentVersion, minVersion) >= 0 {
+		logger.EngineLogger.Info("[OpenVINO] Current version is up-to-date, no upgrade needed.")
+		return nil
+	}
+
+	logger.EngineLogger.Info(fmt.Sprintf("[OpenVINO] Upgrading engine from %s to %s", currentVersion, minVersion))
+
+	// Stop the engine and stop keeping alive
+	if err := o.StopEngine(); err != nil {
+		logger.EngineLogger.Error("[OpenVINO] StopEngine failed: " + err.Error())
+		return fmt.Errorf("stop engine failed: %v", err)
+	}
+	o.SetOperateStatus(0)
+
+	// Install new version
+	if err := o.InstallEngine(true); err != nil {
+		logger.EngineLogger.Error("[OpenVINO] InstallEngine failed: " + err.Error())
+		return fmt.Errorf("install engine failed: %v", err)
+	}
+	defer o.SetOperateStatus(1) // keep alive
+
+	logger.EngineLogger.Info("[OpenVINO] Engine upgrade completed.")
+	return nil
+}
+
+var OpenvinoOperateStatus = 1
+
+func (o *OpenvinoProvider) GetOperateStatus() int {
+	return OpenvinoOperateStatus
+}
+
+func (o *OpenvinoProvider) SetOperateStatus(status int) {
+	OpenvinoOperateStatus = status
+	slog.Info("Openvino operate status set to", "status", OpenvinoOperateStatus)
 }

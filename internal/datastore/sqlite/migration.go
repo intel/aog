@@ -3,9 +3,10 @@ package sqlite
 import (
 	"context"
 	"fmt"
-	"github.com/intel/aog/internal/datastore"
 	"reflect"
 	"strconv"
+
+	"github.com/intel/aog/internal/datastore"
 
 	"github.com/intel/aog/internal/logger"
 	"github.com/intel/aog/internal/types"
@@ -37,7 +38,7 @@ func RegisterMigration(m Migration) {
 // MigrateToLatest
 func MigrateToLatest(vm VersionManager, ds *SQLite) error {
 	initMigrationList()
-	if len(migrationList) == 0 {
+	if len(migrationList) != 0 {
 		err := ds.Init()
 		if err != nil {
 			return err
@@ -82,11 +83,13 @@ func MigrateToLatest(vm VersionManager, ds *SQLite) error {
 }
 
 // MigrationV1 example
-type MigrationV1 struct{}
-type MigrationV2 struct{}
-type MigrationV3 struct{}
-type MigrationV4 struct{}
-type MigrationV5 struct{}
+type (
+	MigrationV1 struct{}
+	MigrationV2 struct{}
+	MigrationV3 struct{}
+	MigrationV4 struct{}
+	MigrationV5 struct{}
+)
 
 func (m *MigrationV1) GetModifyFields(tableName string) map[string]string {
 	return map[string]string{}
@@ -202,6 +205,7 @@ func (m *MigrationV5) GetModifyFields(tableName string) map[string]string {
 func (m *MigrationV5) Version() string {
 	return "v0.5"
 }
+
 func (m *MigrationV5) ExtraDataOperation(ds *SQLite) error {
 	return nil
 }
@@ -263,12 +267,12 @@ func Migrate(ds *SQLite, m Migration) error {
 				}
 				var oldDataRows []map[string]interface{}
 				tx.Table(tableName).Find(&oldDataRows)
-				mDataList := make([]*types.ServiceProvider, 0)
+				mDataList := make([]*types.Model, 0)
 
 				for _, oldDataRow := range oldDataRows {
-					sp := &types.ServiceProvider{}
-					setField(sp, oldDataRow, modifyFields)
-					mDataList = append(mDataList, sp)
+					model := &types.Model{}
+					setField(m, oldDataRow, modifyFields)
+					mDataList = append(mDataList, model)
 				}
 				// rename old table name
 				err := tx.Migrator().RenameTable(tableName, tableName+"_old")
@@ -301,11 +305,11 @@ func Migrate(ds *SQLite, m Migration) error {
 				}
 				var oldDataRows []map[string]interface{}
 				tx.Table(tableName).Find(&oldDataRows)
-				vDataList := make([]*types.ServiceProvider, 0)
+				vDataList := make([]*types.VersionUpdateRecord, 0)
 				for _, oldDataRow := range oldDataRows {
-					sp := &types.ServiceProvider{}
-					setField(sp, oldDataRow, modifyFields)
-					vDataList = append(vDataList, sp)
+					vu := &types.VersionUpdateRecord{}
+					setField(vu, oldDataRow, modifyFields)
+					vDataList = append(vDataList, vu)
 				}
 				// rename old table name
 				err := tx.Migrator().RenameTable(tableName, tableName+"_old")
@@ -338,11 +342,11 @@ func Migrate(ds *SQLite, m Migration) error {
 				}
 				var oldDataRows []map[string]interface{}
 				tx.Table(tableName).Find(&oldDataRows)
-				serviceDataList := make([]*types.ServiceProvider, 0)
+				serviceDataList := make([]*types.Service, 0)
 				for _, oldDataRow := range oldDataRows {
-					sp := &types.ServiceProvider{}
-					setField(sp, oldDataRow, modifyFields)
-					serviceDataList = append(serviceDataList, sp)
+					service := &types.Service{}
+					setField(service, oldDataRow, modifyFields)
+					serviceDataList = append(serviceDataList, service)
 				}
 				// rename old table name
 				err := tx.Migrator().RenameTable(tableName, tableName+"_old")

@@ -31,9 +31,15 @@ import (
 // NewDeleteProviderCommand creates the delete provider command
 func NewDeleteProviderCommand() *cobra.Command {
 	deleteProviderCmd := &cobra.Command{
-		Use:    "service_provider <provider_name>",
-		Short:  "Remove a provider for a specific service",
-		Long:   `Remove a provider for a specific service with optional remote flag.`,
+		Use:   "service_provider <provider_name>",
+		Short: "Remove service providers",
+		Long: `Remove service providers and their configurations.
+		
+Examples:
+  # Remove a specific provider
+  aog delete service_provider local_ollama_chat
+
+Warning: Removing a provider will also remove all associated models and configurations.`,
 		Args:   cobra.ExactArgs(1),
 		PreRun: common.CheckAOGServer,
 		Run: func(cmd *cobra.Command, args []string) {
@@ -67,5 +73,5 @@ func DeleteProviderHandler(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	fmt.Println("Delete service provider success!")
+	fmt.Println("✅ Service provider deleted successfully!")
 }
