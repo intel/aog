@@ -253,15 +253,16 @@ func (ds *SQLite) Put(ctx context.Context, entity datastore.Entity) error {
 
 		updateMap := make(map[string]interface{})
 		for i, field := range fields {
-			putFlag := true
+			if field == "id" || field == "created_at" {
+				continue
+			}
 			switch values[i].(type) {
 			case string:
-				putFlag = values[i].(string) != ""
+				if values[i].(string) == "" {
+					continue
+				}
 			}
-			if putFlag {
-				updateMap[field] = values[i]
-			}
-
+			updateMap[field] = values[i]
 		}
 		updateMap["updated_at"] = time.Now()
 
@@ -371,9 +372,6 @@ func (ds *SQLite) List(ctx context.Context, entity datastore.Entity, options *da
 	list := make([]datastore.Entity, 0)
 	rows, err := db.Rows()
 	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, datastore.ErrRecordNotExist
-		}
 		return nil, datastore.NewDBError(err)
 	}
 	defer func() { _ = rows.Close() }()
