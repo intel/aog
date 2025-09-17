@@ -105,9 +105,6 @@ func (m *BaseProcessManager) Start(ctx context.Context, config *StartConfig) err
 	m.status = ProcessStatusRunning
 	logger.EngineLogger.Info(fmt.Sprintf("[Process] %s started successfully with PID: %d", m.name, handle.PID))
 
-	// Monitor process in background
-	go m.monitorProcess()
-
 	return nil
 }
 
@@ -230,36 +227,5 @@ func (m *BaseProcessManager) waitForHealth(ctx context.Context, timeout time.Dur
 			}
 			// Continue checking
 		}
-	}
-}
-
-// monitorProcess monitors the process and updates status
-func (m *BaseProcessManager) monitorProcess() {
-	for {
-		time.Sleep(5 * time.Second)
-
-		m.mu.Lock()
-		if m.handle == nil || m.status == ProcessStatusStopped {
-			m.mu.Unlock()
-			break
-		}
-
-		// Check if process is still running
-		if !m.platformImpl.IsProcessRunning(m.handle) {
-			logger.EngineLogger.Warn(fmt.Sprintf("[Process] %s (PID: %d) has stopped unexpectedly", m.name, m.handle.PID))
-			m.handle = nil
-			m.status = ProcessStatusStopped
-			m.mu.Unlock()
-			break
-		}
-
-		// Optional: Run health check if available
-		if m.healthCheck != nil {
-			if err := m.healthCheck(); err != nil {
-				logger.EngineLogger.Warn(fmt.Sprintf("[Process] %s health check failed: %v", m.name, err))
-			}
-		}
-
-		m.mu.Unlock()
 	}
 }

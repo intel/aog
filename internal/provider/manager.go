@@ -138,7 +138,7 @@ func (m *engineManager) startSingleEngine(engineName string, engineProvider Mode
 		return err
 	}
 
-	// 引擎启动成功后执行升级操作（与旧逻辑保持一致）
+	// 引擎启动成功后执行升级操作
 	logger.EngineLogger.Info(fmt.Sprintf("Upgrading engine %s...", engineName))
 	engineProvider.UpgradeEngine() // UpgradeEngine通常没有返回值，或者忽略错误
 	logger.EngineLogger.Info(fmt.Sprintf("Engine %s upgraded successfully", engineName))
@@ -210,7 +210,7 @@ func (m *engineManager) StartKeepAlive() {
 	}
 
 	m.keepAliveCtx, m.keepAliveCancel = context.WithCancel(context.Background())
-	m.keepAliveTicker = time.NewTicker(60 * time.Second) // 每60秒检查一次，与旧逻辑保持一致
+	m.keepAliveTicker = time.NewTicker(60 * time.Second) // 每60秒检查一次
 	m.keepAliveEnabled = true
 
 	logger.EngineLogger.Info("Starting engine keep-alive monitoring...")
@@ -246,7 +246,6 @@ func (m *engineManager) StopKeepAlive() {
 }
 
 // runKeepAliveMonitor runs the engine keep-alive monitoring loop
-// 基于旧版本的ListenModelEngineHealth逻辑，保持一致的处理流程
 func (m *engineManager) runKeepAliveMonitor() {
 	defer func() {
 		if r := recover(); r != nil {
@@ -268,7 +267,6 @@ func (m *engineManager) runKeepAliveMonitor() {
 }
 
 // performKeepAliveCheck performs the actual keep-alive check
-// 复制旧版本ListenModelEngineHealth的核心逻辑
 func (m *engineManager) performKeepAliveCheck() {
 	ds := datastore.GetDefaultDatastore()
 	if ds == nil {
@@ -291,7 +289,7 @@ func (m *engineManager) performKeepAliveCheck() {
 		return
 	}
 
-	// 获取需要监控的引擎列表（与旧逻辑保持一致）
+	// 获取需要监控的引擎列表
 	engineList := make([]string, 0)
 	for _, item := range list {
 		model := item.(*types.Model)
@@ -319,7 +317,6 @@ func (m *engineManager) performKeepAliveCheck() {
 }
 
 // checkAndRestartEngine checks engine health and restarts if necessary
-// 基于旧版本的引擎检查和重启逻辑，完全复制旧的处理流程
 func (m *engineManager) checkAndRestartEngine(engineName string) {
 	m.mu.RLock()
 	engineProvider := m.engines[engineName]
@@ -330,25 +327,25 @@ func (m *engineManager) checkAndRestartEngine(engineName string) {
 		return
 	}
 
-	// 检查引擎是否正在使用中（与旧逻辑保持一致）
+	// 检查引擎是否正在使用中
 	if engineProvider.GetOperateStatus != nil && engineProvider.GetOperateStatus() == 0 {
-		// 引擎正在使用中，跳过保活检查（stop keeping alive if being used）
+		// 引擎正在使用中，跳过保活检查
 		return
 	}
 
-	// 进行健康检查（与旧逻辑保持一致）
+	// 进行健康检查
 	err := engineProvider.HealthCheck()
 	if err != nil {
 		logger.EngineLogger.Error(fmt.Sprintf("Engine %s health check failed: %v", engineName, err))
 
-		// 健康检查失败，先初始化环境（与旧逻辑保持一致）
+		// 健康检查失败，先初始化环境
 		err = engineProvider.InitEnv()
 		if err != nil {
 			logger.EngineLogger.Error(fmt.Sprintf("Engine %s init env failed: %v", engineName, err))
 			return
 		}
 
-		// 重启引擎（使用daemon模式，与旧逻辑保持一致）
+		// 重启引擎（使用daemon模式）
 		err = engineProvider.StartEngine(types.EngineStartModeDaemon)
 		if err != nil {
 			logger.EngineLogger.Error(fmt.Sprintf("Failed to restart engine %s: %v", engineName, err))
@@ -357,7 +354,7 @@ func (m *engineManager) checkAndRestartEngine(engineName string) {
 
 		logger.EngineLogger.Info(fmt.Sprintf("Successfully restarted engine %s", engineName))
 
-		// 重启成功后执行升级操作（与旧逻辑保持一致）
+		// 重启成功后执行升级操作
 		logger.EngineLogger.Info(fmt.Sprintf("Upgrading restarted engine %s...", engineName))
 		engineProvider.UpgradeEngine() // UpgradeEngine通常没有返回值，或者忽略错误
 		logger.EngineLogger.Info(fmt.Sprintf("Restarted engine %s upgraded successfully", engineName))

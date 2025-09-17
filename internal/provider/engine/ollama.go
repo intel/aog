@@ -273,12 +273,15 @@ func (o *OllamaProvider) GetConfig() *types.EngineRecommendConfig {
 	execPath := ""
 	downloadUrl := ""
 	enginePath := fmt.Sprintf("%s/%s", dataDir, "engine/ollama")
+
+	gpuType := utils.DetectGpuModel()
+
 	switch runtime.GOOS {
 	case "windows":
 		execFile = "ollama.exe"
 		execPath = fmt.Sprintf("%s/%s", userDir, "ollama")
 
-		switch utils.DetectGpuModel() {
+		switch gpuType {
 		case types.GPUTypeNvidia + "," + types.GPUTypeAmd:
 			downloadUrl = WindowsAllGPUURL
 		case types.GPUTypeNvidia:
@@ -297,8 +300,7 @@ func (o *OllamaProvider) GetConfig() *types.EngineRecommendConfig {
 		execPath = "/opt/aog/engine/ollama"
 		enginePath = filepath.Join(dataDir, "engine/ollama")
 
-		// Determine GPU type and select appropriate download URL
-		gpuType := utils.DetectGpuModel()
+		// Select appropriate download URL based on GPU type
 		switch gpuType {
 		case types.GPUTypeNvidia:
 			if arch == "arm64" {
@@ -319,7 +321,12 @@ func (o *OllamaProvider) GetConfig() *types.EngineRecommendConfig {
 				downloadUrl = LinuxNvidiaURL // CUDA for AMD64
 			}
 		case types.GPUTypeIntelArc:
-			downloadUrl = LinuxIntelArcURL
+			// downloadUrl = LinuxIntelArcURL
+			if arch == "arm64" {
+				downloadUrl = LinuxARMBaseURL // Base for ARM64
+			} else {
+				downloadUrl = LinuxBaseURL // Base for AMD64
+			}
 		case types.GPUTypeNone:
 			if arch == "arm64" {
 				downloadUrl = LinuxARMBaseURL // Base for ARM64
@@ -353,6 +360,7 @@ func (o *OllamaProvider) GetConfig() *types.EngineRecommendConfig {
 		DownloadPath:   downloadPath,
 		ExecFile:       execFile,
 		ExecPath:       execPath,
+		DeviceType:     gpuType,
 	}
 }
 
@@ -397,7 +405,7 @@ func (o *OllamaProvider) CheckEngine() bool {
 
 // checkEngineWindows Windows platform check logic
 func (o *OllamaProvider) checkEngineWindows() bool {
-	isIntel := utils.IpexOllamaSupportGPUStatus()
+	isIntel := o.EngineConfig.DeviceType == types.GPUTypeIntelArc
 
 	if isIntel {
 		// Check Intel chip's ipex-llm batch file
@@ -421,31 +429,31 @@ func (o *OllamaProvider) checkEngineWindows() bool {
 
 // checkEngineLinux Linux platform check logic
 func (o *OllamaProvider) checkEngineLinux() bool {
-	isIntel := utils.IpexOllamaSupportGPUStatus()
+	// isIntel := o.EngineConfig.DeviceType == types.GPUTypeIntelArc
 
-	if isIntel {
-		// Check Intel chip's ipex-llm script file
-		scriptFile := filepath.Join(o.EngineConfig.ExecPath, IpexLlamaDir, OllamaStartShell)
-		if _, err := os.Stat(scriptFile); err != nil {
-			return false
-		}
-		// Check if script file has execute permissions
-		fileInfo, err := os.Stat(scriptFile)
-		if err != nil {
-			return false
-		}
-		return fileInfo.Mode()&0o111 != 0 // Check execute permissions
-	} else {
-		// Check non-Intel chip's standard ollama executable
-		execFile := filepath.Join(o.EngineConfig.ExecPath, "ollama/bin", o.EngineConfig.ExecFile)
-		if _, err := os.Stat(execFile); err != nil {
-			return false
-		}
-		// Try executing -h command to verify executability
-		cmd := exec.Command(execFile, "-h")
-		err := cmd.Run()
-		return err == nil
+	// if isIntel {
+	// 	// Check Intel chip's ipex-llm script file
+	// 	scriptFile := filepath.Join(o.EngineConfig.ExecPath, "ollama", OllamaStartShell)
+	// 	if _, err := os.Stat(scriptFile); err != nil {
+	// 		return false
+	// 	}
+	// 	// Check if script file has execute permissions
+	// 	fileInfo, err := os.Stat(scriptFile)
+	// 	if err != nil {
+	// 		return false
+	// 	}
+	// 	return fileInfo.Mode()&0o111 != 0 // Check execute permissions
+	// } else {
+	// Check non-Intel chip's standard ollama executable
+	execFile := filepath.Join(o.EngineConfig.ExecPath, "ollama/bin", o.EngineConfig.ExecFile)
+	if _, err := os.Stat(execFile); err != nil {
+		return false
 	}
+	// Try executing -h command to verify executability
+	cmd := exec.Command(execFile, "-h")
+	err := cmd.Run()
+	return err == nil
+	// }
 }
 
 // checkEngineMacOS macOS platform check logic
@@ -615,12 +623,45 @@ func (o *OllamaProvider) InitEnv() error {
 		logger.EngineLogger.Error("[Ollama] failed to set OLLAMA_ORIGIN: " + err.Error())
 		return fmt.Errorf("failed to set OLLAMA_ORIGIN: %w", err)
 	}
+
 	if runtime.GOOS == "linux" {
 		err = os.Setenv("OLLAMA_MODELS", OllamaModelDirLinux)
 		if err != nil {
 			logger.EngineLogger.Error("[Ollama] failed to set OLLAMA_MODELS: " + err.Error())
 			return fmt.Errorf("failed to set OLLAMA_MODELS: %w", err)
 		}
+
+		// Set Intel Arc specific environment variables
+		//if o.EngineConfig.DeviceType == types.GPUTypeIntelArc {
+		//	logger.EngineLogger.Info("[Ollama] Setting Intel Arc specific environment variables")
+		//
+		//	if err := os.Setenv("OLLAMA_NUM_GPU", "999"); err != nil {
+		//		logger.EngineLogger.Error("[Ollama] failed to set OLLAMA_NUM_GPU: " + err.Error())
+		//		return fmt.Errorf("failed to set OLLAMA_NUM_GPU: %w", err)
+		//	}
+		//
+		//	if err := os.Setenv("no_proxy", "localhost,127.0.0.1"); err != nil {
+		//		logger.EngineLogger.Error("[Ollama] failed to set no_proxy: " + err.Error())
+		//		return fmt.Errorf("failed to set no_proxy: %w", err)
+		//	}
+		//
+		//	if err := os.Setenv("ZES_ENABLE_SYSMAN", "1"); err != nil {
+		//		logger.EngineLogger.Error("[Ollama] failed to set ZES_ENABLE_SYSMAN: " + err.Error())
+		//		return fmt.Errorf("failed to set ZES_ENABLE_SYSMAN: %w", err)
+		//	}
+		//
+		//	if err := os.Setenv("OLLAMA_KEEP_ALIVE", "10m"); err != nil {
+		//		logger.EngineLogger.Error("[Ollama] failed to set OLLAMA_KEEP_ALIVE: " + err.Error())
+		//		return fmt.Errorf("failed to set OLLAMA_KEEP_ALIVE: %w", err)
+		//	}
+		//
+		//	if err := os.Setenv("SYCL_PI_LEVEL_ZERO_USE_IMMEDIATE_COMMANDLISTS", "1"); err != nil {
+		//		logger.EngineLogger.Error("[Ollama] failed to set SYCL_PI_LEVEL_ZERO_USE_IMMEDIATE_COMMANDLISTS: " + err.Error())
+		//		return fmt.Errorf("failed to set SYCL_PI_LEVEL_ZERO_USE_IMMEDIATE_COMMANDLISTS: %w", err)
+		//	}
+		//
+		//	logger.EngineLogger.Info("[Ollama] Intel Arc environment variables set successfully")
+		//}
 	}
 	return nil
 }

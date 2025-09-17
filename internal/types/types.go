@@ -275,6 +275,7 @@ type EngineRecommendConfig struct {
 	EnginePath     string `json:"engine_path"`
 	ExecPath       string `json:"exec_path"`
 	ExecFile       string `json:"exec_file"`
+	DeviceType     string `json:"device_type"`
 }
 
 type PathDiskSizeInfo struct {

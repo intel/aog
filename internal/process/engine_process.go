@@ -86,8 +86,20 @@ func (m *EngineProcessManager) checkEngineExists() bool {
 // checkOllamaExists checks if Ollama engine exists
 func (m *EngineProcessManager) checkOllamaExists() bool {
 	switch runtime.GOOS {
-	case "windows", "linux":
+	case "windows":
 		execFile := filepath.Join(m.engineConfig.ExecPath, m.engineConfig.ExecFile)
+		if _, err := os.Stat(execFile); err != nil {
+			logger.EngineLogger.Info(fmt.Sprintf("[Debug] Ollama not found at %s: %v", execFile, err))
+			return false
+		}
+		return true
+	case "linux":
+		var execFile string
+		//if m.engineConfig.DeviceType == types.GPUTypeIntelArc {
+		//	execFile = filepath.Join(m.engineConfig.ExecPath, "ollama", m.engineConfig.ExecFile)
+		//} else {
+		execFile = filepath.Join(m.engineConfig.ExecPath, "ollama/bin", m.engineConfig.ExecFile)
+		//}
 		if _, err := os.Stat(execFile); err != nil {
 			logger.EngineLogger.Info(fmt.Sprintf("[Debug] Ollama not found at %s: %v", execFile, err))
 			return false
@@ -166,13 +178,22 @@ func (m *EngineProcessManager) buildOllamaConfig(mode string, healthCheck func()
 		return nil, fmt.Errorf("engine config is nil")
 	}
 
+	// Build environment variables directly using config information
 	var env []string
-
-	// Set environment variables
 	env = append(env, fmt.Sprintf("OLLAMA_HOST=%s", m.engineConfig.Host))
 	env = append(env, fmt.Sprintf("OLLAMA_ORIGIN=%s", m.engineConfig.Origin))
+
 	if runtime.GOOS == "linux" {
 		env = append(env, "OLLAMA_MODELS=/var/lib/aog/engine/ollama/models")
+
+		// Intel Arc specific environment variables
+		//if m.engineConfig.DeviceType == types.GPUTypeIntelArc {
+		//	env = append(env, "OLLAMA_NUM_GPU=999")
+		//	env = append(env, "no_proxy=localhost,127.0.0.1")
+		//	env = append(env, "ZES_ENABLE_SYSMAN=1")
+		//	env = append(env, "OLLAMA_KEEP_ALIVE=10m")
+		//	env = append(env, "SYCL_PI_LEVEL_ZERO_USE_IMMEDIATE_COMMANDLISTS=1")
+		//}
 	}
 
 	switch runtime.GOOS {
@@ -215,8 +236,19 @@ func (m *EngineProcessManager) buildOllamaWindowsConfig(mode string, healthCheck
 
 // buildOllamaLinuxConfig builds Linux-specific Ollama configuration
 func (m *EngineProcessManager) buildOllamaLinuxConfig(mode string, healthCheck func() error, env []string) (*StartConfig, error) {
-	execPath := filepath.Join(m.engineConfig.ExecPath, "ollama/bin", m.engineConfig.ExecFile)
-	args := []string{"serve"}
+	var execPath string
+	var args []string
+	var workDir string
+
+	//if m.engineConfig.DeviceType == types.GPUTypeIntelArc {
+	//	execPath = filepath.Join(m.engineConfig.ExecPath, "ollama", m.engineConfig.ExecFile)
+	//	args = []string{"serve"}
+	//	workDir = filepath.Join(m.engineConfig.ExecPath, "ollama")
+	//} else {
+	execPath = filepath.Join(m.engineConfig.ExecPath, "ollama/bin", m.engineConfig.ExecFile)
+	args = []string{"serve"}
+	workDir = m.engineConfig.ExecPath
+	//}
 
 	startMode := StartModeBackground
 	if mode == types.EngineStartModeStandard {
@@ -228,7 +260,7 @@ func (m *EngineProcessManager) buildOllamaLinuxConfig(mode string, healthCheck f
 		ExecPath:    execPath,
 		Args:        args,
 		Env:         env,
-		WorkDir:     m.engineConfig.ExecPath,
+		WorkDir:     workDir,
 		Mode:        startMode,
 		Timeout:     60 * time.Second,
 		HealthCheck: healthCheck,
