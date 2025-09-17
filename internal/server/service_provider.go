@@ -150,6 +150,8 @@ func (s *ServiceProviderImpl) CreateServiceProvider(ctx context.Context, request
 				m := new(types.Model)
 				m.ModelName = mName
 				m.ProviderName = request.ProviderName
+				m.ServiceName = request.ServiceName
+				m.ServiceSource = request.ServiceSource
 				err = s.Ds.Get(ctx, m)
 				if err != nil && !errors.Is(err, datastore.ErrEntityInvalid) {
 					// todo debug log output
@@ -233,8 +235,10 @@ func (s *ServiceProviderImpl) CreateServiceProvider(ctx context.Context, request
 			generateSp.Properties = request.Properties
 			generateSp.CreatedAt = time.Now()
 			generateSp.UpdatedAt = time.Now()
+			if err := ds.Put(ctx, generateSp); err != nil {
+				return nil, err
+			}
 		}
-
 	}
 
 	return &dto.CreateServiceProviderResponse{

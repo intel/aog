@@ -169,9 +169,9 @@ func (t *Model) Index() map[string]interface{} {
 		index["provider_name"] = t.ProviderName
 	}
 
-	//if t.ServiceName != "" {
-	//	index["service_name"] = t.ServiceName
-	//}
+	if t.ServiceName != "" {
+		index["service_name"] = t.ServiceName
+	}
 
 	return index
 }

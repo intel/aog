@@ -365,12 +365,12 @@ func (s *ModelImpl) CreateModelStream(ctx context.Context, request *dto.CreateMo
 
 				if resp.Completed > 0 || resp.Status == "success" {
 					if resp.Status == "success" {
-						logger.LogicLogger.Error("[Pull Model Stream] accept success label")
+						logger.LogicLogger.Info("[Pull Model Stream] accept success label")
 						m.Status = "downloaded"
 						err = ds.Put(ctx, m)
 						if err != nil {
 							newErrorCh <- err
-							logger.LogicLogger.Error("[Pull Model Stream] put model status failed")
+							logger.LogicLogger.Info("[Pull Model Stream] put model status failed")
 							return
 						}
 						if service.Status != 1 {
@@ -382,7 +382,7 @@ func (s *ModelImpl) CreateModelStream(ctx context.Context, request *dto.CreateMo
 							newErrorCh <- err
 							return
 						}
-						logger.LogicLogger.Error("[Pull Model Stream] put model status success")
+						logger.LogicLogger.Info("[Pull Model Stream] put model status success")
 
 					}
 					newDataCh <- data

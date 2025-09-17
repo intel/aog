@@ -257,6 +257,10 @@ func (ss *BasicServiceScheduler) dispatch(task *ServiceTask) (*types.ServiceTarg
 			SortBy: sortOption,
 		})
 		if err != nil {
+			logger.LogicLogger.Error("[Schedule] model list err", "error", err, "model", task.Request.Model)
+			return nil, err
+		}
+		if len(ms) == 0 {
 			logger.LogicLogger.Error("[Schedule] model not found", "error", err, "model", task.Request.Model)
 			return nil, bcode.ErrModelRecordNotFound
 		}
