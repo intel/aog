@@ -18,13 +18,14 @@ package server
 
 import (
 	"context"
-	"errors"
 	"fmt"
+
 	"sort"
 	"strings"
 
 	"github.com/intel/aog/internal/api/dto"
 	"github.com/intel/aog/internal/datastore"
+	"github.com/intel/aog/internal/logger"
 	"github.com/intel/aog/internal/schedule"
 	"github.com/intel/aog/internal/types"
 	"github.com/intel/aog/internal/utils/bcode"
@@ -114,9 +115,6 @@ func (c *ControlPanelImpl) GetSupportModelListCombine(ctx context.Context, reque
 	defaultIdx := -1
 
 	if request.ServiceSource == types.ServiceSourceLocal {
-		if request.Flavor != "" && request.Flavor != types.FlavorOllama {
-			return nil, errors.New(fmt.Sprintf("%s flavor is not local flavor", request.Flavor))
-		}
 		// 查全部
 		supportModelList, err := c.JDs.List(ctx, sm, options)
 		if err != nil {
@@ -220,11 +218,19 @@ func (c *ControlPanelImpl) GetSupportModelListCombine(ctx context.Context, reque
 			}
 			providerServiceDefaultInfo := schedule.GetProviderServiceDefaultInfo(smInfo.Flavor, smInfo.ServiceName)
 			authFields := []string{""}
-			if providerServiceDefaultInfo.AuthType == types.AuthTypeToken {
-				authFields = []string{"secret_id", "secret_key"}
-			} else if providerServiceDefaultInfo.AuthType == types.AuthTypeApiKey {
-				authFields = []string{"api_key"}
+
+			sp := &types.ServiceProvider{
+				ProviderName: providerName,
 			}
+			err = c.Ds.Get(context.Background(), sp)
+			if err == nil && sp.AuthKey != "" {
+				authFields = []string{sp.AuthKey}
+			}
+			// if providerServiceDefaultInfo.AuthType == types.AuthTypeToken {
+			// 	authFields = []string{"secret_id", "secret_key"}
+			// } else if providerServiceDefaultInfo.AuthType == types.AuthTypeApiKey {
+			// 	authFields = []string{"api_key"}
+			// }
 			modelData := dto.RecommendModelData{
 				Id:              smInfo.Id,
 				Name:            smInfo.Name,
@@ -319,7 +325,8 @@ func (c *ControlPanelImpl) SetDefaultModel(ctx context.Context, req *dto.SetDefa
 		model := v.(*types.Model)
 		if model.ModelName == req.ModelName {
 			if model.Status != "downloaded" {
-				return errors.New("model must be downloaded to set as default")
+				logger.LogicLogger.Error("[SetDefaultModel] model status is downloaded]", model.ModelName)
+				return bcode.ErrModelStatus
 			}
 			if model.IsDefault {
 				model.IsDefault = false
@@ -335,7 +342,8 @@ func (c *ControlPanelImpl) SetDefaultModel(ctx context.Context, req *dto.SetDefa
 		}
 	}
 	if !found {
-		return errors.New("model not found")
+		logger.LogicLogger.Error("[SetDefaultModel] model not found", req.ModelName)
+		return bcode.ErrModelRecordNotFound
 	}
 	return nil
 }
@@ -431,6 +439,7 @@ func (c *ControlPanelImpl) GetProductInfo(ctx context.Context) (*dto.GetProductI
 	}, nil
 }
 
+// Deprecated: GetModelkey is deprecated and may be removed in future versions.
 func (c *ControlPanelImpl) GetModelkey(ctx context.Context, req *dto.GetModelkeyRequest) (*dto.GetModelkeyResponse, error) {
 	// 构造查询条件
 	sp := &types.ServiceProvider{

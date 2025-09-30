@@ -33,8 +33,6 @@ import (
 // NewEditServiceCommand creates the edit service command
 func NewEditServiceCommand() *cobra.Command {
 	var hybridPolicy string
-	var remoteProvider string
-	var localProvider string
 
 	updateServiceCmd := &cobra.Command{
 		Use:   "service <service_name>",
@@ -52,8 +50,6 @@ Examples:
 		Run: func(cmd *cobra.Command, args []string) {
 			serviceName := args[0]
 			hybridPolicy, err := cmd.Flags().GetString("hybrid_policy")
-			remoteProvider, err := cmd.Flags().GetString("remote_provider")
-			localProvider, err := cmd.Flags().GetString("local_provider")
 			if err != nil {
 				fmt.Println("An error occurred while obtaining the hybrid_policy parameter:", err)
 				os.Exit(1)
@@ -70,13 +66,6 @@ Examples:
 			}
 			resp := bcode.Bcode{}
 
-			if remoteProvider != "" {
-				req.RemoteProvider = remoteProvider
-			}
-			if localProvider != "" {
-				req.LocalProvider = localProvider
-			}
-
 			c := config.NewAOGClient()
 			routerPath := fmt.Sprintf("/%s/%s/service", "aog", version.SpecVersion)
 
@@ -92,8 +81,6 @@ Examples:
 	}
 
 	updateServiceCmd.Flags().StringVar(&hybridPolicy, "hybrid_policy", "default", "Scheduling policy: default, always_local, or always_remote")
-	updateServiceCmd.Flags().StringVarP(&remoteProvider, "remote_provider", "", "", "Remote service provider name")
-	updateServiceCmd.Flags().StringVarP(&localProvider, "local_provider", "", "", "Local service provider name")
 
 	return updateServiceCmd
 }

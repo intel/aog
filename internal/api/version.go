@@ -1,111 +1,72 @@
 package api
 
 import (
-	"fmt"
-	"log/slog"
-	"net/http"
-	"os"
-	"path/filepath"
-	"runtime"
-
 	"github.com/gin-gonic/gin"
-	"github.com/intel/aog/config"
-	"github.com/intel/aog/internal/datastore"
-	"github.com/intel/aog/internal/process"
-	"github.com/intel/aog/internal/provider"
-	"github.com/intel/aog/internal/types"
-	"github.com/intel/aog/version"
+	"github.com/intel/aog/internal/api/dto"
+	"github.com/intel/aog/internal/logger"
+	"github.com/intel/aog/internal/utils/bcode"
+	"net/http"
 )
 
-func GetVersion(c *gin.Context) {
-	c.JSON(http.StatusOK, map[string]string{"version": version.AOGVersion, "spec_version": version.SpecVersion})
-}
+func (t *AOGCoreServer) GetVersion(c *gin.Context) {
+	logger.ApiLogger.Debug("[API] Get version request params:", c.Request.Body)
 
-func GetEngineVersion(c *gin.Context) {
 	ctx := c.Request.Context()
-	data := make(map[string]string)
-	for _, modelEngineName := range types.SupportModelEngine {
-		engine := provider.GetModelEngine(modelEngineName)
-		var respData types.EngineVersionResponse
-		resp, err := engine.GetVersion(ctx, &respData)
-		if err != nil {
-			data[modelEngineName] = "get version failed"
-			continue
-		}
-		data[modelEngineName] = resp.Version
-	}
-
-	c.JSON(http.StatusOK, data)
-}
-
-func UpdateAvailableHandler(c *gin.Context) {
-	ctx := c.Request.Context()
-	status, updateResp := version.IsNewVersionAvailable(ctx)
-	if status {
-		c.JSON(http.StatusOK, map[string]string{"message": fmt.Sprintf("Ollama version %s is ready to install", updateResp.UpdateVersion)})
-	} else {
-		c.JSON(http.StatusOK, map[string]string{"message": ""})
-	}
-}
-
-func UpdateHandler(c *gin.Context) {
-	// check and stop server if running
-	manager, err := process.GetAOGProcessManager()
+	resp, err := t.Health.HealthHeader(ctx)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, map[string]string{"message": err.Error()})
+		bcode.ReturnError(c, err)
 		return
 	}
 
-	if manager.IsProcessRunning() {
-		pidFilePath := filepath.Join(config.GlobalEnvironment.RootDir, "aog.pid")
-		if err := manager.StopProcessWithFallback(pidFilePath); err != nil {
-			c.JSON(http.StatusInternalServerError, map[string]string{"message": err.Error()})
-			return
-		}
-	}
-	// rm old version file
-	aogFileName := "aog.exe"
-	if runtime.GOOS != "windows" {
-		aogFileName = "aog"
-	}
-	aogFilePath := filepath.Join(config.GlobalEnvironment.RootDir, aogFileName)
-	err = os.Remove(aogFilePath)
-	if err != nil {
-		slog.Error("[Update] Failed to remove aog file %s: %v\n", aogFilePath, err)
-		c.JSON(http.StatusOK, map[string]string{"message": err.Error()})
-	}
-	// install new version
-	downloadPath := filepath.Join(config.GlobalEnvironment.RootDir, "download", aogFileName)
-	err = os.Rename(downloadPath, aogFilePath)
-	if err != nil {
-		slog.Error("[Update] Failed to rename aog file %s: %v\n", downloadPath, err)
-		c.JSON(http.StatusOK, map[string]string{"message": err.Error()})
-	}
-	// start server
-	if err := manager.StartProcessDaemon(); err != nil {
-		slog.Error("[Update] Failed to start AOG server: %v", err)
-		c.JSON(http.StatusInternalServerError, map[string]string{"message": err.Error()})
+	logger.ApiLogger.Debug("[API] Get server health response:", resp)
+	c.JSON(http.StatusOK, resp)
+}
+
+func (t *AOGCoreServer) GetEngineVersion(c *gin.Context) {
+	logger.ApiLogger.Debug("[API] Get engine server health request params:", c.Request.Body)
+	request := new(dto.GetEngineVersionRequest)
+	if err := c.Bind(request); err != nil {
+		bcode.ReturnError(c, bcode.ErrModelBadRequest)
 		return
 	}
-	ds := datastore.GetDefaultDatastore()
+
+	if err := validate.Struct(request); err != nil {
+		bcode.ReturnError(c, err)
+		return
+	}
 	ctx := c.Request.Context()
-	vr := &types.VersionUpdateRecord{}
-	sortOption := []datastore.SortOption{
-		{Key: "created_at", Order: -1},
-	}
-	versionRecoreds, err := ds.List(ctx, vr, &datastore.ListOptions{SortBy: sortOption})
+	resp, err := t.Version.GetEngineVersion(ctx, request)
 	if err != nil {
-		slog.Error("[Update] Failed to list versions: %v\n", err)
-		c.JSON(http.StatusOK, map[string]string{"message": err.Error()})
+		bcode.ReturnError(c, err)
+		return
 	}
-	versionRecord := versionRecoreds[0].(*types.VersionUpdateRecord)
-	if versionRecord.Status == types.VersionRecordStatusInstalled {
-		versionRecord.Status = types.VersionRecordStatusUpdated
-	}
-	err = ds.Put(ctx, versionRecord)
+
+	logger.ApiLogger.Debug("[API] Get engine server health response:", resp)
+	c.JSON(http.StatusOK, resp)
+}
+
+func (t *AOGCoreServer) GetUpdateAvailableStatus(c *gin.Context) {
+	ctx := c.Request.Context()
+	resp, err := t.Version.UpdateAvailableHandler(ctx)
 	if err != nil {
-		slog.Error("[Update] Failed to update versions: %v\n", err)
-		c.JSON(http.StatusOK, map[string]string{"message": err.Error()})
+		bcode.ReturnError(c, err)
+		return
 	}
-	c.JSON(http.StatusOK, map[string]string{"message": ""})
+
+	logger.ApiLogger.Debug("[API] Get update available status response:", resp)
+	c.JSON(http.StatusOK, resp)
+}
+
+func (t *AOGCoreServer) UpdateHandler(c *gin.Context) {
+	logger.ApiLogger.Debug("[API] Update AOG version params:", c.Request.Body)
+	ctx := c.Request.Context()
+	resp, err := t.Version.UpdateHandler(ctx)
+	if err != nil {
+		bcode.ReturnError(c, err)
+		return
+	}
+
+	logger.ApiLogger.Debug("[API] Update AOG version response:", resp)
+	c.JSON(http.StatusOK, resp)
+
 }

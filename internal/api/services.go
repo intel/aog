@@ -61,7 +61,8 @@ func (t *AOGCoreServer) UpdateAIGCService(c *gin.Context) {
 		return
 	}
 
-	if err := validate.Struct(request); err != nil {
+	if err := ValidateAndSetDefaults(request); err != nil {
+		logger.ApiLogger.Warn("[API] UpdateAIGCService validation failed:", err)
 		bcode.ReturnError(c, err)
 		return
 	}
@@ -90,7 +91,8 @@ func (t *AOGCoreServer) GetAIGCServices(c *gin.Context) {
 		}
 	}
 
-	if err := validate.Struct(request); err != nil {
+	if err := ValidateAndSetDefaults(request); err != nil {
+		logger.ApiLogger.Warn("[API] GetAIGCServices validation failed:", err)
 		bcode.ReturnError(c, err)
 		return
 	}
@@ -114,7 +116,8 @@ func (t *AOGCoreServer) ExportService(c *gin.Context) {
 		return
 	}
 
-	if err := validate.Struct(request); err != nil {
+	if err := ValidateAndSetDefaults(request); err != nil {
+		logger.ApiLogger.Warn("[API] ExportService validation failed:", err)
 		bcode.ReturnError(c, err)
 		return
 	}

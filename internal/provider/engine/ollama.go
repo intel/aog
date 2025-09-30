@@ -169,7 +169,7 @@ func (o *OllamaProvider) StopEngine() error {
 	// First try to unload running models gracefully
 	runningModels, err := o.GetRunningModels(ctx)
 	if err == nil {
-		runningModelList := []string{}
+		var runningModelList []string
 		for _, model := range runningModels.Models {
 			runningModelList = append(runningModelList, model.Name)
 		}
@@ -182,6 +182,11 @@ func (o *OllamaProvider) StopEngine() error {
 		}
 	}
 
+	// todo check running model  Ensure that the model is completely unloaded
+	//for {
+	//
+	//}
+
 	// Use new process manager if available
 	if o.processManager != nil {
 		return o.processManager.StopEngine()
@@ -193,50 +198,6 @@ func (o *OllamaProvider) StopEngine() error {
 // SetProcessManager sets the process manager for the provider
 func (o *OllamaProvider) SetProcessManager(pm *process.EngineProcessManager) {
 	o.processManager = pm
-}
-
-// stopEngineOldWay fallback to old PID-based stopping method
-func (o *OllamaProvider) stopEngineOldWay() error {
-	rootPath, err := utils.GetAOGDataDir()
-	if err != nil {
-		logger.EngineLogger.Error("[Ollama] failed get aog dir: " + err.Error())
-		return fmt.Errorf("failed get aog dir: %v", err)
-	}
-	pidFile := fmt.Sprintf("%s/ollama.pid", rootPath)
-	if _, err := os.Stat(pidFile); os.IsNotExist(err) {
-		logger.EngineLogger.Info("[Ollama] Stop ollama not found pidfile: " + pidFile)
-		return nil
-	}
-
-	pidData, err := os.ReadFile(pidFile)
-	if err != nil {
-		logger.EngineLogger.Error("[Ollama] failed to read pid file: " + err.Error())
-		return fmt.Errorf("failed to read pid file: %v", err)
-	}
-
-	pid, err := strconv.Atoi(string(pidData))
-	if err != nil {
-		logger.EngineLogger.Error("[Ollama] invalid pid format: " + err.Error())
-		return fmt.Errorf("invalid pid format: %v", err)
-	}
-
-	proc, err := os.FindProcess(pid)
-	if err != nil {
-		logger.EngineLogger.Error("[Ollama] failed to find process: " + err.Error())
-		return fmt.Errorf("failed to find process: %v", err)
-	}
-
-	if err := proc.Kill(); err != nil {
-		logger.EngineLogger.Error("[Ollama] failed to kill process: " + err.Error())
-		return fmt.Errorf("failed to kill process: %v", err)
-	}
-
-	if err := os.Remove(pidFile); err != nil {
-		logger.EngineLogger.Error("[Ollama] failed to remove pid file: " + err.Error())
-		return fmt.Errorf("failed to remove pid file: %v", err)
-	}
-
-	return nil
 }
 
 func (o *OllamaProvider) GetConfig() *types.EngineRecommendConfig {
@@ -671,8 +632,8 @@ func (o *OllamaProvider) PullModel(ctx context.Context, req *types.PullModelRequ
 
 	c := o.GetDefaultClient()
 	ctx, cancel := context.WithCancel(ctx)
-	modelArray := append(client.ModelClientMap[req.Model], cancel)
-	client.ModelClientMap[req.Model] = modelArray
+	modelArray := append(client.ModelClientMap["ollama_"+req.Model], cancel)
+	client.ModelClientMap["ollama_"+req.Model] = modelArray
 
 	var resp types.ProgressResponse
 	if err := c.Do(ctx, http.MethodPost, "/api/pull", req, &resp); err != nil {
@@ -689,8 +650,8 @@ func (o *OllamaProvider) PullModelStream(ctx context.Context, req *types.PullMod
 
 	c := o.GetDefaultClient()
 	ctx, cancel := context.WithCancel(ctx)
-	modelArray := append(client.ModelClientMap[req.Model], cancel)
-	client.ModelClientMap[req.Model] = modelArray
+	modelArray := append(client.ModelClientMap["ollama_"+req.Model], cancel)
+	client.ModelClientMap["ollama_"+req.Model] = modelArray
 	reqHeader := make(map[string]string)
 	reqHeader["Content-Type"] = "application/json"
 	reqHeader["Accept"] = "application/json"

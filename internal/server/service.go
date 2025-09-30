@@ -124,7 +124,7 @@ func (s *AIGCServiceImpl) createRemoteService(ctx context.Context, request *dto.
 			logger.LogicLogger.Error("Add model error: %s", err.Error())
 			return bcode.ErrAddModel
 		}
-		if err := createRelatedModels(ctx, s.Ds, sp, m, service, request.SkipModelFlag); err != nil {
+		if err := createRelatedDBData(ctx, s.Ds, sp, m, service); err != nil {
 			return err
 		}
 
@@ -435,13 +435,6 @@ func (s *AIGCServiceImpl) UpdateAIGCService(ctx context.Context, request *dto.Up
 	if err != nil {
 		return nil, bcode.ErrServiceRecordNotFound
 	}
-
-	if request.RemoteProvider != "" {
-		service.RemoteProvider = request.RemoteProvider
-	}
-	if request.LocalProvider != "" {
-		service.LocalProvider = request.LocalProvider
-	}
 	service.HybridPolicy = request.HybridPolicy
 	err = s.Ds.Put(ctx, &service)
 	if err != nil {
@@ -747,6 +740,34 @@ func getAllServices(service *types.Service, provider *types.ServiceProvider, mod
 		tmp := v.(*types.Service)
 		tmpService := dbServices.Services[tmp.Name]
 		tmpService.HybridPolicy = tmp.HybridPolicy
+		dm := new(types.Model)
+		dm.ModelName = model.ModelName
+		localDefaultModelList, err := ds.List(context.Background(), dm, &datastore.ListOptions{
+			FilterOptions: datastore.FilterOptions{
+				Queries: []datastore.FuzzyQueryOption{
+					{Key: "IsDefault", Query: "true"},
+					{Key: "service_name", Query: tmp.Name},
+					{Key: "service_source", Query: types.ServiceSourceLocal},
+				},
+			},
+			Page: 0, PageSize: 100})
+		if err == nil && len(localDefaultModelList) > 0 {
+			localDmObj := localDefaultModelList[0].(*types.Model)
+			tmpService.ServiceProviders.Local = localDmObj.ProviderName
+		}
+		remoteDefaultModelList, err := ds.List(context.Background(), dm, &datastore.ListOptions{
+			FilterOptions: datastore.FilterOptions{
+				Queries: []datastore.FuzzyQueryOption{
+					{Key: "IsDefault", Query: "true"},
+					{Key: "service_name", Query: tmp.Name},
+					{Key: "service_source", Query: types.ServiceSourceRemote},
+				},
+			},
+			Page: 0, PageSize: 100})
+		if err == nil && len(remoteDefaultModelList) > 0 {
+			RemoteDmObj := localDefaultModelList[0].(*types.Model)
+			tmpService.ServiceProviders.Remote = RemoteDmObj.ProviderName
+		}
 		dbServices.Services[tmp.Name] = tmpService
 	}
 

@@ -30,7 +30,6 @@ import (
 	"github.com/intel/aog/internal/utils/bcode"
 )
 
-// ModelServiceProvider model service provider interface
 // EngineLifecycleManager defines core engine lifecycle operations
 type EngineLifecycleManager interface {
 	StartEngine(mode string) error
@@ -76,17 +75,11 @@ type ModelServiceProvider interface {
 
 // EngineManager defines unified engine management operations
 type EngineManager interface {
-	// 启动所有引擎
 	StartAllEngines(mode string) error
-	// 停止所有引擎
 	StopAllEngines() error
-	// 启动引擎保活监控
 	StartKeepAlive()
-	// 停止引擎保活监控
 	StopKeepAlive()
-	// 获取引擎状态
 	GetEngineStatus() map[string]string
-	// 注册引擎到管理器
 	RegisterEngine(name string, provider ModelServiceProvider)
 }
 

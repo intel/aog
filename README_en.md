@@ -161,9 +161,7 @@ aog get services <service_name>
 # Modify service configuration
 # hybrid_policy   specifies the scheduling policy of the specific service, 
 # 			      the optional values are always_local, always_remote, default
-# remote_provider specifies the remote service provider
-# local_provider  specifies the local service provider
-aog edit service <service_name> --hybrid_policy always_remote --remote_provider xxx --local_provider xxx
+aog edit service <service_name> --hybrid_policy always_remote
 
 # Get service provider information, you can set optional parameters to get the specified service provider information
 aog get service_providers --service <service_name> --provider <provider_name> --remote <local/remote>

@@ -36,4 +36,8 @@ var (
 	ErrNoRecommendModel = NewBcode(http.StatusNotFound, 30007, "No Recommend Model")
 
 	ErrModelServiceNotAvailable = NewBcode(http.StatusInternalServerError, 30008, "Model service not available")
+
+	ErrModelSizeIsTooLarge = NewBcode(http.StatusInternalServerError, 30009, "Model size is too large")
+
+	ErrModelStatus = NewBcode(http.StatusInternalServerError, 30010, "Model status is not correct")
 )

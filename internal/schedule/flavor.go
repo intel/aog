@@ -457,15 +457,7 @@ func processSuccessResponse(c *gin.Context, result *types.ServiceResult) {
 		var rawData interface{}
 		if json.Unmarshal(result.HTTP.Body, &rawData) == nil {
 			// Create response with original data source
-			response := struct {
-				bcode.Bcode             // Embedded Bcode structure, inheriting business_code and message fields
-				Data        interface{} `json:"data"`
-			}{
-				Bcode: *bcode.SuccessCode, // Constantly check if there are any available sessions
-				Data:  rawData,
-			}
-
-			c.JSON(http.StatusOK, response)
+			c.JSON(http.StatusOK, rawData)
 			return
 		}
 	}

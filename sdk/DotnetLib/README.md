@@ -48,7 +48,7 @@ var requestData = new
     service_name = "chat/embed/generate/text-to-image",
     hybrid_policy = "default/always_local/always_remote",
     remote_provider = "remote_openai_chat",
-    local_provider = "local_ollama_chat"
+    `local_provider = "local_ollama_chat"
 };
 var result = await client.UpdateServiceAsync(requestData);
 Console.WriteLine(result);

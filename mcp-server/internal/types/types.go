@@ -34,14 +34,12 @@ type GetAIGCServicesResponse struct {
 
 // Service service information - strictly follows AOG dto definition
 type Service struct {
-	ServiceName    string    `json:"service_name"`
-	HybridPolicy   string    `json:"hybrid_policy"`
-	RemoteProvider string    `json:"remote_provider"`
-	LocalProvider  string    `json:"local_provider"`
-	Status         int       `json:"status"`
-	Avatar         string    `json:"avatar"`
-	CreatedAt      time.Time `json:"created_at"`
-	UpdatedAt      time.Time `json:"updated_at"`
+	ServiceName  string    `json:"service_name"`
+	HybridPolicy string    `json:"hybrid_policy"`
+	Status       int       `json:"status"`
+	Avatar       string    `json:"avatar"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
 }
 
 // Service provider related types - strictly follows AOG dto definition

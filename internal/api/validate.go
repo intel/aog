@@ -23,7 +23,6 @@ import (
 	"strings"
 
 	"github.com/go-playground/validator/v10"
-
 	"github.com/intel/aog/internal/api/dto"
 	"github.com/intel/aog/internal/types"
 	"github.com/intel/aog/internal/utils"
@@ -39,6 +38,7 @@ var validationErrorMessages = map[string]string{
 	"supported_flavor":         "Unsupported API flavor",
 	"supported_auth_type":      "Unsupported authentication type",
 	"supported_http_method":    "Unsupported HTTP method",
+	"supported_hybrid_policy":  "Unsupported hybrid policy",
 	"required_with_auth":       "Authentication key is required when using authentication",
 	"json_format":              "Invalid JSON format",
 	"url":                      "Invalid URL format",
@@ -55,11 +55,14 @@ func init() {
 	validate.RegisterValidation("supported_flavor", validateSupportedFlavor)
 	validate.RegisterValidation("supported_auth_type", validateSupportedAuthType)
 	validate.RegisterValidation("supported_http_method", validateSupportedHTTPMethod)
+	validate.RegisterValidation("supported_hybrid_policy", validateSupportedHybridPolicy)
 	validate.RegisterValidation("required_with_auth", validateRequiredWithAuth)
 	validate.RegisterValidation("json_format", validateJSONFormat)
 
 	// Register struct-level validation
 	validate.RegisterStructValidation(validateCreateAIGCServiceRequest, dto.CreateAIGCServiceRequest{})
+	//validate.RegisterStructValidation(validateUpdateAIGCServiceRequest, dto.UpdateAIGCServiceRequest{})
+	validate.RegisterStructValidation(validateExportServiceRequest, dto.ExportServiceRequest{})
 }
 
 // Validate supported service types
@@ -190,6 +193,25 @@ func ValidateAndSetDefaults(request interface{}) error {
 		return FormatValidationError(err)
 	}
 	return nil
+}
+
+// Validate supported hybrid policy
+func validateSupportedHybridPolicy(fl validator.FieldLevel) bool {
+	if fl.Field().String() == "" {
+		return true // Allow empty, will use default value
+	}
+	hybridPolicy := fl.Field().String()
+	return utils.Contains(types.SupportHybridPolicy, hybridPolicy)
+}
+
+// Struct-level validation - ExportServiceRequest
+func validateExportServiceRequest(sl validator.StructLevel) {
+	request := sl.Current().Interface().(dto.ExportServiceRequest)
+
+	// If ProviderName is specified, ModelName should also be specified
+	if request.ProviderName != "" && request.ModelName == "" {
+		sl.ReportError(request.ModelName, "ModelName", "ModelName", "required", "")
+	}
 }
 
 // TestValidateStruct validation function for testing

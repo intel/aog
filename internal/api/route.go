@@ -28,12 +28,12 @@ import (
 
 func InjectRouter(e *AOGCoreServer) {
 	e.Router.Handle(http.MethodGet, "/", rootHandler)
-	e.Router.Handle(http.MethodGet, "/health", HealthHeader)
-	e.Router.Handle(http.MethodGet, "/engine/health", EngineHealthHandler)
-	e.Router.Handle(http.MethodGet, "/version", GetVersion)
-	e.Router.Handle(http.MethodGet, "/engine/version", GetEngineVersion)
-	e.Router.Handle(http.MethodGet, "/update/status", UpdateAvailableHandler)
-	e.Router.Handle(http.MethodPost, "/update", UpdateHandler)
+	e.Router.Handle(http.MethodGet, "/health", e.GetServerHealth)
+	e.Router.Handle(http.MethodGet, "/engine/health", e.GetEngineServerHealth)
+	e.Router.Handle(http.MethodGet, "/version", e.GetVersion)
+	e.Router.Handle(http.MethodGet, "/engine/version", e.GetEngineVersion)
+	e.Router.Handle(http.MethodGet, "/update/status", e.GetUpdateAvailableStatus)
+	e.Router.Handle(http.MethodPost, "/update", e.UpdateHandler)
 
 	r := e.Router.Group("/" + constants.AppName + "/" + version.SpecVersion)
 

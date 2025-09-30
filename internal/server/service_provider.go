@@ -17,14 +17,9 @@
 package server
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
-	"fmt"
-	"io"
 	"log/slog"
-	"net/http"
 	"net/url"
 	"strings"
 	"time"
@@ -32,9 +27,9 @@ import (
 	"github.com/intel/aog/internal/api/dto"
 	"github.com/intel/aog/internal/constants"
 	"github.com/intel/aog/internal/datastore"
-	"github.com/intel/aog/internal/logger"
 	"github.com/intel/aog/internal/provider"
 	"github.com/intel/aog/internal/schedule"
+	"github.com/intel/aog/internal/server/checker"
 	"github.com/intel/aog/internal/types"
 	"github.com/intel/aog/internal/utils/bcode"
 )
@@ -63,13 +58,13 @@ func (s *ServiceProviderImpl) CreateServiceProvider(ctx context.Context, request
 	sp := &types.ServiceProvider{}
 	sp.ProviderName = request.ProviderName
 
-	// isExist, err := ds.IsExist(ctx, sp)
-	// if err != nil {
-	// 	return nil, err
-	// }
-	// if isExist {
-	// 	return nil, bcode.ErrAIGCServiceProviderIsExist
-	// }
+	isExist, err := ds.IsExist(ctx, sp)
+	if err != nil {
+		return nil, err
+	}
+	if isExist {
+		return nil, bcode.ErrAIGCServiceProviderIsExist
+	}
 	providerServiceInfo := schedule.GetProviderServiceDefaultInfo(request.ApiFlavor, request.ServiceName)
 
 	sp.ServiceName = request.ServiceName
@@ -170,15 +165,14 @@ func (s *ServiceProviderImpl) CreateServiceProvider(ctx context.Context, request
 			}
 		}
 	} else if request.ServiceSource == types.ServiceSourceRemote {
+		checkSpStatus := 0
 		for _, mName := range request.Models {
-			server := ChooseCheckServer(*sp, mName)
+			server := checker.CreateChecker(*sp, mName)
 			if server == nil {
-				// return nil, bcode.ErrProviderIsUnavailable
 				continue
 			}
 			checkRes := server.CheckServer()
 			if !checkRes {
-				// return nil, bcode.ErrProviderIsUnavailable
 				continue
 			}
 
@@ -194,49 +188,20 @@ func (s *ServiceProviderImpl) CreateServiceProvider(ctx context.Context, request
 			if err != nil {
 				return nil, err
 			}
+			err = createRelatedDBData(ctx, s.Ds, nil, model, nil)
+			if err != nil {
+				return nil, err
+			}
+			checkSpStatus = 1
 		}
-		sp.Status = 1
+		sp.Status = checkSpStatus
 	}
 
-	err := ds.Put(ctx, sp)
+	err = ds.Put(ctx, sp)
 	if err != nil {
 		return nil, err
 	}
-	if request.ServiceName == types.ServiceChat {
-		generateSp := &types.ServiceProvider{}
-		generateSp.ProviderName = request.ProviderName
-
-		generateSpIsExist, err := ds.IsExist(ctx, generateSp)
-		if err != nil {
-			return nil, err
-		}
-		if !generateSpIsExist {
-			generateProviderServiceInfo := schedule.GetProviderServiceDefaultInfo(request.ApiFlavor, strings.Replace(request.ServiceName, "chat", "generate", -1))
-
-			generateSp.ServiceName = strings.Replace(request.ServiceName, "chat", "generate", -1)
-			generateSp.ServiceSource = request.ServiceSource
-			generateSp.Flavor = request.ApiFlavor
-			generateSp.AuthType = request.AuthType
-			generateSp.AuthType = request.AuthType
-			if request.AuthType != types.AuthTypeNone && request.AuthKey == "" {
-				return nil, bcode.ErrProviderAuthInfoLost
-			}
-			generateSp.AuthKey = request.AuthKey
-			generateSp.Desc = request.Desc
-			generateSp.Method = request.Method
-			generateSp.URL = generateProviderServiceInfo.RequestUrl
-			generateSp.ExtraHeaders = request.ExtraHeaders
-			if request.ExtraHeaders == "" {
-				generateSp.ExtraHeaders = providerServiceInfo.ExtraHeaders
-			}
-			generateSp.ExtraJSONBody = request.ExtraJsonBody
-			generateSp.Properties = request.Properties
-			generateSp.CreatedAt = time.Now()
-			generateSp.UpdatedAt = time.Now()
-		}
-
-	}
-
+	err = createRelatedDBData(ctx, s.Ds, sp, nil, nil)
 	return &dto.CreateServiceProviderResponse{
 		Bcode: *bcode.ServiceProviderCode,
 	}, nil
@@ -244,9 +209,6 @@ func (s *ServiceProviderImpl) CreateServiceProvider(ctx context.Context, request
 
 func (s *ServiceProviderImpl) DeleteServiceProvider(ctx context.Context, request *dto.DeleteServiceProviderRequest) (*dto.DeleteServiceProviderResponse, error) {
 	sp := new(types.ServiceProvider)
-	if request.ProviderName == "" {
-		return nil, bcode.ErrProviderInvalid
-	}
 	sp.ProviderName = request.ProviderName
 
 	ds := datastore.GetDefaultDatastore()
@@ -392,7 +354,7 @@ func (s *ServiceProviderImpl) UpdateServiceProvider(ctx context.Context, request
 		if err != nil && !errors.Is(err, datastore.ErrEntityInvalid) {
 			return nil, err
 		}
-		server := ChooseCheckServer(*sp, model.ModelName)
+		server := checker.CreateChecker(*sp, model.ModelName)
 		if server == nil {
 			model.Status = "failed"
 			err = ds.Put(ctx, sp)
@@ -417,9 +379,6 @@ func (s *ServiceProviderImpl) UpdateServiceProvider(ctx context.Context, request
 		if !checkRes {
 			model.Status = "failed"
 			err = ds.Put(ctx, sp)
-			if err != nil {
-				return nil, err
-			}
 			if err != nil && !errors.Is(err, datastore.ErrEntityInvalid) {
 				return nil, err
 			} else if errors.Is(err, datastore.ErrEntityInvalid) {
@@ -555,394 +514,8 @@ func (s *ServiceProviderImpl) GetServiceProviders(ctx context.Context, request *
 	}, nil
 }
 
-type ModelServiceManager interface {
-	CheckServer() bool
-}
-
-type CheckLocalServer struct {
-	ServiceProvider types.ServiceProvider
-}
-
-type CheckModelsServer struct {
-	ServiceProvider types.ServiceProvider
-}
-type CheckChatServer struct {
-	ServiceProvider types.ServiceProvider
-	ModelName       string
-}
-type CheckGenerateServer struct {
-	ServiceProvider types.ServiceProvider
-	ModelName       string
-}
-
-type CheckEmbeddingServer struct {
-	ServiceProvider types.ServiceProvider
-	ModelName       string
-}
-
-type CheckTextToImageServer struct {
-	ServiceProvider types.ServiceProvider
-	ModelName       string
-}
-
-type CheckTextToSpeechServer struct {
-	ServiceProvider types.ServiceProvider
-	ModelName       string
-}
-
-type CheckSpeechToTextServer struct {
-	ServiceProvider types.ServiceProvider
-	ModelName       string
-}
-
-type CheckSpeechToTextWSServer struct {
-	ServiceProvider types.ServiceProvider
-	ModelName       string
-}
-
-type CheckTextToVideoServer struct {
-	ServiceProvider types.ServiceProvider
-	ModelName       string
-}
-type CheckImageToVideoServer struct {
-	ServiceProvider types.ServiceProvider
-	ModelName       string
-}
-type CheckImageToImageServer struct {
-	ServiceProvider types.ServiceProvider
-	ModelName       string
-}
-
-func (l *CheckLocalServer) CheckServer() bool {
-	engine := provider.GetModelEngine(l.ServiceProvider.Flavor)
-	status := true
-	if err := engine.HealthCheck(); err != nil {
-		status = false
-	}
-	return status
-}
-
-func (m *CheckModelsServer) CheckServer() bool {
-	req, err := http.NewRequest(m.ServiceProvider.Method, m.ServiceProvider.URL, nil)
-	if err != nil {
-		return false
-	}
-	status := CheckServerRequest(req, m.ServiceProvider, "")
-	return status
-}
-
-func (c *CheckChatServer) CheckServer() bool {
-	type Message struct {
-		Role    string `json:"role"`
-		Content string `json:"content"`
-	}
-	type RequestBody struct {
-		Model    string    `json:"model"`
-		Messages []Message `json:"messages"`
-		Stream   bool      `json:"stream"`
-	}
-
-	requestBody := RequestBody{
-		Model:  c.ModelName,
-		Stream: false,
-		Messages: []Message{
-			{
-				Role:    "user",
-				Content: "Hello!",
-			},
-		},
-	}
-	jsonData, err := json.Marshal(requestBody)
-	if err != nil {
-		logger.LogicLogger.Error("[Schedule] Failed to marshal request body", "error", err)
-		return false
-	}
-	req, err := http.NewRequest(c.ServiceProvider.Method, c.ServiceProvider.URL, bytes.NewReader(jsonData))
-	if err != nil {
-		logger.LogicLogger.Error("[Schedule] Failed to prepare request", "error", err)
-		return false
-	}
-
-	status := CheckServerRequest(req, c.ServiceProvider, string(jsonData))
-	return status
-}
-
-func (g *CheckGenerateServer) CheckServer() bool {
-	return true
-}
-
-func (e *CheckEmbeddingServer) CheckServer() bool {
-	type RequestBody struct {
-		Model          string   `json:"model"`
-		Input          []string `json:"input"`
-		Inputs         []string `json:"inputs"`
-		Dimensions     int      `json:"dimensions"`
-		EncodingFormat string   `json:"encoding_format"`
-	}
-	requestBody := RequestBody{
-		Model:          e.ModelName,
-		Input:          []string{"test text"},
-		Inputs:         []string{"test text"},
-		Dimensions:     1024,
-		EncodingFormat: "float",
-	}
-	jsonData, err := json.Marshal(requestBody)
-	if err != nil {
-		logger.LogicLogger.Error("[Schedule] Failed to marshal request body", "error", err)
-		return false
-	}
-	req, err := http.NewRequest(e.ServiceProvider.Method, e.ServiceProvider.URL, bytes.NewReader(jsonData))
-	if err != nil {
-		logger.LogicLogger.Error("[Schedule] Failed to prepare request", "error", err)
-		return false
-	}
-
-	status := CheckServerRequest(req, e.ServiceProvider, string(jsonData))
-	return status
-}
-
-func (e *CheckTextToImageServer) CheckServer() bool {
-	prompt := "Draw a puppy"
-	var jsonData []byte
-	var err error
-	switch e.ServiceProvider.Flavor {
-	case types.FlavorTencent:
-		type RequestBody struct {
-			Model      string `json:"model"`
-			Prompt     string `json:"Prompt"`
-			RspImgType string `json:"RspImgType"`
-		}
-		requestBody := RequestBody{
-			Model:      e.ModelName,
-			Prompt:     prompt,
-			RspImgType: "url",
-		}
-		jsonData, err = json.Marshal(requestBody)
-	case types.FlavorAliYun:
-		type InputData struct {
-			Prompt string `json:"prompt"`
-		}
-		type RequestBody struct {
-			Model string    `json:"model"`
-			Input InputData `json:"input"`
-		}
-		inputData := InputData{
-			Prompt: prompt,
-		}
-		requestBody := RequestBody{
-			Model: e.ModelName,
-			Input: inputData,
-		}
-		jsonData, err = json.Marshal(requestBody)
-	case types.FlavorBaidu:
-		type RequestBody struct {
-			Model  string `json:"model"`
-			Prompt string `json:"prompt"`
-		}
-		requestBody := RequestBody{
-			Model:  e.ModelName,
-			Prompt: prompt,
-		}
-		jsonData, err = json.Marshal(requestBody)
-	default:
-		type RequestBody struct {
-			Model  string `json:"model"`
-			Prompt string `json:"prompt"`
-		}
-		requestBody := RequestBody{
-			Model:  e.ModelName,
-			Prompt: prompt,
-		}
-		jsonData, err = json.Marshal(requestBody)
-	}
-	if err != nil {
-		logger.LogicLogger.Error("[Schedule] Failed to marshal request body", "error", err)
-		return false
-	}
-	req, err := http.NewRequest(e.ServiceProvider.Method, e.ServiceProvider.URL, bytes.NewReader(jsonData))
-	if err != nil {
-		logger.LogicLogger.Error("[Schedule] Failed to prepare request", "error", err)
-		return false
-	}
-
-	status := CheckServerRequest(req, e.ServiceProvider, string(jsonData))
-	return status
-}
-
-func (t *CheckTextToSpeechServer) CheckServer() bool {
-	prompt := "我来给大家推荐一款T恤，这款呢真的是超级好看"
-	var jsonData []byte
-	var err error
-	switch t.ServiceProvider.Flavor {
-	case types.FlavorTencent:
-		type RequestBody struct {
-			Model      string `json:"model"`
-			Prompt     string `json:"Prompt"`
-			RspImgType string `json:"RspImgType"`
-		}
-		requestBody := RequestBody{
-			Model:      t.ModelName,
-			Prompt:     prompt,
-			RspImgType: "url",
-		}
-		jsonData, err = json.Marshal(requestBody)
-	case types.FlavorAliYun:
-		type InputData struct {
-			Text  string `json:"text"`
-			Voice string `json:"voice"`
-		}
-		type RequestBody struct {
-			Model string    `json:"model"`
-			Input InputData `json:"input"`
-		}
-		inputData := InputData{
-			Text:  prompt,
-			Voice: "Chelsie",
-		}
-		requestBody := RequestBody{
-			Model: t.ModelName,
-			Input: inputData,
-		}
-		jsonData, err = json.Marshal(requestBody)
-	case types.FlavorBaidu:
-		type RequestBody struct {
-			Model  string `json:"model"`
-			Prompt string `json:"prompt"`
-		}
-		requestBody := RequestBody{
-			Model:  t.ModelName,
-			Prompt: prompt,
-		}
-		jsonData, err = json.Marshal(requestBody)
-	default:
-		type RequestBody struct {
-			Model  string `json:"model"`
-			Prompt string `json:"prompt"`
-		}
-		requestBody := RequestBody{
-			Model:  t.ModelName,
-			Prompt: prompt,
-		}
-		jsonData, err = json.Marshal(requestBody)
-	}
-	if err != nil {
-		logger.LogicLogger.Error("[Schedule] Failed to marshal request body", "error", err)
-		return false
-	}
-	req, err := http.NewRequest(t.ServiceProvider.Method, t.ServiceProvider.URL, bytes.NewReader(jsonData))
-	if err != nil {
-		logger.LogicLogger.Error("[Schedule] Failed to prepare request", "error", err)
-		return false
-	}
-
-	status := CheckServerRequest(req, t.ServiceProvider, string(jsonData))
-	return status
-}
-
-func (g *CheckSpeechToTextServer) CheckServer() bool {
-	return true
-}
-
-func (g *CheckSpeechToTextWSServer) CheckServer() bool {
-	return true
-}
-
-func (g *CheckTextToVideoServer) CheckServer() bool {
-	return true
-}
-
-func (g *CheckImageToVideoServer) CheckServer() bool {
-	return true
-}
-
-func (g *CheckImageToImageServer) CheckServer() bool {
-	return true
-}
-
-func ChooseCheckServer(sp types.ServiceProvider, modelName string) ModelServiceManager {
-	var server ModelServiceManager
-	if sp.ServiceSource == types.ServiceSourceLocal {
-		server = &CheckLocalServer{ServiceProvider: sp}
-	} else {
-		switch sp.ServiceName {
-		case types.ServiceModels:
-			server = &CheckModelsServer{ServiceProvider: sp}
-		case types.ServiceChat:
-			server = &CheckChatServer{ServiceProvider: sp, ModelName: modelName}
-		case types.ServiceGenerate:
-			server = &CheckGenerateServer{ServiceProvider: sp, ModelName: modelName}
-		case types.ServiceEmbed:
-			server = &CheckEmbeddingServer{ServiceProvider: sp, ModelName: modelName}
-		case types.ServiceTextToImage:
-			server = &CheckTextToImageServer{ServiceProvider: sp, ModelName: modelName}
-		case types.ServiceTextToSpeech:
-			server = &CheckTextToSpeechServer{ServiceProvider: sp, ModelName: modelName}
-		case types.ServiceSpeechToText:
-			server = &CheckSpeechToTextServer{ServiceProvider: sp, ModelName: modelName}
-		case types.ServiceSpeechToTextWS:
-			server = &CheckSpeechToTextWSServer{ServiceProvider: sp, ModelName: modelName}
-		case types.ServiceTextToVideo:
-			server = &CheckTextToSpeechServer{ServiceProvider: sp, ModelName: modelName}
-		case types.ServiceImageToVideo:
-			server = &CheckTextToSpeechServer{ServiceProvider: sp, ModelName: modelName}
-		case types.ServiceImageToImage:
-			server = &CheckTextToSpeechServer{ServiceProvider: sp, ModelName: modelName}
-		default:
-			logger.LogicLogger.Error("[Schedule] Unknown service name", "error", sp.ServiceName)
-			return nil
-		}
-	}
-	return server
-}
-
-func CheckServerRequest(req *http.Request, serviceProvider types.ServiceProvider, reqBodyString string) bool {
-	transport := &http.Transport{
-		MaxIdleConns:       10,
-		IdleConnTimeout:    30 * time.Second,
-		DisableCompression: true,
-	}
-	if serviceProvider.ExtraHeaders != "{}" && serviceProvider.ExtraHeaders != "" {
-		var extraHeader map[string]interface{}
-		logger.LogicLogger.Info("ExtraHeaders: " + serviceProvider.ExtraHeaders)
-		err := json.Unmarshal([]byte(serviceProvider.ExtraHeaders), &extraHeader)
-		if err != nil {
-			logger.LogicLogger.Error("Error parsing JSON:", err.Error())
-			return false
-		}
-		for k, v := range extraHeader {
-			req.Header.Set(k, v.(string))
-		}
-
-	}
-	client := &http.Client{Transport: transport}
-	req.Header.Set("Content-Type", "application/json")
-	if serviceProvider.AuthType != "none" {
-		authParams := &schedule.AuthenticatorParams{
-			Request:      req,
-			ProviderInfo: &serviceProvider,
-			RequestBody:  reqBodyString,
-		}
-		authenticator := schedule.ChooseProviderAuthenticator(authParams)
-		if authenticator == nil {
-			return false
-		}
-		err := authenticator.Authenticate()
-		if err != nil {
-			return false
-		}
-	}
-	logger.LogicLogger.Info("Request: "+req.URL.String(), "method", req.Method, "body", reqBodyString)
-	resp, err := client.Do(req)
-	if err != nil {
-		logger.LogicLogger.Error("[Schedule] Failed to request", "error", err)
-		return false
-	}
-	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
-	fmt.Println(string(body))
-	if resp.StatusCode != http.StatusOK {
-		logger.LogicLogger.Error("[Schedule] Failed to request", "error", resp.StatusCode)
-		return false
-	}
-	return true
+// ChooseCheckServer creates and returns an appropriate service checker
+// This function maintains backward compatibility with the existing API
+func ChooseCheckServer(sp types.ServiceProvider, modelName string) checker.ServiceChecker {
+	return checker.CreateChecker(sp, modelName)
 }

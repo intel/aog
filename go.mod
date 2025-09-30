@@ -1,8 +1,6 @@
 module github.com/intel/aog
 
-go 1.24.1
-
-toolchain go1.24.3
+go 1.24.3
 
 require (
 	github.com/MatusOllah/slogcolor v1.6.0

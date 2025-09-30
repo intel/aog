@@ -934,8 +934,8 @@ func (o *OpenvinoProvider) ListModels(ctx context.Context) (*types.ListResponse,
 
 func (o *OpenvinoProvider) PullModelStream(ctx context.Context, req *types.PullModelRequest) (chan []byte, chan error) {
 	ctx, cancel := context.WithCancel(ctx)
-	modelArray := append(client.ModelClientMap[req.Model], cancel)
-	client.ModelClientMap[req.Model] = modelArray
+	modelArray := append(client.ModelClientMap["openvino_"+req.Model], cancel)
+	client.ModelClientMap["openvino_"+req.Model] = modelArray
 	dataCh := make(chan []byte)
 	errCh := make(chan error)
 	defer close(dataCh)
@@ -1052,8 +1052,8 @@ func (o *OpenvinoProvider) generateGraphPBTxt(modelName, modelType string) error
 
 func (o *OpenvinoProvider) PullModel(ctx context.Context, req *types.PullModelRequest, fn types.PullProgressFunc) (*types.ProgressResponse, error) {
 	ctx, cancel := context.WithCancel(ctx)
-	modelArray := append(client.ModelClientMap[req.Model], cancel)
-	client.ModelClientMap[req.Model] = modelArray
+	modelArray := append(client.ModelClientMap["openvino_"+req.Model], cancel)
+	client.ModelClientMap["openvino_"+req.Model] = modelArray
 	localModelPath := fmt.Sprintf("%s/models/%s", o.EngineConfig.EnginePath, req.Model)
 	if _, err := os.Stat(localModelPath); err != nil {
 		_ = os.MkdirAll(localModelPath, 0o755)

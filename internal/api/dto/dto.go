@@ -125,10 +125,15 @@ func (r *CreateAIGCServiceRequest) getRecommendConfig() types.RecommendConfig {
 }
 
 type UpdateAIGCServiceRequest struct {
-	ServiceName    string `json:"service_name" validate:"required"`
-	HybridPolicy   string `json:"hybrid_policy"`
-	RemoteProvider string `json:"remote_provider"`
-	LocalProvider  string `json:"local_provider"`
+	ServiceName  string `json:"service_name" validate:"required,supported_service"`
+	HybridPolicy string `json:"hybrid_policy" validate:"omitempty,supported_hybrid_policy"`
+}
+
+// SetDefaults implements RequestDefaultSetter interface
+func (r *UpdateAIGCServiceRequest) SetDefaults() {
+	if r.HybridPolicy == "" {
+		r.HybridPolicy = types.HybridPolicyDefault
+	}
 }
 
 type DeleteAIGCServiceRequest struct{}
@@ -136,9 +141,9 @@ type DeleteAIGCServiceRequest struct{}
 type GetAIGCServiceRequest struct{}
 
 type ExportServiceRequest struct {
-	ServiceName  string `json:"service_name"`
-	ProviderName string `json:"provider_name"`
-	ModelName    string `json:"model_name"`
+	ServiceName  string `json:"service_name" validate:"omitempty,supported_service"`
+	ProviderName string `json:"provider_name" validate:"omitempty,max=200"`
+	ModelName    string `json:"model_name" validate:"omitempty,max=200"`
 }
 
 type ExportServiceResponse struct {
@@ -198,7 +203,7 @@ type ImportServiceResponse struct {
 }
 
 type GetAIGCServicesRequest struct {
-	ServiceName string `json:"service_name,omitempty"`
+	ServiceName string `json:"service_name,omitempty" validate:"omitempty,supported_service"`
 }
 
 type CreateAIGCServiceResponse struct {
@@ -228,7 +233,7 @@ type Service struct {
 }
 
 type CreateModelRequest struct {
-	ProviderName  string `json:"provider_name"`
+	ProviderName  string `json:"provider_name" validate:"required"`
 	ModelName     string `json:"model_name" validate:"required"`
 	ServiceName   string `json:"service_name" validate:"required"`
 	ServiceSource string `json:"service_source" validate:"required"`
@@ -307,8 +312,9 @@ type Model struct {
 type SetDefaultModelRequest struct {
 	ProviderName  string `json:"provider_name"`
 	ModelName     string `json:"model_name" validate:"required"`
-	ServiceName   string `json:"service_name"`
-	ServiceSource string `json:"service_source"`
+	ServiceName   string `json:"service_name" validate:"required"`
+	ServiceSource string `json:"service_source" validate:"required"`
+	IsDefault     bool   `json:"is_default"`
 }
 
 type LocalSupportModelData struct {
@@ -497,7 +503,7 @@ type GetModelkeyResponse struct {
 }
 
 type RagGetFileRequest struct {
-	FileId string `form:"file_id"`
+	FileId string `form:"file_id" validate:"required"`
 }
 
 type RagGetFileResponse struct {
@@ -519,7 +525,7 @@ type RagUploadFileResponse struct {
 }
 
 type RagDeleteFileRequest struct {
-	FileId string `form:"file_id"`
+	FileId string `form:"file_id" validate:"required"`
 }
 
 type RagDeleteFileResponse struct {
@@ -539,4 +545,52 @@ type RagRetrievalResponseData struct {
 type RagRetrievalResponse struct {
 	bcode.Bcode
 	Data RagRetrievalResponseData `json:"data"`
+}
+
+type GetVersionResponseData struct {
+	Version     string `json:"version"`
+	SpecVersion string `json:"spec_version"`
+}
+
+type GetVersionResponse struct {
+	bcode.Bcode
+	Data GetVersionResponseData `json:"data"`
+}
+
+type GetEngineVersionRequest struct {
+	EngineName string `form:"engine_name"`
+}
+
+type GetEngineVersionResponse struct {
+	bcode.Bcode
+	Data map[string]string `json:"data"`
+}
+
+type UpdateAvailableResponseData struct {
+	Message string `json:"message"`
+	Status  bool   `json:"status"`
+}
+
+type UpdateAvailableResponse struct {
+	bcode.Bcode
+	Data UpdateAvailableResponseData `json:"data"`
+}
+
+type UpdateResponse struct {
+	bcode.Bcode
+	Data struct{} `json:"data"`
+}
+
+type GetSeverHealthResponse struct {
+	bcode.Bcode
+	Data map[string]string `json:"data"`
+}
+
+type GetEngineHealthRequest struct {
+	EngineName string `form:"engine_name"`
+}
+
+type GetEngineHealthResponse struct {
+	bcode.Bcode
+	Data map[string]string `json:"data"`
 }

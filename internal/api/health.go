@@ -1,27 +1,47 @@
 package api
 
 import (
+	"github.com/intel/aog/internal/api/dto"
+	"github.com/intel/aog/internal/logger"
+	"github.com/intel/aog/internal/utils/bcode"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/intel/aog/internal/provider"
-	"github.com/intel/aog/internal/types"
 )
 
-func HealthHeader(c *gin.Context) {
-	c.JSON(http.StatusOK, map[string]string{"status": "UP"})
+func (t *AOGCoreServer) GetServerHealth(c *gin.Context) {
+	logger.ApiLogger.Debug("[API] Get server health request params:", c.Request.Body)
+
+	ctx := c.Request.Context()
+	resp, err := t.Health.HealthHeader(ctx)
+	if err != nil {
+		bcode.ReturnError(c, err)
+		return
+	}
+
+	logger.ApiLogger.Debug("[API] Get server health response:", resp)
+	c.JSON(http.StatusOK, resp)
 }
 
-func EngineHealthHandler(c *gin.Context) {
-	data := make(map[string]string)
-	for _, modelEngineName := range types.SupportModelEngine {
-		engine := provider.GetModelEngine(modelEngineName)
-		err := engine.HealthCheck()
-		if err != nil {
-			data[modelEngineName] = "DOWN"
-			continue
-		}
-		data[modelEngineName] = "UP"
+func (t *AOGCoreServer) GetEngineServerHealth(c *gin.Context) {
+	logger.ApiLogger.Debug("[API] Get engine server health request params:", c.Request.Body)
+	request := new(dto.GetEngineHealthRequest)
+	if err := c.Bind(request); err != nil {
+		bcode.ReturnError(c, bcode.ErrModelBadRequest)
+		return
 	}
-	c.JSON(http.StatusOK, data)
+
+	if err := validate.Struct(request); err != nil {
+		bcode.ReturnError(c, err)
+		return
+	}
+	ctx := c.Request.Context()
+	resp, err := t.Health.EngineHealthHandler(ctx, request)
+	if err != nil {
+		bcode.ReturnError(c, err)
+		return
+	}
+
+	logger.ApiLogger.Debug("[API] Get engine server health response:", resp)
+	c.JSON(http.StatusOK, resp)
 }

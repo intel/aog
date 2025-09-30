@@ -379,9 +379,7 @@ aog get services <service_name>
 
 # 修改服务配置
 # hybrid_policy 指定具体服务的调度策略，可选值有 always_local, always_remote, default
-# remote_provider 指定远程服务提供商
-# local_provider 指定本地服务提供商
-aog edit service <service_name> --hybrid_policy always_remote --remote_provider xxx --local_provider xxx
+aog edit service <service_name> --hybrid_policy always_remote
 
 
 # 获取服务提供商信息，可设置可选参来获取指定服务提供商信息

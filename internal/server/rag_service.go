@@ -43,9 +43,6 @@ func NewRagService() *RagServiceImpl {
 }
 
 func (srv *RagServiceImpl) GetFile(ctx context.Context, request *dto.RagGetFileRequest) (*dto.RagGetFileResponse, error) {
-	if request == nil || request.FileId == "" {
-		return nil, fmt.Errorf("file_id is required")
-	}
 	entity := &types.RagFile{FileID: request.FileId}
 	if err := srv.Ds.Get(ctx, entity); err != nil {
 		return nil, err
@@ -123,9 +120,6 @@ func (srv *RagServiceImpl) UploadFile(c *gin.Context) (*dto.RagUploadFileRespons
 }
 
 func (srv *RagServiceImpl) DeleteFile(ctx context.Context, request *dto.RagDeleteFileRequest) (*dto.RagDeleteFileResponse, error) {
-	if request == nil || request.FileId == "" {
-		return nil, fmt.Errorf("file_id is required")
-	}
 	// cascade delete vectors and chunks (by index)
 	_ = srv.Ds.Delete(ctx, &types.RagChunk{FileID: request.FileId})
 	// delete file record
@@ -152,7 +146,7 @@ func ProcessFile(fileRecord *types.RagFile) error {
 	}
 
 	if fileRecord.Status != 1 { // 仅处理 processing
-		return fmt.Errorf("invalid file status: %d", fileRecord.Status)
+		return bcode.ErrRagFileStatus
 	}
 
 	chunks, chunkErr := rag.ChunkFile(fileRecord.FilePath, rag.RagConfig.ChunkSize)
@@ -242,13 +236,13 @@ func (srv *RagServiceImpl) Search(ctx context.Context, fileIDList []string, quer
 		dbPath := config.GlobalEnvironment.Datastore
 		if err := sqlite.InitVecDB(dbPath); err != nil {
 			logger.LogicLogger.Error("[RAG] VEC初始化失败", "error", err)
-			return "", fmt.Errorf("VEC初始化失败: %w", err)
+			return "", bcode.ErrRagSqliteVec
 		}
 
 		// Check the initialization status again
 		if !sqlite.VecInitialized || sqlite.VecDB == nil {
 			logger.LogicLogger.Error("[RAG] VEC初始化后仍无效")
-			return "", fmt.Errorf("VEC未正确初始化")
+			return "", bcode.ErrRagSqliteVec
 		}
 	}
 	modelEngine := rag.NewEngineService()
@@ -268,11 +262,11 @@ func (srv *RagServiceImpl) Search(ctx context.Context, fileIDList []string, quer
 		embeddingResp, err := modelEngine.GenerateEmbedding(ctx, embeddingReq)
 		if err != nil {
 			logger.LogicLogger.Error("[RAG] 查询变体嵌入生成失败", "query", q, "error", err)
-			return "", fmt.Errorf("RAG: 查询变体嵌入生成失败: %w", err)
+			return "", bcode.ErrRagEmbedding
 		}
 		if len(embeddingResp.Embeddings) == 0 {
 			logger.LogicLogger.Error("[RAG] 嵌入返回数据为空", "query", q)
-			return "", fmt.Errorf("RAG: 嵌入返回数据为空")
+			return "", bcode.ErrRagEmbedding
 		}
 		embedding := embeddingResp.Embeddings[0]
 		logger.LogicLogger.Info("[RAG] Got embedding", "query", q, "embeddingDim", len(embedding))
@@ -283,7 +277,7 @@ func (srv *RagServiceImpl) Search(ctx context.Context, fileIDList []string, quer
 	logger.LogicLogger.Info("DEBUG: queryEmbeddings after loop", "len", len(queryEmbeddings), "cap", cap(queryEmbeddings), "isNil", queryEmbeddings == nil)
 	if len(queryEmbeddings) == 0 {
 		logger.LogicLogger.Error("[RAG] 所有查询embedding生成失败")
-		return "", fmt.Errorf("failed to generate query embeddings")
+		return "", bcode.ErrRagEmbedding
 	} // Construct a file query to ensure that the SessionID has no spaces
 	fileQuery := &types.RagFile{}
 	logger.LogicLogger.Info("[RAG] 文件查询参数", "sessionID", fileQuery.FileID)
@@ -321,7 +315,7 @@ func (srv *RagServiceImpl) Search(ctx context.Context, fileIDList []string, quer
 		dbPath := config.GlobalEnvironment.Datastore
 		if err := sqlite.InitVecDB(dbPath); err != nil || !sqlite.VecInitialized || sqlite.VecDB == nil {
 			logger.LogicLogger.Error("[RAG] VEC初始化失败，无法执行检索", "error", err)
-			return "", fmt.Errorf("VEC数据库不可用: %w", err)
+			return "", bcode.ErrRagSqliteVec
 		}
 	}
 
@@ -340,7 +334,7 @@ func (srv *RagServiceImpl) Search(ctx context.Context, fileIDList []string, quer
 			if err != nil {
 				// Both search methods failed
 				logger.LogicLogger.Error("RAG: 所有搜索方法均失败", "queryIndex", i, "error", err)
-				return "", fmt.Errorf("RAG: 检索失败: %w", err)
+				return "", bcode.ErrRagRetrieval
 			}
 			logger.LogicLogger.Info("RAG: 降级使用文本搜索成功", "queryIndex", i)
 		}
@@ -468,10 +462,10 @@ func (srv *RagServiceImpl) Retrieval(ctx context.Context, req *dto.RagRetrievalR
 	for _, s := range services {
 		sObj := s.(*types.Service)
 		if sObj.Name == types.ServiceEmbed && sObj.Status != 1 {
-			return nil, fmt.Errorf("embed service is not avalivable")
+			return nil, bcode.ErrRagEmbedding
 		}
 		if sObj.Name == types.ServiceGenerate && sObj.Status != 1 {
-			return nil, fmt.Errorf("generate service is not avalivable")
+			return nil, bcode.ErrRagAOGBaseService
 		}
 	}
 	searchResult, err := srv.Search(ctx, req.FileIDs, req.Text)

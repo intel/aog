@@ -233,6 +233,7 @@ func (ss *BasicServiceScheduler) dispatch(task *ServiceTask) (*types.ServiceTarg
 	var providerName string
 	if model != "" {
 		m.ModelName = model
+		m.ServiceName = task.Request.Service
 		err = ds.Get(context.Background(), m)
 		if err != nil {
 			logger.LogicLogger.Error("[Schedule] Failed to get model", "error", err, "model", model)
