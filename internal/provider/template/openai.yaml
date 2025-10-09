@@ -119,7 +119,7 @@ services:
                           "id": id,
                           "model": model,
                           "object": "chat.completion",
-                          "created": created_at,
+                          "created": $floor($toMillis(created_at)/1000),
                           "choices": [{
                                 "index": 0,
                                 "message": message,
@@ -136,7 +136,7 @@ services:
                           "id": id,
                           "model": model,
                           "object": "chat.completion.chunk",
-                          "created": created_at,
+                          "created": $floor($toMillis(created_at)/1000),
                           "choices": [{
                                 "index": 0,
                                 "delta": message,

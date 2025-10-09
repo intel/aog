@@ -20,7 +20,7 @@ endif
 
 
 build-cli-win:
-	set CGO_ENABLED=1 && set CGO_CFLAGS=-I%SQLITE_VEC_DIR% && go build -o aog.exe -ldflags="-s -w"  cmd/cli/main.go
+	set CGO_ENABLED=1 && set CGO_CFLAGS=-I(SQLITE_VEC_DIR) && go build -o aog.exe -ldflags="-s -w"  cmd/cli/main.go
 
 build-cli-darwin:
 	CGO_ENABLED=1 GOOS=darwin GOARCH=amd64  CGO_CFLAGS=-I$(SQLITE_VEC_DIR) go build -o aog -ldflags="-s -w"  cmd/cli/main.go

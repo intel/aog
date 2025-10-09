@@ -257,6 +257,10 @@ func (s *ModelImpl) CreateModelStream(ctx context.Context, request *dto.CreateMo
 	defer close(newErrChan)
 	ds := datastore.GetDefaultDatastore()
 	sp := new(types.ServiceProvider)
+	sp.ProviderName = request.ProviderName
+
+	sp.ServiceName = request.ServiceName
+	sp.ServiceSource = request.ServiceSource
 	// ensure service avaliable first
 	service := &types.Service{Name: request.ServiceName}
 	err := s.Ds.Get(ctx, service)

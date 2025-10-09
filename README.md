@@ -324,7 +324,7 @@ call build-frontend.bat
 
 echo Step 2: Building AOG command line tool...
 set SQLITE_VEC_DIR=%cd%\\internal\\datastore\\sqlite\\sqlite-vec
-set CGO_ENABLED=1 && set CGO_CFLAGS=-I%SQLITE_VEC_DIR% && go build -o aog -ldflags="-s -w" cmd/cli/main.go
+set CGO_ENABLED=1 && set CGO_CFLAGS=-I%SQLITE_VEC_DIR% && go build -o aog.exe -ldflags="-s -w" cmd/cli/main.go
 
 echo Build completed successfully!
 echo You can now run: aog.exe server start
