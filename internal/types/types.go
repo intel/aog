@@ -18,12 +18,98 @@ package types
 
 import (
 	"container/list"
+	"database/sql/driver"
 	"fmt"
 	"net/http"
 	"time"
 
 	"github.com/intel/aog/internal/constants"
 )
+
+// LocalTime is a custom time type with fixed format "2006-01-02 15:04:05" in CST (UTC+8)
+type LocalTime time.Time
+
+const (
+	TimeFormat = "2006-01-02 15:04:05"
+)
+
+func (t LocalTime) MarshalJSON() ([]byte, error) {
+	if time.Time(t).IsZero() {
+		return []byte("null"), nil
+	}
+	b := make([]byte, 0, len(TimeFormat)+2)
+	b = append(b, '"')
+	b = time.Time(t).AppendFormat(b, TimeFormat)
+	b = append(b, '"')
+	return b, nil
+}
+
+func (t *LocalTime) UnmarshalJSON(data []byte) error {
+	if string(data) == "null" {
+		return nil
+	}
+	var err error
+	str := string(data[1 : len(data)-1])
+	tt, err := time.ParseInLocation(TimeFormat, str, time.FixedZone("CST", 8*3600))
+	*t = LocalTime(tt)
+	return err
+}
+
+func (t LocalTime) Value() (driver.Value, error) {
+	if time.Time(t).IsZero() {
+		return nil, nil
+	}
+	return time.Time(t).Format(TimeFormat), nil
+}
+
+func (t *LocalTime) Scan(v interface{}) error {
+	if v == nil {
+		*t = LocalTime(time.Time{})
+		return nil
+	}
+	switch vt := v.(type) {
+	case time.Time:
+		*t = LocalTime(vt)
+	case string:
+		tt, err := time.ParseInLocation(TimeFormat, vt, time.FixedZone("CST", 8*3600))
+		if err != nil {
+			return err
+		}
+		*t = LocalTime(tt)
+	case []byte:
+		tt, err := time.ParseInLocation(TimeFormat, string(vt), time.FixedZone("CST", 8*3600))
+		if err != nil {
+			return err
+		}
+		*t = LocalTime(tt)
+	}
+	return nil
+}
+
+func (t LocalTime) ToTime() time.Time {
+	return time.Time(t)
+}
+
+// Format formats the LocalTime using the given layout
+func (t LocalTime) Format(layout string) string {
+	return time.Time(t).Format(layout)
+}
+
+func (t LocalTime) After(u LocalTime) bool {
+	return time.Time(t).After(time.Time(u))
+}
+
+func (t LocalTime) Before(u LocalTime) bool {
+	return time.Time(t).Before(time.Time(u))
+}
+
+func (t LocalTime) IsZero() bool {
+	return time.Time(t).IsZero()
+}
+
+func Now() LocalTime {
+	return LocalTime(time.Now().In(time.FixedZone("CST", 8*3600)))
+}
 
 const (
 	ServiceSourceLocal  = "local"
@@ -47,6 +133,7 @@ const (
 	ServiceModels         = "models"
 	ServiceGenerate       = "generate"
 	ServiceEmbed          = "embed"
+	ServiceRerank         = "rerank"
 	ServiceTextToImage    = "text-to-image"
 	ServiceTextToSpeech   = "text-to-speech"
 	ServiceSpeechToText   = "speech-to-text"
@@ -59,6 +146,7 @@ const (
 	ServiceTextToImageAvatar    = constants.BaseDownloadURL + constants.URLDirPathIcon + "/text-to-image.svg"
 	ServiceEmbedAvatar          = constants.BaseDownloadURL + constants.URLDirPathIcon + "/Embed.svg"
 	ServiceGenerateAvatar       = constants.BaseDownloadURL + constants.URLDirPathIcon + "/Generate.svg"
+	ServiceRerankAvatar         = constants.BaseDownloadURL + constants.URLDirPathIcon + "/Rerank.svg"
 	ServiceSpeechToTextAvatar   = constants.BaseDownloadURL + constants.URLDirPathIcon + "/Speech-to-text.svg"
 	ServiceTextToSpeechAvatar   = constants.BaseDownloadURL + constants.URLDirPathIcon + "/Text-to-speech.svg"
 	ServiceImageToVideoAvatar   = constants.BaseDownloadURL + constants.URLDirPathIcon + "/Image-to-video.svg"
@@ -127,7 +215,7 @@ const (
 )
 
 var (
-	SupportService           = []string{ServiceEmbed, ServiceModels, ServiceChat, ServiceGenerate, ServiceTextToImage, ServiceSpeechToText, ServiceSpeechToTextWS, ServiceTextToSpeech, ServiceImageToVideo, ServiceImageToImage}
+	SupportService           = []string{ServiceEmbed, ServiceModels, ServiceChat, ServiceGenerate, ServiceRerank, ServiceTextToImage, ServiceSpeechToText, ServiceSpeechToTextWS, ServiceTextToSpeech, ServiceImageToVideo, ServiceImageToImage}
 	SupportHybridPolicy      = []string{HybridPolicyDefault, HybridPolicyLocal, HybridPolicyRemote}
 	SupportAuthType          = []string{AuthTypeNone, AuthTypeApiKey, AuthTypeSign, AuthTypeToken}
 	SupportFlavor            = []string{FlavorDeepSeek, FlavorOpenAI, FlavorTencent, FlavorOllama, FlavorBaidu, FlavorAliYun, FlavorOpenvino}
@@ -140,6 +228,7 @@ var (
 		ServiceChat:           ServiceChatAvatar,
 		ServiceEmbed:          ServiceEmbedAvatar,
 		ServiceGenerate:       ServiceGenerateAvatar,
+		ServiceRerank:         ServiceRerankAvatar,
 		ServiceTextToImage:    ServiceTextToImageAvatar,
 		ServiceTextToSpeech:   ServiceTextToSpeechAvatar,
 		ServiceSpeechToText:   ServiceSpeechToTextAvatar,
@@ -173,8 +262,15 @@ func (hc *HTTPErrorResponse) Error() string {
 // In particular, it supports multiline strings which greatly help write
 // jsonata templates
 type ConversionStepDef struct {
-	Converter string `yaml:"converter"`
-	Config    any    `yaml:"config"`
+	Converter string `yaml:"converter" json:"converter"`
+	Config    any    `yaml:"config" json:"config"`
+}
+
+// FlavorConversionDef defines conversion rules for protocol transformation
+type FlavorConversionDef struct {
+	Prologue   []string            `yaml:"prologue,omitempty" json:"prologue,omitempty"`
+	Epilogue   []string            `yaml:"epilogue,omitempty" json:"epilogue,omitempty"`
+	Conversion []ConversionStepDef `yaml:"conversion,omitempty" json:"conversion,omitempty"`
 }
 
 type ScheduleDetails struct {

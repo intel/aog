@@ -44,16 +44,16 @@ type Service struct {
 	Status         int       `gorm:"column:status;not null;default:1" json:"status"`
 	CanInstall     int       `gorm:"column:can_install;not null;default:0" json:"can_install"`
 	Avatar         string    `gorm:"column:avatar;not null;default:''" json:"avatar"`
-	CreatedAt      time.Time `gorm:"column:created_at;default:CURRENT_TIMESTAMP" json:"created_at"`
-	UpdatedAt      time.Time `gorm:"column:updated_at;default:CURRENT_TIMESTAMP" json:"updated_at"`
+	CreatedAt      LocalTime `gorm:"column:created_at;default:CURRENT_TIMESTAMP" json:"created_at"`
+	UpdatedAt      LocalTime `gorm:"column:updated_at;default:CURRENT_TIMESTAMP" json:"updated_at"`
 }
 
-func (t *Service) SetCreateTime(time time.Time) {
-	t.CreatedAt = time
+func (t *Service) SetCreateTime(tm time.Time) {
+	t.CreatedAt = LocalTime(tm)
 }
 
-func (t *Service) SetUpdateTime(time time.Time) {
-	t.UpdatedAt = time
+func (t *Service) SetUpdateTime(tm time.Time) {
+	t.UpdatedAt = LocalTime(tm)
 }
 
 func (t *Service) PrimaryKey() string {
@@ -85,21 +85,22 @@ type ServiceProvider struct {
 	AuthType      string    `gorm:"column:auth_type" json:"auth_type"`
 	AuthKey       string    `gorm:"column:auth_key" json:"auth_key"`
 	Flavor        string    `gorm:"column:flavor" json:"flavor"`
+	Protocol      string    `gorm:"column:protocol;default:HTTP" json:"protocol"`
 	ExtraHeaders  string    `gorm:"column:extra_headers;default:'{}'" json:"extra_headers"`
 	ExtraJSONBody string    `gorm:"column:extra_json_body;default:'{}'" json:"extra_json_body"`
 	Properties    string    `gorm:"column:properties;default:'{}'" json:"properties"`
 	Status        int       `gorm:"column:status;not null;default:0" json:"status"`
 	Scope         string    `gorm:"column:scope;default:system" json:"scope"` // 'system' or 'custom'
-	CreatedAt     time.Time `gorm:"column:created_at;default:CURRENT_TIMESTAMP" json:"created_at"`
-	UpdatedAt     time.Time `gorm:"column:updated_at;default:CURRENT_TIMESTAMP" json:"updated_at"`
+	CreatedAt     LocalTime `gorm:"column:created_at;default:CURRENT_TIMESTAMP" json:"created_at"`
+	UpdatedAt     LocalTime `gorm:"column:updated_at;default:CURRENT_TIMESTAMP" json:"updated_at"`
 }
 
-func (t *ServiceProvider) SetCreateTime(time time.Time) {
-	t.CreatedAt = time
+func (t *ServiceProvider) SetCreateTime(tm time.Time) {
+	t.CreatedAt = LocalTime(tm)
 }
 
-func (t *ServiceProvider) SetUpdateTime(time time.Time) {
-	t.UpdatedAt = time
+func (t *ServiceProvider) SetUpdateTime(tm time.Time) {
+	t.UpdatedAt = LocalTime(tm)
 }
 
 func (t *ServiceProvider) PrimaryKey() string {
@@ -139,16 +140,16 @@ type Model struct {
 	ServiceName   string    `gorm:"column:service_name" json:"service_name"`
 	ServiceSource string    `gorm:"column:service_source" json:"service_source"`
 	IsDefault     bool      `gorm:"column:is_default" json:"is_default"`
-	CreatedAt     time.Time `gorm:"column:created_at;default:CURRENT_TIMESTAMP" json:"created_at"`
-	UpdatedAt     time.Time `gorm:"column:updated_at;default:CURRENT_TIMESTAMP" json:"updated_at"`
+	CreatedAt     LocalTime `gorm:"column:created_at;default:CURRENT_TIMESTAMP" json:"created_at"`
+	UpdatedAt     LocalTime `gorm:"column:updated_at;default:CURRENT_TIMESTAMP" json:"updated_at"`
 }
 
-func (t *Model) SetCreateTime(time time.Time) {
-	t.CreatedAt = time
+func (t *Model) SetCreateTime(tm time.Time) {
+	t.CreatedAt = LocalTime(tm)
 }
 
-func (t *Model) SetUpdateTime(time time.Time) {
-	t.UpdatedAt = time
+func (t *Model) SetUpdateTime(tm time.Time) {
+	t.UpdatedAt = LocalTime(tm)
 }
 
 func (t *Model) PrimaryKey() string {
@@ -182,16 +183,16 @@ type VersionUpdateRecord struct {
 	Version      string    `gorm:"column:version;not null" json:"version"`
 	ReleaseNotes string    `gorm:"column:release_notes;not null" json:"release_notes"`
 	Status       int       `gorm:"column:status;not null" json:"status"`
-	CreatedAt    time.Time `gorm:"column:created_at;default:CURRENT_TIMESTAMP" json:"created_at"`
-	UpdatedAt    time.Time `gorm:"column:updated_at;default:CURRENT_TIMESTAMP" json:"updated_at"`
+	CreatedAt    LocalTime `gorm:"column:created_at;default:CURRENT_TIMESTAMP" json:"created_at"`
+	UpdatedAt    LocalTime `gorm:"column:updated_at;default:CURRENT_TIMESTAMP" json:"updated_at"`
 }
 
-func (t *VersionUpdateRecord) SetCreateTime(time time.Time) {
-	t.CreatedAt = time
+func (t *VersionUpdateRecord) SetCreateTime(tm time.Time) {
+	t.CreatedAt = LocalTime(tm)
 }
 
-func (t *VersionUpdateRecord) SetUpdateTime(time time.Time) {
-	t.UpdatedAt = time
+func (t *VersionUpdateRecord) SetUpdateTime(tm time.Time) {
+	t.UpdatedAt = LocalTime(tm)
 }
 
 func (t *VersionUpdateRecord) PrimaryKey() string {
@@ -215,16 +216,16 @@ func (t *VersionUpdateRecord) Index() map[string]interface{} {
 type DataMigrateVersion struct {
 	ID        int       `gorm:"primaryKey;column:id;autoIncrement" json:"id"`
 	Version   string    `gorm:"column:version;not null" json:"version"`
-	CreatedAt time.Time `gorm:"column:created_at;default:CURRENT_TIMESTAMP" json:"created_at"`
-	UpdatedAt time.Time `gorm:"column:updated_at;default:CURRENT_TIMESTAMP" json:"updated_at"`
+	CreatedAt LocalTime `gorm:"column:created_at;default:CURRENT_TIMESTAMP" json:"created_at"`
+	UpdatedAt LocalTime `gorm:"column:updated_at;default:CURRENT_TIMESTAMP" json:"updated_at"`
 }
 
-func (t *DataMigrateVersion) SetCreateTime(time time.Time) {
-	t.CreatedAt = time
+func (t *DataMigrateVersion) SetCreateTime(tm time.Time) {
+	t.CreatedAt = LocalTime(tm)
 }
 
-func (t *DataMigrateVersion) SetUpdateTime(time time.Time) {
-	t.UpdatedAt = time
+func (t *DataMigrateVersion) SetUpdateTime(tm time.Time) {
+	t.UpdatedAt = LocalTime(tm)
 }
 
 func (t *DataMigrateVersion) PrimaryKey() string {
@@ -253,12 +254,12 @@ type RagFile struct {
 	FilePath   string    `gorm:"column:file_path" json:"file_path"`
 	Status     int       `gorm:"column:status" json:"status"` // 1-processing | 2-done | 3-failed
 	EmbedModel string    `gorm:"column:embed_model" json:"embed_model"`
-	CreatedAt  time.Time `gorm:"column:created_at;default:CURRENT_TIMESTAMP" json:"created_at"`
-	UpdatedAt  time.Time `gorm:"column:updated_at;default:CURRENT_TIMESTAMP" json:"updated_at"`
+	CreatedAt  LocalTime `gorm:"column:created_at;default:CURRENT_TIMESTAMP" json:"created_at"`
+	UpdatedAt  LocalTime `gorm:"column:updated_at;default:CURRENT_TIMESTAMP" json:"updated_at"`
 }
 
-func (t *RagFile) SetCreateTime(tm time.Time) { t.CreatedAt = tm }
-func (t *RagFile) SetUpdateTime(tm time.Time) { t.UpdatedAt = tm }
+func (t *RagFile) SetCreateTime(tm time.Time) { t.CreatedAt = LocalTime(tm) }
+func (t *RagFile) SetUpdateTime(tm time.Time) { t.UpdatedAt = LocalTime(tm) }
 func (t *RagFile) PrimaryKey() string         { return "id" }
 func (t *RagFile) TableName() string          { return TableRagFile }
 func (t *RagFile) Index() map[string]interface{} {
@@ -279,12 +280,12 @@ type RagChunk struct {
 	Content    string                `json:"content"`
 	ChunkIndex int                   `json:"index"`
 	Embedding  datastore.Float32List `json:"embedding"`
-	CreatedAt  time.Time             `json:"created_at"`
-	UpdatedAt  time.Time             `json:"updated_at"`
+	CreatedAt  LocalTime             `json:"created_at"`
+	UpdatedAt  LocalTime             `json:"updated_at"`
 }
 
-func (t *RagChunk) SetCreateTime(tm time.Time) { t.CreatedAt = tm }
-func (t *RagChunk) SetUpdateTime(tm time.Time) { t.UpdatedAt = tm }
+func (t *RagChunk) SetCreateTime(tm time.Time) { t.CreatedAt = LocalTime(tm) }
+func (t *RagChunk) SetUpdateTime(tm time.Time) { t.UpdatedAt = LocalTime(tm) }
 func (t *RagChunk) PrimaryKey() string         { return "id" }
 func (t *RagChunk) TableName() string          { return TableRagChunk }
 func (t *RagChunk) Index() map[string]interface{} {

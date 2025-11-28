@@ -16,7 +16,12 @@
 
 package checker
 
-import "github.com/intel/aog/internal/provider"
+import (
+	"context"
+
+	"github.com/intel/aog/internal/logger"
+	"github.com/intel/aog/internal/provider"
+)
 
 // LocalServiceChecker checks local service availability
 type LocalServiceChecker struct {
@@ -25,6 +30,10 @@ type LocalServiceChecker struct {
 
 // CheckServer implements ServiceChecker for local services
 func (l *LocalServiceChecker) CheckServer() bool {
-	engine := provider.GetModelEngine(l.ServiceProvider.Flavor)
-	return engine.HealthCheck() == nil
+	engine, err := provider.GetModelEngine(l.ServiceProvider.Flavor)
+	if err != nil {
+		logger.EngineLogger.Error("Failed to get engine", "flavor", l.ServiceProvider.Flavor, "error", err)
+		return false
+	}
+	return engine.HealthCheck(context.Background()) == nil
 }

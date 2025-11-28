@@ -260,7 +260,7 @@ application.
 
 ```json
 {
-  "version": "0.6",
+  "version": "v0.7",
   "service": {
     "chat": {
       "models": ["qwen2.5:0.5b", "qwen2.5:7b"]

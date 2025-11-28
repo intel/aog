@@ -7,7 +7,7 @@
 AOG（AIPC Open Gateway）是一个运行时，旨在为开发者提供一个极其简单易用的基础设施，以便他们在开发环境中安装本地 AI 服务，并发布他们的 AI 应用程序，无需打包自己的 AI 堆栈和模型。
 
 .. note::
-   **Linux 平台注意事项：** Linux 版本暂不支持 OpenVINO 引擎，因此不支持本地的文生图（text-to-image）、文本转语音（text-to-speech）、语音识别（speech-to-text）等服务。这些服务在 Linux 上需要使用远程服务提供商。
+   **Linux 平台注意事项：** Linux 环境已支持 OpenVINO 引擎（当前仅支持 Ubuntu 24.04），可使用本地的 chat、embed、generate、rerank、text-to-image 等服务。其他 Linux 发行版本暂不支持 OpenVINO，需使用远程服务提供商。
 
 
 .. graphviz::
@@ -210,15 +210,15 @@ AOG 包含前端 Control Panel 和后端命令行工具两个部分。为了确�
        # sudo yum install sqlite-devel
        
        # 构建AOG
-       SQLITE_VEC_DIR ?= $(abspath internal/datastore/sqlite/sqlite-vec)
-       CGO_ENABLED=1 CGO_CFLAGS=-I$(SQLITE_VEC_DIR go build -o aog -ldflags="-s -w" cmd/cli/main.go
+       SQLITE_VEC_DIR="$(pwd)/internal/datastore/sqlite/sqlite-vec"
+       CGO_ENABLED=1 CGO_CFLAGS="-I$SQLITE_VEC_DIR" go build -o aog -ldflags="-s -w" cmd/cli/main.go
 
    **macOS:**
 
    .. code-block:: bash
 
-       SQLITE_VEC_DIR ?= $(abspath internal/datastore/sqlite/sqlite-vec)
-       CGO_ENABLED=1 CGO_CFLAGS=-I$(SQLITE_VEC_DIR go build -o aog -ldflags="-s -w" cmd/cli/main.go
+       SQLITE_VEC_DIR="$(pwd)/internal/datastore/sqlite/sqlite-vec"
+       CGO_ENABLED=1 CGO_CFLAGS="-I$SQLITE_VEC_DIR" go build -o aog -ldflags="-s -w" cmd/cli/main.go
 
    **Windows:**
 
@@ -257,8 +257,8 @@ AOG 包含前端 Control Panel 和后端命令行工具两个部分。为了确�
 
     # Step 2: Build AOG
     echo "Step 2: Building AOG command line tool..."
-    SQLITE_VEC_DIR ?= $(abspath internal/datastore/sqlite/sqlite-vec)
-    CGO_ENABLED=1 CGO_CFLAGS=-I$(SQLITE_VEC_DIR go build -o aog -ldflags="-s -w" cmd/cli/main.go
+    SQLITE_VEC_DIR="$(pwd)/internal/datastore/sqlite/sqlite-vec"
+    CGO_ENABLED=1 CGO_CFLAGS="-I$SQLITE_VEC_DIR" go build -o aog -ldflags="-s -w" cmd/cli/main.go
 
     echo "Build completed successfully!"
     echo "You can now run: ./aog server start"
@@ -285,11 +285,11 @@ Linux 平台构建 AOG 的步骤与 macOS 类似，但需要注意依赖安装�
 
     # Step 2: Build AOG for Linux
     echo "Step 2: Building AOG command line tool for Linux..."
-    SQLITE_VEC_DIR ?= $(abspath internal/datastore/sqlite/sqlite-vec)
-    CGO_ENABLED=1 CGO_CFLAGS=-I$(SQLITE_VEC_DIR go build -o aog -ldflags="-s -w" cmd/cli/main.go
+    SQLITE_VEC_DIR="$(pwd)/internal/datastore/sqlite/sqlite-vec"
+    CGO_ENABLED=1 CGO_CFLAGS="-I$SQLITE_VEC_DIR" go build -o aog -ldflags="-s -w" cmd/cli/main.go
 
     echo "Linux build completed successfully!"
-    echo "Note: OpenVINO features (text-to-image, text-to-speech, speech-to-text) are not supported on Linux"
+    echo "Note: OpenVINO features are supported on Ubuntu 24.04. Other Linux distributions need remote providers."
     echo "You can now run: ./aog server start"
 
 **Windows (build-all.bat):**
@@ -304,7 +304,7 @@ Linux 平台构建 AOG 的步骤与 macOS 类似，但需要注意依赖安装�
 
     echo Step 2: Building AOG command line tool...
     set SQLITE_VEC_DIR=%cd%\\internal\\datastore\\sqlite\\sqlite-vec
-    set CGO_ENABLED=1 && set CGO_CFLAGS=-I$(SQLITE_VEC_DIR go build -o aog -ldflags="-s -w" cmd/cli/main.go
+    set CGO_ENABLED=1 && set CGO_CFLAGS=-I%SQLITE_VEC_DIR% && go build -o aog.exe -ldflags="-s -w" cmd/cli/main.go
 
     echo Build completed successfully!
     echo You can now run: aog.exe server start
@@ -367,16 +367,15 @@ AOG 有两个关键概念：**服务(Service)** 和 **服务提供商(Service Pr
     # AOG 将安装必要的 AI 堆栈（如 ollama）和 AOG 推荐的模型
     aog install chat
     aog install embed
-    aog install text-to-image      # 注意：Linux平台不支持本地text-to-image服务
-    aog install speech-to-text     # 注意：Linux平台不支持本地speech-to-text服务  
-    aog install image-to-image     # 注意：Linux平台不支持本地image-to-image服务
-    aog install image-to-video     # 注意：Linux平台不支持本地image-to-video服务
-    aog install speech-to-text-ws  # 注意：Linux平台不支持本地speech-to-text-ws服务
-    aog install text-to-speech     # 注意：Linux平台不支持本地text-to-speech服务
+    aog install text-to-image      
+    aog install speech-to-text     
+    aog install image-to-image     
+    aog install image-to-video     
+    aog install speech-to-text-ws  
+    aog install text-to-speech     
 
     # 除了默认的模型之外，您可以在服务中安装更多的模型
-    # 当前版本暂仅支持基于 ollama 及 openvino（https://modelscope.cn/organization/OpenVINO）中的部分模型（文生图、语音识别）
-    # v0.6 版本将支持更多的 AI 堆栈和模型，以及其他服务
+    # 当前版本支持基于 ollama 及 openvino（https://modelscope.cn/organization/OpenVINO）的多种模型
     aog pull <model_name> --for <service_name> --provider <provider_name>
 
     # 获取服务信息，可查看指定服务，未指定则输出全部服务信息
@@ -432,7 +431,7 @@ AOG 有两个关键概念：**服务(Service)** 和 **服务提供商(Service Pr
     aog delete service_provider <provider_name>
 
     # 删除模型 必选参数：--for --provider
-    aog delete model <model_name> -f <service_name> --provider <provider_name>
+    aog delete model <model_name> --for <service_name> --provider <provider_name>
 
 Control Panel 图形化界面
 =================================
@@ -493,7 +492,7 @@ AOG 提供了一个基于 Web 的图形化控制面板，您可以通过浏览�
 .. code-block:: json
 
     {
-        "version": "v0.6",
+        "version": "v0.7",
         "services": {
             "models": {
                 "service_providers": {
@@ -582,8 +581,8 @@ AOG API 是一个 Restful API。您可以通过与调用云 AI 服务（如 Open
 .. note::
    **Linux 平台服务支持情况：**
    
-   * **完全支持本地和远程：** chat、embed 服务
-   * **仅支持远程服务：** text-to-image、text-to-speech、speech-to-text、image-to-image、image-to-video 等基于 OpenVINO 的服务
+   * **Ubuntu 24.04 完全支持本地和远程：** chat、embed、generate、rerank、text-to-image 等服务
+   * **其他 Linux 发行版仅支持远程服务：** 基于 OpenVINO 的服务（text-to-image、text-to-speech、speech-to-text 等）
 
 例如，您可以使用 curl 在 Windows 上测试聊天服务。
 
@@ -618,7 +617,7 @@ AOG API 是一个 Restful API。您可以通过与调用云 AI 服务（如 Open
 .. code-block:: json
 
     {
-        "version": "v0.6",
+        "version": "v0.7",
         "services": {
             "models": {
                 "service_providers": {

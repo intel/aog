@@ -2,12 +2,11 @@
 
 中文 | [English](README_en.md)
 
-当前为 AOG 预览版 v0.6.0，更多功能和稳定性正在不断完善过程中。欢迎就发现的缺陷提交 Issues。
+当前为 AOG 预览版 v0.7.0，更多功能和稳定性正在不断完善过程中。欢迎就发现的缺陷提交 Issues。
 
-当前版本支持 chat、embed、text-to-image 服务，下层支持 ollama 和 openvino model server。更多服务如视频、音频相关，以及其他 AI 引擎，敬请
-期待正在开发的后续版本。
+当前版本支持 chat、embed、text-to-image、generate、rerank、text-to-speech、speech-to-text、image-to-image、image-to-video、speech-to-text-ws 等服务，下层支持 ollama 和 openvino model server，并提供插件化扩展能力。更多服务如 OCR 等，以及其他 AI 引擎，敬请期待正在开发的后续版本。
 
-**注意：** Linux 版本暂不支持 OpenVINO 引擎，因此不支持本地的文生图（text-to-image）、文本转语音（text-to-speech）、语音识别（speech-to-text）等服务。这些服务在 Linux 上需要使用远程服务提供商。
+**注意：** Linux 环境已支持 OpenVINO 引擎（当前仅支持 Ubuntu 24.04），可使用本地的 chat、embed、generate、rerank、text-to-image 等服务。其他 Linux 发行版本暂不支持 OpenVINO，需使用远程服务提供商。
 
 详细中文文档请参见[此处](https://intel.github.io/aog/index.html)
 
@@ -220,14 +219,14 @@ AOG 包含前端 Control Panel 和后端命令行工具两个部分。为了确�
    # sudo yum install sqlite-devel
    
    # 构建AOG
-   SQLITE_VEC_DIR ?= $(abspath internal/datastore/sqlite/sqlite-vec)
-   CGO_ENABLED=1 CGO_CFLAGS=-I$(SQLITE_VEC_DIR) go build -o aog -ldflags="-s -w" cmd/cli/main.go
+   SQLITE_VEC_DIR="$(pwd)/internal/datastore/sqlite/sqlite-vec"
+   CGO_ENABLED=1 CGO_CFLAGS="-I$SQLITE_VEC_DIR" go build -o aog -ldflags="-s -w" cmd/cli/main.go
    ```
 
    **macOS:**
    ```sh
-   SQLITE_VEC_DIR ?= $(abspath internal/datastore/sqlite/sqlite-vec)
-   CGO_ENABLED=1 CGO_CFLAGS=-I$(SQLITE_VEC_DIR go build -o aog -ldflags="-s -w" cmd/cli/main.go
+   SQLITE_VEC_DIR="$(pwd)/internal/datastore/sqlite/sqlite-vec"
+   CGO_ENABLED=1 CGO_CFLAGS="-I$SQLITE_VEC_DIR" go build -o aog -ldflags="-s -w" cmd/cli/main.go
    ```
 
    **Windows:**
@@ -268,8 +267,8 @@ echo "Step 1: Building frontend Control Panel..."
 
 # Step 2: Build AOG
 echo "Step 2: Building AOG command line tool..."
- SQLITE_VEC_DIR ?= $(abspath internal/datastore/sqlite/sqlite-vec)
- CGO_ENABLED=1 CGO_CFLAGS=-I$(SQLITE_VEC_DIR go build -o aog -ldflags="-s -w" cmd/cli/main.go
+SQLITE_VEC_DIR="$(pwd)/internal/datastore/sqlite/sqlite-vec"
+CGO_ENABLED=1 CGO_CFLAGS="-I$SQLITE_VEC_DIR" go build -o aog -ldflags="-s -w" cmd/cli/main.go
 
 echo "Build completed successfully!"
 echo "You can now run: ./aog server start"
@@ -310,12 +309,12 @@ fi
 CGO_ENABLED=1 CGO_CFLAGS="-I$SQLITE_VEC_DIR" go build -o aog -ldflags="-s -w" cmd/cli/main.go
 
 echo "Linux build completed successfully!"
-echo "Note: OpenVINO features (text-to-image, text-to-speech, speech-to-text) are not supported on Linux"
+echo "Note: OpenVINO features are supported on Ubuntu 24.04. Other Linux distributions need remote providers."
 echo "You can now run: ./aog server start"
 ```
 
 **Windows (build-all.bat):**
-```sh
+```bat
 @echo off
 echo Building AOG - Complete Build Process
 
@@ -371,7 +370,7 @@ aog install embed
 aog install text-to-image  # 注意：Linux平台不支持本地text-to-image服务
 
 # 除了默认的模型之外，您可以在服务中安装更多的模型
-aog pull <model_name> -for <service_name> --provider <provider_name>
+aog pull <model_name> --for <service_name> --provider <provider_name>
 
 # 获取服务信息，可查看指定服务，未指定则输出全部服务信息
 aog get services <service_name>
@@ -435,13 +434,11 @@ AOG API 是一个 Restful API。您可以通过与调用云 AI 服务（如 Open
 规范请参见 [AOG API 规范](https://intel.github.io/aog/index.html).
 
 值得注意的是，当前 AOG 预览提供了基本的 chat 等服务，下一版本将会提供视频、音频相关的更多服务。
-当前版本的文生图服务基于 OpenVINO 实现（仅支持 Windows 系统），通过 modelscope 拉取openvino转换过的 IR 格式的文生图模型提供服务。
+当前版本的文生图服务基于 OpenVINO 实现，通过 modelscope 拉取 openvino 转换过的 IR 格式的文生图模型提供服务。
 
 **Linux 平台注意事项：**
-- 文生图（text-to-image）服务：仅支持远程服务提供商
-- 文本转语音（text-to-speech）服务：仅支持远程服务提供商  
-- 语音识别（speech-to-text）服务：仅支持远程服务提供商
-- chat 和 embed 服务：完全支持本地和远程服务提供商 
+- **Ubuntu 24.04**：完全支持本地 OpenVINO 服务（chat、embed、generate、rerank、text-to-image 等）
+- **其他 Linux 发行版**：仅支持本地 Ollama 服务（chat、embed），OpenVINO 相关服务需使用远程服务提供商 
 
 例如，您可以使用 `curl` 在 Windows 上测试聊天服务。
 
@@ -479,7 +476,7 @@ Windows 上是 `AOGChecker.dll` 。您不需要发布 AI 堆栈或模型。
 
 ```json
 {
-  "version": "0.6",
+  "version": "v0.7",
   "service": {
     "chat": {
       "models": ["qwen2.5:0.5b", "qwen2.5:7b"]
@@ -501,9 +498,55 @@ Windows 上是 `AOGChecker.dll` 。您不需要发布 AI 堆栈或模型。
 4. 将应用程序与 `.aog` 文件以及与您的应用程序 `.exe` 文件在同一目录下的 `AOGChecker.dll` 文件一起发
    布。
 
+## 插件开发
+
+AOG 支持通过插件扩展其功能，可以集成新的本地 AI 引擎或远程 AI 服务。
+
+### 插件目录
+
+AOG 会根据不同操作系统在以下位置搜索插件：
+
+| 操作系统 | 插件目录路径 |
+|---------|-------------|
+| **Linux** | `/var/lib/aog/plugins` |
+| **macOS** | `~/Library/Application Support/AOG/plugins` |
+| **Windows** | `%APPDATA%\AOG\plugins` (通常为 `C:\Users\<用户名>\AppData\Roaming\AOG\plugins`) |
+
+**自定义插件目录：** 可以通过设置环境变量 `AOG_PLUGIN_DIR` 来自定义插件目录。
+
+**开发模式：** 如果当前工作目录包含 `plugins/` 子目录，AOG 会优先使用该目录，方便开发测试。
+
+### 文档
+- [AOG 插件开发指南](docs/zh-cn/source/aog插件开发指南.rst)
+
+### 示例插件
+- `plugin-example/ollama-plugin/`: 本地 Ollama 引擎插件示例
+- `plugin-example/deepseek-plugin/`: 远程 DeepSeek API 插件示例
+
+### 插件 SDK
+- [Plugin SDK 文档](plugin-sdk/)
+
 ## 发布历史
 
-### v0.6.0 (当前版本)
+### v0.7.0 (当前版本)
+
+**发布日期：** 2025-11-19
+
+**新功能：**
+- 支持以插件化的方式接入本地和远程 AI 引擎的（提供了Plugin开发SDK、本地以及云端插件Example）
+- 基于 OpenVINO 的 Chat/Embed/Generate/Rerank 服务支持
+- Linux 环境加入了 OpenVINO 支持 （暂只支持 ubuntu 24.04）
+- 支持无Python环境版的 OpenVINO 接入（无 Python 环境版仅支持 chat、embed、generate、rerank、text-to-image 服务）
+
+**改进：**
+- 优化服务启停机制和 Engine 保活逻辑
+- 修复已知安全漏洞和稳定性问题
+- 更新并完善文档内容
+
+---
+
+### v0.6.0
+
 **发布日期：** 2025-09-11
 
 **新功能：**
@@ -514,11 +557,10 @@ Windows 上是 `AOGChecker.dll` 。您不需要发布 AI 堆栈或模型。
 **改进：**
 - 修复了一些文档及稳定性bug
 
-
-
 ---
 
 ### v0.5.0
+
 **发布日期：** 2025-08-15
 
 **新功能：**
@@ -532,12 +574,10 @@ Windows 上是 `AOGChecker.dll` 。您不需要发布 AI 堆栈或模型。
 - 本地模型请求加入队列机制（当前非embed模型请求加入队列）、已加载模型定时清理机制
 - 修复了一些稳定性bug及文档
 
-
-
 ---
 
+### v0.4.0
 
-### v0.4.0 
 **发布日期：** 2025-07-03
 
 **新功能：**
@@ -553,6 +593,7 @@ Windows 上是 `AOGChecker.dll` 。您不需要发布 AI 堆栈或模型。
 ---
 
 ### v0.3.0
+
 **发布日期：** 2025-05-14
 
 **新功能：**
@@ -566,6 +607,7 @@ Windows 上是 `AOGChecker.dll` 。您不需要发布 AI 堆栈或模型。
 ---
 
 ### v0.2.1
+
 **发布日期：** 2025-03-25
 
 **新功能：**

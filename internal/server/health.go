@@ -36,9 +36,10 @@ func (h *HealthImpl) HealthHeader(ctx context.Context) (*dto.GetSeverHealthRespo
 func (h *HealthImpl) EngineHealthHandler(ctx context.Context, request *dto.GetEngineHealthRequest) (*dto.GetEngineHealthResponse, error) {
 	data := make(map[string]string)
 	if request.EngineName != "" {
-		engine := provider.GetModelEngine(request.EngineName)
-		err := engine.HealthCheck()
+		engine, err := provider.GetModelEngine(request.EngineName)
 		if err != nil {
+			data[request.EngineName] = "NOT_FOUND"
+		} else if err := engine.HealthCheck(ctx); err != nil {
 			data[request.EngineName] = "DOWN"
 		} else {
 			data[request.EngineName] = "UP"
@@ -46,8 +47,12 @@ func (h *HealthImpl) EngineHealthHandler(ctx context.Context, request *dto.GetEn
 
 	} else {
 		for _, modelEngineName := range types.SupportModelEngine {
-			engine := provider.GetModelEngine(modelEngineName)
-			err := engine.HealthCheck()
+			engine, err := provider.GetModelEngine(modelEngineName)
+			if err != nil {
+				data[modelEngineName] = "NOT_FOUND"
+				continue
+			}
+			err = engine.HealthCheck(ctx)
 			if err != nil {
 				data[modelEngineName] = "DOWN"
 				continue

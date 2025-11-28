@@ -2,6 +2,7 @@ package sqlite
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
 	"strconv"
@@ -13,7 +14,13 @@ import (
 	"gorm.io/gorm"
 )
 
-var allTables = []interface{}{new(types.ServiceProvider), new(types.Service), new(types.Model), new(types.VersionUpdateRecord), new(types.DataMigrateVersion)}
+var allTables = []interface{}{
+	new(types.ServiceProvider),
+	new(types.Service),
+	new(types.Model),
+	new(types.VersionUpdateRecord),
+	new(types.DataMigrateVersion),
+}
 
 // VersionManager
 type VersionManager interface {
@@ -45,7 +52,9 @@ func MigrateToLatest(vm VersionManager, ds *SQLite) error {
 		}
 		return nil
 	}
-	err := ds.db.AutoMigrate(&types.DataMigrateVersion{})
+	if err := ds.db.AutoMigrate(&types.DataMigrateVersion{}); err != nil {
+		return err
+	}
 	currentVersion, err := vm.GetCurrentVersion()
 	if err != nil {
 		return err
@@ -89,6 +98,8 @@ type (
 	MigrationV3 struct{}
 	MigrationV4 struct{}
 	MigrationV5 struct{}
+	MigrationV6 struct{} // Phase 3: Plugin support
+	MigrationV7 struct{} // text-to-image migration from gRPC to HTTP
 )
 
 func (m *MigrationV1) GetModifyFields(tableName string) map[string]string {
@@ -161,7 +172,7 @@ func (m *MigrationV4) ExtraDataOperation(ds *SQLite) error {
 		sp.ProviderName = model.ProviderName
 		err = ds.Get(ctx, sp)
 		if err != nil {
-			return err
+			continue
 		}
 		model.ServiceName = sp.ServiceName
 		model.ServiceSource = sp.ServiceSource
@@ -207,6 +218,70 @@ func (m *MigrationV5) Version() string {
 }
 
 func (m *MigrationV5) ExtraDataOperation(ds *SQLite) error {
+	return nil
+}
+
+// MigrationV6: Phase 3 Plugin support
+// Add plugin-related fields and tables
+func (m *MigrationV6) GetModifyFields(tableName string) map[string]string {
+	// No field mapping needed, new fields are handled by AutoMigrate
+	return map[string]string{}
+}
+
+func (m *MigrationV6) Version() string {
+	return "v0.6"
+}
+
+func (m *MigrationV6) ExtraDataOperation(ds *SQLite) error {
+	// Phase 3: Plugin support data migration
+	// Set default source field value to "builtin" for existing data
+	// Since we've set default:builtin in field definition, GORM AutoMigrate handles it
+	// No additional operation needed here
+	return nil
+}
+
+// MigrationV7: text-to-image service migration from gRPC to HTTP
+func (m *MigrationV7) GetModifyFields(tableName string) map[string]string {
+	return map[string]string{}
+}
+
+func (m *MigrationV7) Version() string {
+	return "v0.7"
+}
+
+func (m *MigrationV7) ExtraDataOperation(ds *SQLite) error {
+	// Migrate text-to-image service provider from gRPC to HTTP
+	logger.LogicLogger.Info("[Migration V0.7] Migrating text-to-image service from gRPC to HTTP")
+
+	var provider types.ServiceProvider
+	err := ds.db.Where("provider_name = ?", "local_openvino_text-to-image").First(&provider).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			// Record not found, skip migration
+			logger.LogicLogger.Info("[Migration V0.7] text-to-image provider not found, skipping migration")
+			return nil
+		}
+		return fmt.Errorf("failed to query text-to-image provider: %w", err)
+	}
+
+	// Check if migration is needed
+	if provider.Protocol == "HTTP" && provider.URL == "http://127.0.0.1:16666/v3/images/generations" {
+		logger.LogicLogger.Info("[Migration V0.7] text-to-image provider already migrated, skipping")
+		return nil
+	}
+
+	// Update protocol and URL
+	provider.Protocol = "HTTP"
+	provider.URL = "http://127.0.0.1:16666/v3/images/generations"
+
+	if err := ds.db.Save(&provider).Error; err != nil {
+		return fmt.Errorf("failed to update text-to-image provider: %w", err)
+	}
+
+	logger.LogicLogger.Info("[Migration V0.7] Successfully migrated text-to-image service to HTTP",
+		"protocol", provider.Protocol,
+		"url", provider.URL)
+
 	return nil
 }
 
@@ -442,13 +517,15 @@ func convertType(val interface{}, targetType reflect.Type) (reflect.Value, error
 	return reflect.Value{}, fmt.Errorf("不支持的类型转换: %v -> %v", v.Type(), targetType)
 }
 
-// 在 init 函数中注册迁移
+// Register migrations in init function
 func initMigrationList() {
 	RegisterMigration(&MigrationV1{})
 	RegisterMigration(&MigrationV2{})
 	RegisterMigration(&MigrationV3{})
 	RegisterMigration(&MigrationV4{})
 	RegisterMigration(&MigrationV5{})
+	RegisterMigration(&MigrationV6{}) // Phase 3: Plugin support
+	RegisterMigration(&MigrationV7{}) // text-to-image gRPC → HTTP
 }
 
 // SQLiteVersionManager 实现 VersionManager 接口，基于 version_update_record 表

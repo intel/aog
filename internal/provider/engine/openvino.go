@@ -45,6 +45,7 @@ import (
 	"github.com/intel/aog/internal/process"
 	"github.com/intel/aog/internal/types"
 	"github.com/intel/aog/internal/utils"
+	sdktypes "github.com/intel/aog/plugin-sdk/types"
 	"github.com/intel/aog/version"
 )
 
@@ -62,7 +63,7 @@ const (
 	OpenvinoGRPCHost     = constants.DefaultHost + ":" + OpenvinoGRPCPort
 	OpenvinoHTTPPort     = "16666"
 	OpenvinoHTTPHost     = constants.DefaultHost + ":" + OpenvinoHTTPPort
-	OpenvinoVersion      = "2025.0.0"
+	OpenvinoVersion      = "2025.3.0"
 	OpenvinoDefaultModel = "stable-diffusion-v-1-5-ov-fp16"
 
 	// Download URLs
@@ -71,14 +72,15 @@ const (
 	OVMSLinuxUbuntu22DownloadURL = constants.BaseDownloadURL + constants.UrlDirPathLinux + "/" + version.AOGVersion + "/ovms_ubuntu22_python_on.tar.gz"
 	OVMSLinuxUbuntu24DownloadURL = constants.BaseDownloadURL + constants.UrlDirPathLinux + "/" + version.AOGVersion + "/ovms_ubuntu24_python_on.tar.gz"
 
-	ScriptsDownloadURL = constants.BaseDownloadURL + constants.UrlDirPathWindows + "/" + version.AOGVersion + "/scripts.zip"
+	ScriptsWindowsDownloadURL = constants.BaseDownloadURL + constants.UrlDirPathWindows + "/" + version.AOGVersion + "/scripts.zip"
+	ScriptsLinuxDownloadURL   = constants.BaseDownloadURL + constants.UrlDirPathLinux + "/" + version.AOGVersion + "/scripts.zip"
 
 	// Required Version
-	OpenvinoMinVersion = "2025.2.0"
+	OpenvinoMinVersion = "2025.3.0"
 )
 
 type OpenvinoProvider struct {
-	EngineConfig   *types.EngineRecommendConfig
+	EngineConfig   *sdktypes.EngineRecommendConfig
 	processManager *process.EngineProcessManager
 }
 
@@ -225,7 +227,7 @@ func AsyncDownloadModelFile(ctx context.Context, a AsyncDownloadModelFileData, e
 	}
 
 	logger.EngineLogger.Info("[OpenVINO] Pull model completed: " + a.ModelName)
-	resp := types.ProgressResponse{Status: "success"}
+	resp := sdktypes.ProgressResponse{Status: "success"}
 	if data, err := json.Marshal(resp); err == nil {
 		a.DataCh <- data
 	} else {
@@ -325,7 +327,7 @@ func downloadSingleFile(ctx context.Context, a AsyncDownloadModelFileData, fileD
 			partSize += int64(n)
 
 			// Write progress
-			progress := types.ProgressResponse{
+			progress := sdktypes.ProgressResponse{
 				Status:    fmt.Sprintf("pulling %s", fileData.Name),
 				Digest:    fileData.Digest,
 				Total:     fileData.Size,
@@ -344,7 +346,7 @@ func downloadSingleFile(ctx context.Context, a AsyncDownloadModelFileData, fileD
 	}
 }
 
-func NewOpenvinoProvider(config *types.EngineRecommendConfig) *OpenvinoProvider {
+func NewOpenvinoProvider(config *sdktypes.EngineRecommendConfig) *OpenvinoProvider {
 	if config != nil {
 		provider := &OpenvinoProvider{
 			EngineConfig: config,
@@ -369,7 +371,12 @@ func NewOpenvinoProvider(config *types.EngineRecommendConfig) *OpenvinoProvider 
 	}
 
 	openvinoProvider := new(OpenvinoProvider)
-	openvinoProvider.EngineConfig = openvinoProvider.GetConfig()
+	config, err = openvinoProvider.GetConfig(context.Background())
+	if err != nil {
+		logger.EngineLogger.Error("[OpenVINO] Get config failed", "error", err)
+		return nil
+	}
+	openvinoProvider.EngineConfig = config
 	if openvinoProvider.EngineConfig == nil {
 		logger.EngineLogger.Error("[OpenVINO] OpenVINO engine is not available")
 		return nil
@@ -395,7 +402,10 @@ func (o *OpenvinoProvider) StartEngine(mode string) error {
 		o.processManager = process.NewEngineProcessManager("openvino", o.EngineConfig)
 	}
 
-	if err := o.processManager.StartEngine(mode, o.HealthCheck); err != nil {
+	healthCheckFn := func() error {
+		return o.HealthCheck(context.Background())
+	}
+	if err := o.processManager.StartEngine(mode, healthCheckFn); err != nil {
 		// If engine not found, this is expected behavior - just log and return success
 		if strings.Contains(err.Error(), "executable not found") {
 			logger.EngineLogger.Info("[OpenVINO] Engine not installed, skipping startup")
@@ -423,14 +433,14 @@ func (o *OpenvinoProvider) SetProcessManager(pm *process.EngineProcessManager) {
 	o.processManager = pm
 }
 
-func (o *OpenvinoProvider) GetConfig() *types.EngineRecommendConfig {
+func (o *OpenvinoProvider) GetConfig(ctx context.Context) (*sdktypes.EngineRecommendConfig, error) {
 	downloadPath, err := utils.GetDownloadDir()
 	if _, err = os.Stat(downloadPath); os.IsNotExist(err) {
 		err = os.MkdirAll(downloadPath, 0o755)
 		if err != nil {
 			slog.Error("Create download path failed: " + err.Error())
 			logger.EngineLogger.Error("[OpenVINO] Create download path failed: " + err.Error())
-			return nil
+			return nil, fmt.Errorf("create download path failed: %w", err)
 		}
 	}
 
@@ -438,7 +448,7 @@ func (o *OpenvinoProvider) GetConfig() *types.EngineRecommendConfig {
 	if err != nil {
 		slog.Error("Get AOG data dir failed: " + err.Error())
 		logger.EngineLogger.Error("[OpenVINO] Get AOG data dir failed: " + err.Error())
-		return nil
+		return nil, fmt.Errorf("get AOG data dir failed: %w", err)
 	}
 	execFile := ""
 	execPath := ""
@@ -460,7 +470,7 @@ func (o *OpenvinoProvider) GetConfig() *types.EngineRecommendConfig {
 		if err != nil {
 			slog.Error("Failed to detect Linux distribution: " + err.Error())
 			logger.EngineLogger.Error("[OpenVINO] Failed to detect Linux distribution: " + err.Error())
-			return nil
+			return nil, fmt.Errorf("failed to detect Linux distribution: %w", err)
 		}
 
 		// Select download URL based on distribution and version
@@ -474,17 +484,15 @@ func (o *OpenvinoProvider) GetConfig() *types.EngineRecommendConfig {
 			default:
 				slog.Error("Unsupported Ubuntu version: " + version)
 				logger.EngineLogger.Error("[OpenVINO] Unsupported Ubuntu version: " + version)
-				return nil
+				return nil, fmt.Errorf("unsupported Ubuntu version: %s. Only Ubuntu 22.04 and 24.04 are supported", version)
 			}
-		case "rhel", "centos", "rocky", "almalinux":
-			// RedHat-based distributions
-			downloadUrl = OVMSLinuxRedHatDownloadURL
 		case "deepin":
+			// Deepin 使用 Ubuntu 22.04 的配置
 			downloadUrl = OVMSLinuxUbuntu22DownloadURL
 		default:
 			slog.Error("Unsupported Linux distribution: " + distro)
 			logger.EngineLogger.Error("[OpenVINO] Unsupported Linux distribution: " + distro)
-			return nil
+			return nil, fmt.Errorf("unsupported Linux distribution: %s. Only Ubuntu 22.04, Ubuntu 24.04, and Deepin are supported", distro)
 		}
 	case "darwin":
 		execFile = "ovms"
@@ -494,10 +502,10 @@ func (o *OpenvinoProvider) GetConfig() *types.EngineRecommendConfig {
 	default:
 		slog.Error("Unsupported OS: " + runtime.GOOS)
 		logger.EngineLogger.Error("[OpenVINO] Unsupported OS: " + runtime.GOOS)
-		return nil
+		return nil, fmt.Errorf("unsupported OS: %s", runtime.GOOS)
 	}
 
-	return &types.EngineRecommendConfig{
+	return &sdktypes.EngineRecommendConfig{
 		Host:           OpenvinoGRPCHost,
 		Origin:         "127.0.0.1",
 		Scheme:         types.ProtocolHTTP,
@@ -507,10 +515,10 @@ func (o *OpenvinoProvider) GetConfig() *types.EngineRecommendConfig {
 		EnginePath:     enginePath,
 		ExecPath:       execPath,
 		ExecFile:       execFile,
-	}
+	}, nil
 }
 
-func (o *OpenvinoProvider) HealthCheck() error {
+func (o *OpenvinoProvider) HealthCheck(ctx context.Context) error {
 	c := o.GetDefaultClient()
 	health, err := c.ServerLive()
 	if err != nil || !health.GetLive() {
@@ -522,7 +530,7 @@ func (o *OpenvinoProvider) HealthCheck() error {
 	return nil
 }
 
-func (o *OpenvinoProvider) GetVersion(ctx context.Context, resp *types.EngineVersionResponse) (*types.EngineVersionResponse, error) {
+func (o *OpenvinoProvider) GetVersion(ctx context.Context, resp *sdktypes.EngineVersionResponse) (*sdktypes.EngineVersionResponse, error) {
 	// Add to PATH
 	setupVarsPath := filepath.Join(o.EngineConfig.ExecPath, "setupvars.bat")
 	ovmsExePath := filepath.Join(o.EngineConfig.ExecPath, o.EngineConfig.ExecFile)
@@ -578,26 +586,26 @@ call "%s"
 }
 
 // CheckEngine checks if OpenVINO engine is installed
-func (o *OpenvinoProvider) CheckEngine() bool {
+func (o *OpenvinoProvider) CheckEngine() (bool, error) {
 	if o.EngineConfig == nil {
-		return false
+		return false, nil
 	}
 
 	// Only supports Windows and Linux
 	if runtime.GOOS != "windows" && runtime.GOOS != "linux" {
-		return false
+		return false, nil
 	}
 
 	// Check if model directory exists
 	modelDir := fmt.Sprintf("%s/models", o.EngineConfig.EnginePath)
 	if _, err := os.Stat(modelDir); os.IsNotExist(err) {
-		return false
+		return false, nil
 	}
 
 	// Check if config file exists
 	configFile := fmt.Sprintf("%s/config.json", modelDir)
 	if _, err := os.Stat(configFile); os.IsNotExist(err) {
-		return false
+		return false, nil
 	}
 
 	// Check if executable file exists (use correct path and filename based on platform)
@@ -612,26 +620,49 @@ func (o *OpenvinoProvider) CheckEngine() bool {
 	}
 
 	if _, err := os.Stat(execPath); os.IsNotExist(err) {
-		return false
+		return false, nil
 	}
 
 	// Additional check for Python script dependencies (Linux specific)
 	if runtime.GOOS == "linux" {
 		pythonDir := filepath.Join(o.EngineConfig.ExecPath, "ovms", "lib", "python")
 		if _, err := os.Stat(pythonDir); os.IsNotExist(err) {
-			return false
+			return false, nil
 		}
 	}
 
-	return true
+	return true, nil
 }
 
-func (o *OpenvinoProvider) InstallEngine(cover bool) error {
+func (o *OpenvinoProvider) InstallEngine(ctx context.Context) error {
+	// Default behavior: do not overwrite existing installations
+	cover := false
+
 	modelDir := fmt.Sprintf("%s/models", o.EngineConfig.EnginePath)
 
+	// Linux 发行版支持检查
 	if runtime.GOOS == "linux" {
-		logger.EngineLogger.Error("[OpenVINO] Install models on Linux is not supported currently")
-		return fmt.Errorf("openVINO Model Server installation is only supported on Windows currently")
+		distro, version, err := detectLinuxDistribution()
+		if err != nil {
+			logger.EngineLogger.Error("[OpenVINO] Failed to detect Linux distribution: " + err.Error())
+			return fmt.Errorf("failed to detect Linux distribution: %v", err)
+		}
+
+		// 仅支持 Ubuntu 22.04/24.04 和 Deepin
+		supported := false
+		if distro == "ubuntu" && (version == "22.04" || version == "24.04") {
+			supported = true
+		} else if distro == "deepin" {
+			supported = true
+		}
+
+		if !supported {
+			errMsg := fmt.Sprintf("[OpenVINO] Unsupported Linux distribution: %s %s. Only Ubuntu 22.04, Ubuntu 24.04, and Deepin are supported", distro, version)
+			logger.EngineLogger.Error(errMsg)
+			return fmt.Errorf("unsupported Linux distribution: %s %s. Only Ubuntu 22.04, Ubuntu 24.04, and Deepin are supported", distro, version)
+		}
+
+		logger.EngineLogger.Info(fmt.Sprintf("[OpenVINO] Detected supported Linux distribution: %s %s", distro, version))
 	}
 	// When cover installing, first delete the entire EnginePath directory (including models, ovms, scripts, etc.)
 	if cover {
@@ -717,20 +748,26 @@ func (o *OpenvinoProvider) InstallEngine(cover bool) error {
 	}
 
 	// Download Python script file archive
-	scriptZipUrl := ScriptsDownloadURL
-	scriptZipFile, err := utils.DownloadFile(scriptZipUrl, o.EngineConfig.EnginePath, cover)
+	var scriptDownloadUrl string
+	if runtime.GOOS == "windows" {
+		scriptDownloadUrl = ScriptsWindowsDownloadURL
+	} else {
+		scriptDownloadUrl = ScriptsLinuxDownloadURL
+	}
+
+	scriptFile, err := utils.DownloadFile(scriptDownloadUrl, o.EngineConfig.EnginePath, cover)
 	if err != nil {
-		slog.Error("Failed to download scripts.zip", "error", err)
-		logger.EngineLogger.Error("[OpenVINO] Failed to download scripts.zip: " + err.Error())
-		return fmt.Errorf("failed to download scripts.zip: %v", err)
+		slog.Error("Failed to download scripts archive", "error", err)
+		logger.EngineLogger.Error("[OpenVINO] Failed to download scripts archive: " + err.Error())
+		return fmt.Errorf("failed to download scripts archive: %v", err)
 	}
 
 	// Extract Python script files
-	err = utils.UnzipFile(scriptZipFile, o.EngineConfig.EnginePath)
+	err = utils.UnzipFile(scriptFile, o.EngineConfig.EnginePath)
 	if err != nil {
-		slog.Error("Failed to unzip scripts.zip", "error", err)
-		logger.EngineLogger.Error("[OpenVINO] Failed to unzip scripts.zip: " + err.Error())
-		return fmt.Errorf("failed to unzip scripts.zip: %v", err)
+		slog.Error("Failed to extract scripts archive", "error", err)
+		logger.EngineLogger.Error("[OpenVINO] Failed to extract scripts archive: " + err.Error())
+		return fmt.Errorf("failed to extract scripts archive: %v", err)
 	}
 
 	// Cross-platform handling: choose different script execution methods based on operating system
@@ -779,7 +816,7 @@ func (o *OpenvinoProvider) InstallEngine(cover bool) error {
 		// 1. Construct shell script commands (ensure all commands execute in the same session)
 		shellContent := ""
 
-		// Select download URL based on distribution and version
+		// Select shell script based on distribution and version
 		switch distro {
 		case "ubuntu":
 			switch version {
@@ -790,14 +827,15 @@ func (o *OpenvinoProvider) InstallEngine(cover bool) error {
 			default:
 				slog.Error("Unsupported Ubuntu version: " + version)
 				logger.EngineLogger.Error("[OpenVINO] Unsupported Ubuntu version: " + version)
-				return nil
+				return fmt.Errorf("unsupported Ubuntu version: %s", version)
 			}
-		case "rhel", "centos", "rocky", "almalinux":
-			shellContent = fmt.Sprintf(InitShellLinuxREHL96, libPath, envPath, pythonPath, enginePath)
+		case "deepin":
+			// Deepin 使用 Ubuntu 22.04 的安装脚本
+			shellContent = fmt.Sprintf(InitShellLinuxUbuntu2204, libPath, envPath, pythonPath, enginePath)
 		default:
 			slog.Error("Unsupported Linux distribution: " + distro)
 			logger.EngineLogger.Error("[OpenVINO] Unsupported Linux distribution: " + distro)
-			return nil
+			return fmt.Errorf("unsupported Linux distribution: %s", distro)
 		}
 
 		logger.EngineLogger.Debug("[OpenVINO] Shell content: " + shellContent)
@@ -912,7 +950,7 @@ func (o *OpenvinoProvider) saveConfig(config *OpenvinoModelServerConfig) error {
 	return os.WriteFile(o.getConfigPath(), data, 0o644)
 }
 
-func (o *OpenvinoProvider) ListModels(ctx context.Context) (*types.ListResponse, error) {
+func (o *OpenvinoProvider) ListModels(ctx context.Context) (*sdktypes.ListResponse, error) {
 	config, err := o.loadConfig()
 	if err != nil {
 		slog.Error("Failed to load config", "error", err)
@@ -920,19 +958,19 @@ func (o *OpenvinoProvider) ListModels(ctx context.Context) (*types.ListResponse,
 		return nil, err
 	}
 
-	modelList := make([]types.ListModelResponse, 0)
+	modelList := make([]sdktypes.ModelInfo, 0)
 	for _, model := range config.MediapipeConfigList {
-		modelList = append(modelList, types.ListModelResponse{
+		modelList = append(modelList, sdktypes.ModelInfo{
 			Name: model.Name,
 		})
 	}
 
-	return &types.ListResponse{
+	return &sdktypes.ListResponse{
 		Models: modelList,
 	}, nil
 }
 
-func (o *OpenvinoProvider) PullModelStream(ctx context.Context, req *types.PullModelRequest) (chan []byte, chan error) {
+func (o *OpenvinoProvider) PullModelStream(ctx context.Context, req *sdktypes.PullModelRequest) (chan []byte, chan error) {
 	ctx, cancel := context.WithCancel(ctx)
 	modelArray := append(client.ModelClientMap["openvino_"+req.Model], cancel)
 	client.ModelClientMap["openvino_"+req.Model] = modelArray
@@ -978,8 +1016,8 @@ func (o *OpenvinoProvider) PullModelStream(ctx context.Context, req *types.PullM
 	return newDataCh, newErrorCh
 }
 
-func (o *OpenvinoProvider) DeleteModel(ctx context.Context, req *types.DeleteRequest) error {
-	err := o.UnloadModel(ctx, &types.UnloadModelRequest{Models: []string{req.Model}})
+func (o *OpenvinoProvider) DeleteModel(ctx context.Context, req *sdktypes.DeleteRequest) error {
+	err := o.UnloadModel(ctx, &sdktypes.UnloadModelRequest{Models: []string{req.Model}})
 	if err != nil {
 		slog.Error("Failed to unload model", "error", err)
 		logger.EngineLogger.Error("[OpenVINO] Failed to unload model: " + err.Error())
@@ -1020,6 +1058,32 @@ func (o *OpenvinoProvider) addModelToConfig(modelName, modelType string) error {
 	return o.saveConfig(config)
 }
 
+// inferToolParser infers the tool_parser value based on model name
+func (o *OpenvinoProvider) inferToolParser(modelName string) string {
+	modelNameLower := strings.ToLower(modelName)
+
+	// Check for specific model keywords
+	// qwen3 uses hermes3 parser
+	if strings.Contains(modelNameLower, "qwen") {
+		return "hermes3"
+	}
+	if strings.Contains(modelNameLower, "hermes") {
+		return "hermes3"
+	}
+	if strings.Contains(modelNameLower, "llama") {
+		return "llama3"
+	}
+	if strings.Contains(modelNameLower, "phi") {
+		return "phi4"
+	}
+	if strings.Contains(modelNameLower, "mistral") {
+		return "mistral"
+	}
+
+	// Default: empty string (no parser)
+	return ""
+}
+
 func (o *OpenvinoProvider) generateGraphPBTxt(modelName, modelType string) error {
 	modelDir := fmt.Sprintf("%s/models/%s", o.EngineConfig.EnginePath, modelName)
 	if err := os.MkdirAll(modelDir, 0o750); err != nil {
@@ -1033,13 +1097,23 @@ func (o *OpenvinoProvider) generateGraphPBTxt(modelName, modelType string) error
 	var template string
 	switch modelType {
 	case types.ServiceTextToImage:
-		template = fmt.Sprintf(GraphPBTxtTextToImage, modelName, enginePath)
+		template = GraphPBTxtTextToImage
 	case types.ServiceSpeechToText:
 		template = fmt.Sprintf(GraphPBTxtSpeechToText, modelName, enginePath)
 	case types.ServiceSpeechToTextWS:
 		template = fmt.Sprintf(GraphPBTxtSpeechToText, modelName, enginePath)
 	case types.ServiceTextToSpeech:
 		template = fmt.Sprintf(GraphPBTxtTextToSpeech, modelName, enginePath)
+	case types.ServiceChat:
+		toolParser := o.inferToolParser(modelName)
+		reasoningParser := "qwen3"
+		template = fmt.Sprintf(GraphPBTxtChat, enginePath, modelName, toolParser, reasoningParser)
+	case types.ServiceGenerate:
+		template = fmt.Sprintf(GraphPBTxtGenerate, enginePath, modelName)
+	case types.ServiceEmbed:
+		template = fmt.Sprintf(GraphPBTxtEmbed, enginePath, modelName)
+	case types.ServiceRerank:
+		template = fmt.Sprintf(GraphPBTxtRerank, enginePath, modelName)
 	default:
 		slog.Error("Unsupported model type: " + modelType)
 		logger.EngineLogger.Error("[OpenVINO] Unsupported model type: " + modelType)
@@ -1047,10 +1121,25 @@ func (o *OpenvinoProvider) generateGraphPBTxt(modelName, modelType string) error
 	}
 
 	graphPath := fmt.Sprintf("%s/graph.pbtxt", modelDir)
-	return os.WriteFile(graphPath, []byte(template), 0o644)
+	if err := os.WriteFile(graphPath, []byte(template), 0o644); err != nil {
+		return err
+	}
+
+	// For Chat service, also generate chat_template.jinja
+	if modelType == types.ServiceChat {
+		chatTemplatePath := fmt.Sprintf("%s/chat_template.jinja", modelDir)
+		if err := os.WriteFile(chatTemplatePath, []byte(ChatTemplateJinja), 0o644); err != nil {
+			slog.Error("Failed to create chat_template.jinja", "error", err)
+			logger.EngineLogger.Error("[OpenVINO] Failed to create chat_template.jinja: " + err.Error())
+			return err
+		}
+		logger.EngineLogger.Info("[OpenVINO] Generated chat_template.jinja for model: " + modelName)
+	}
+
+	return nil
 }
 
-func (o *OpenvinoProvider) PullModel(ctx context.Context, req *types.PullModelRequest, fn types.PullProgressFunc) (*types.ProgressResponse, error) {
+func (o *OpenvinoProvider) PullModel(ctx context.Context, req *sdktypes.PullModelRequest, fn sdktypes.PullProgressFunc) (*sdktypes.ProgressResponse, error) {
 	ctx, cancel := context.WithCancel(ctx)
 	modelArray := append(client.ModelClientMap["openvino_"+req.Model], cancel)
 	client.ModelClientMap["openvino_"+req.Model] = modelArray
@@ -1121,7 +1210,7 @@ func (o *OpenvinoProvider) PullModel(ctx context.Context, req *types.PullModelRe
 			break
 		}
 	}
-	return &types.ProgressResponse{}, nil
+	return &sdktypes.ProgressResponse{}, nil
 }
 
 const (
@@ -1144,25 +1233,20 @@ node {
   }
 }`
 
-	GraphPBTxtTextToImage = `input_stream: "OVMS_PY_TENSOR:prompt"
-input_stream: "OVMS_PY_TENSOR_BATCH:batch"
-input_stream: "OVMS_PY_TENSOR_HEIGHT:height"
-input_stream: "OVMS_PY_TENSOR_WIDTH:width"
-output_stream: "OVMS_PY_TENSOR:image"
+	GraphPBTxtTextToImage = `input_stream: "HTTP_REQUEST_PAYLOAD:input"
+output_stream: "HTTP_RESPONSE_PAYLOAD:output"
 
-node {
-  name: "%s"
-  calculator: "PythonExecutorCalculator"
-  input_side_packet: "PYTHON_NODE_RESOURCES:py"
-
-  input_stream: "INPUT:prompt"
-  input_stream: "BATCH:batch"
-  input_stream: "HEIGHT:height"
-  input_stream: "WIDTH:width"
-  output_stream: "OUTPUT:image"
+node: {
+  name: "ImageGenExecutor"
+  calculator: "ImageGenCalculator"
+  input_stream: "HTTP_REQUEST_PAYLOAD:input"
+  input_side_packet: "IMAGE_GEN_NODE_RESOURCES:pipes"
+  output_stream: "HTTP_RESPONSE_PAYLOAD:output"
   node_options: {
-    [type.googleapis.com/mediapipe.PythonExecutorCalculatorOptions]: {
-      handler_path: "%s/scripts/text-to-image/stable_diffusion.py"
+    [type.googleapis.com / mediapipe.ImageGenCalculatorOptions]: {
+      models_path: "./",
+      device: "GPU",
+      max_resolution: '2048x2048',
     }
   }
 }`
@@ -1188,18 +1272,183 @@ node {
   }
 }`
 
+	GraphPBTxtChat = `input_stream: "HTTP_REQUEST_PAYLOAD:input"
+output_stream: "HTTP_RESPONSE_PAYLOAD:output"
+
+node: {
+  name: "LLMExecutor"
+  calculator: "HttpLLMCalculator"
+  input_stream: "LOOPBACK:loopback"
+  input_stream: "HTTP_REQUEST_PAYLOAD:input"
+  input_side_packet: "LLM_NODE_RESOURCES:llm"
+  output_stream: "LOOPBACK:loopback"
+  output_stream: "HTTP_RESPONSE_PAYLOAD:output"
+  input_stream_info: {
+    tag_index: 'LOOPBACK:0',
+    back_edge: true
+  }
+  node_options: {
+      [type.googleapis.com / mediapipe.LLMCalculatorOptions]: {
+          models_path: "%s/models/%s",
+          plugin_config: '{}',
+          enable_prefix_caching: false,
+          cache_size: 1,
+          max_num_batched_tokens: 8192,
+          dynamic_split_fuse: false, 
+          max_num_seqs: 256,
+          device: "GPU",
+          tool_parser: "%s",
+          reasoning_parser: "%s",
+      }
+  }
+  input_stream_handler {
+    input_stream_handler: "SyncSetInputStreamHandler",
+    options {
+      [mediapipe.SyncSetInputStreamHandlerOptions.ext] {
+        sync_set {
+          tag_index: "LOOPBACK:0"
+        }
+      }
+    }
+  }
+}`
+
+	GraphPBTxtGenerate = `input_stream: "HTTP_REQUEST_PAYLOAD:input"
+output_stream: "HTTP_RESPONSE_PAYLOAD:output"
+
+node: {
+  name: "LLMExecutor"
+  calculator: "HttpLLMCalculator"
+  input_stream: "LOOPBACK:loopback"
+  input_stream: "HTTP_REQUEST_PAYLOAD:input"
+  input_side_packet: "LLM_NODE_RESOURCES:llm"
+  output_stream: "LOOPBACK:loopback"
+  output_stream: "HTTP_RESPONSE_PAYLOAD:output"
+  input_stream_info: {
+    tag_index: 'LOOPBACK:0',
+    back_edge: true
+  }
+  node_options: {
+      [type.googleapis.com / mediapipe.LLMCalculatorOptions]: {
+          models_path: "%s/models/%s",
+          plugin_config: '{}',
+          enable_prefix_caching: false,
+          cache_size: 1,
+          max_num_batched_tokens: 8192,
+          dynamic_split_fuse: false, 
+          max_num_seqs: 256,
+          device: "GPU",
+      }
+  }
+  input_stream_handler {
+    input_stream_handler: "SyncSetInputStreamHandler",
+    options {
+      [mediapipe.SyncSetInputStreamHandlerOptions.ext] {
+        sync_set {
+          tag_index: "LOOPBACK:0"
+        }
+      }
+    }
+  }
+}`
+
+	GraphPBTxtEmbed = `input_stream: "REQUEST_PAYLOAD:input"
+output_stream: "RESPONSE_PAYLOAD:output"
+
+node {
+  name: "EmbeddingsExecutor"
+  input_side_packet: "EMBEDDINGS_NODE_RESOURCES:embeddings_servable"
+  calculator: "EmbeddingsCalculatorOV"
+  input_stream: "REQUEST_PAYLOAD:input"
+  output_stream: "RESPONSE_PAYLOAD:output"
+  node_options: {
+    [type.googleapis.com / mediapipe.EmbeddingsCalculatorOVOptions]: {
+      models_path: "%s/models/%s",
+      normalize_embeddings: true,
+      pooling: CLS,
+      truncate: true,
+      target_device: "CPU"
+    }
+  }
+}`
+
+	GraphPBTxtRerank = `input_stream: "REQUEST_PAYLOAD:input"
+output_stream: "RESPONSE_PAYLOAD:output"
+
+node {
+  name: "RerankExecutor"
+  input_side_packet: "RERANK_NODE_RESOURCES:rerank_servable"
+  calculator: "RerankCalculatorOV"
+  input_stream: "REQUEST_PAYLOAD:input"
+  output_stream: "RESPONSE_PAYLOAD:output"
+  node_options: {
+    [type.googleapis.com / mediapipe.RerankCalculatorOVOptions]: {
+      models_path: "%s/models/%s",
+      target_device: "CPU"
+    }
+  }
+}`
+
+	ChatTemplateJinja = `{%- if not tools is defined %}{% set tools = None %}{%- endif %}
+{%- if not date_string is defined %}
+    {%- if strftime_now is defined %}
+        {%- set date_string = strftime_now("%Y-%m-%d") %}
+    {%- else %}
+        {%- set date_string = "2024-01-01" %}
+    {%- endif %}
+{%- endif %}
+{# ==== 系统消息（可选性自定义） ==== #}
+{%- if messages[0]['role'] == 'system' %}
+    {%- set system_message = messages[0]['content'] | trim %}
+    {%- set messages = messages[1:] %}
+{%- else %}
+    {%- set system_message = "你是一名可以调用工具的AI助手。" %}
+{%- endif %}
+<|start|>system
+{{ system_message }}
+知识截止: 2023-12-31
+当前日期: {{ date_string }}
+{%- if tools %}
+可用工具:
+{%- for t in tools %}
+- {{ t | tojson(indent=4) }}
+{%- endfor %}
+调用工具时，请以 {"name": 工具名, "parameters": {...}} 的JSON严格返回。
+{%- endif %}
+<|end|>
+{# ==== 聊天消息历史区块（无图片/无代码，纯文本） ==== #}
+{%- for message in messages %}
+    {%- if message['role'] in ['user', 'assistant'] %}
+<|start|>{{ message['role'] }}
+{{ message['content'] | trim }}
+<|end|>
+    {%- elif message['role'] in ['tool', 'function'] %}
+<|start|>function
+{%- if message['tool_call'] %}
+{{ message['tool_call'] | tojson }}
+{%- else %}
+{{ message['content'] | tojson }}
+{%- endif %}
+<|end|>
+    {%- endif %}
+{%- endfor %}
+{# ==== assistant新答复提示 ==== #}
+{%- if add_generation_prompt %}
+<|start|>assistant
+{%- endif %}`
+
 	InitShellWin = `@echo on
 call "%s\setupvars.bat"
 set PATH=%s\python\Scripts;%%PATH%%
-python -m pip install -r "%s\scripts\requirements.txt" -i https://mirrors.aliyun.com/pypi/simple/`
+python -m pip install -r "%s\scripts\requirements.txt" -i https://mirrors.aliyun.com/pypi/simple/ --break-system-packages`
 
 	InitShellLinuxUbuntu2204 = `#!/bin/bash
 export LD_LIBRARY_PATH=%s
 export PATH=$PATH:%s
 export PYTHONPATH=%s
-sudo apt -y install libpython3.10
+sudo apt -y install libpython3.10 python3-pip
 python3 -m pip install "Jinja2==3.1.6" "MarkupSafe==3.0.2"
-python3 -m pip install -r "%s/scripts/requirements.txt" -i https://mirrors.aliyun.com/pypi/simple/`
+python3 -m pip install -r "%s/scripts/requirements.txt" -i https://mirrors.aliyun.com/pypi/simple/ --break-system-packages`
 
 	InitShellLinuxUbuntu2404 = `#!/bin/bash
 export LD_LIBRARY_PATH=%s
@@ -1207,26 +1456,14 @@ export PATH=$PATH:%s
 export PYTHONPATH=%s
 sudo apt -y install libpython3.12
 python3 -m pip install "Jinja2==3.1.6" "MarkupSafe==3.0.2"
-python3 -m pip install -r "%s/scripts/requirements.txt" -i https://mirrors.aliyun.com/pypi/simple/`
+python3 -m pip install -r "%s/scripts/requirements.txt" -i https://mirrors.aliyun.com/pypi/simple/ --break-system-packages`
 	InitShellLinuxREHL96 = `#!/bin/bash
 export LD_LIBRARY_PATH=%s
 export PATH=$PATH:%s
 export PYTHONPATH=%s
 sudo yum install -y python39-libs
 python3 -m pip install "Jinja2==3.1.6" "MarkupSafe==3.0.2"
-python3 -m pip install -r "%s/scripts/requirements.txt" -i https://mirrors.aliyun.com/pypi/simple/`
-
-	StartShellWin = `@echo on
-	call "%s\\setupvars.bat"
-	set PATH=%s\\python\\Scripts;%%PATH%%
-	set HF_HOME=%s\\.cache
-	set HF_ENDPOINT=https://hf-mirror.com
-	%s --port 9000 --grpc_bind_address 127.0.0.1 --config_path %s\\config.json`
-	StartShellLinux = `#!/bin/bash
-export LD_LIBRARY_PATH=%s
-export PATH=$PATH:%s
-export PYTHONPATH=%s
-ovms --port 9000 --grpc_bind_address 127.0.0.1 --config_path %s/config.json`
+python3 -m pip install -r "%s/scripts/requirements.txt" -i https://mirrors.aliyun.com/pypi/simple/ --break-system-packages`
 )
 
 func (o *OpenvinoProvider) checkModelMetadata(modelName string) (err error) {
@@ -1254,7 +1491,7 @@ func (o *OpenvinoProvider) checkModelMetadata(modelName string) (err error) {
 	return nil
 }
 
-func (o *OpenvinoProvider) GetRunningModels(ctx context.Context) (*types.ListResponse, error) {
+func (o *OpenvinoProvider) GetRunningModels(ctx context.Context) (*sdktypes.ListResponse, error) {
 	config, err := o.loadConfig()
 	if err != nil {
 		slog.Error("Failed to load config", "error", err)
@@ -1262,19 +1499,19 @@ func (o *OpenvinoProvider) GetRunningModels(ctx context.Context) (*types.ListRes
 		return nil, err
 	}
 
-	modelList := make([]types.ListModelResponse, 0)
+	modelList := make([]sdktypes.ModelInfo, 0)
 	for _, model := range config.MediapipeConfigList {
-		modelList = append(modelList, types.ListModelResponse{
+		modelList = append(modelList, sdktypes.ModelInfo{
 			Name: model.Name,
 		})
 	}
 
-	return &types.ListResponse{
+	return &sdktypes.ListResponse{
 		Models: modelList,
 	}, nil
 }
 
-func (o *OpenvinoProvider) LoadModel(ctx context.Context, req *types.LoadRequest) error {
+func (o *OpenvinoProvider) LoadModel(ctx context.Context, req *sdktypes.LoadRequest) error {
 	config, err := o.loadConfig()
 	if err != nil {
 		slog.Error("Failed to load config", "error", err)
@@ -1339,7 +1576,7 @@ func (o *OpenvinoProvider) LoadModel(ctx context.Context, req *types.LoadRequest
 	return nil
 }
 
-func (o *OpenvinoProvider) UnloadModel(ctx context.Context, req *types.UnloadModelRequest) error {
+func (o *OpenvinoProvider) UnloadModel(ctx context.Context, req *sdktypes.UnloadModelRequest) error {
 	config, err := o.loadConfig()
 	if err != nil {
 		slog.Error("Failed to load config", "error", err)
@@ -1487,10 +1724,10 @@ func normalizeDistroName(name string) string {
 	}
 }
 
-func (o *OpenvinoProvider) UpgradeEngine() error {
+func (o *OpenvinoProvider) UpgradeEngine(ctx context.Context) error {
 	// Get current engine version
-	var resp types.EngineVersionResponse
-	verResp, err := o.GetVersion(context.Background(), &resp)
+	var resp sdktypes.EngineVersionResponse
+	verResp, err := o.GetVersion(ctx, &resp)
 	if err != nil {
 		logger.EngineLogger.Error("[Ollama] GetVersion failed: " + err.Error())
 		return fmt.Errorf("get current engine version failed: %v", err)
@@ -1514,8 +1751,8 @@ func (o *OpenvinoProvider) UpgradeEngine() error {
 	}
 	o.SetOperateStatus(0)
 
-	// Install new version
-	if err := o.InstallEngine(true); err != nil {
+	// Install new version (with overwrite enabled for upgrade)
+	if err := o.InstallEngine(ctx); err != nil {
 		logger.EngineLogger.Error("[OpenVINO] InstallEngine failed: " + err.Error())
 		return fmt.Errorf("install engine failed: %v", err)
 	}
@@ -1534,4 +1771,10 @@ func (o *OpenvinoProvider) GetOperateStatus() int {
 func (o *OpenvinoProvider) SetOperateStatus(status int) {
 	OpenvinoOperateStatus = status
 	slog.Info("Openvino operate status set to", "status", OpenvinoOperateStatus)
+}
+
+// InvokeService 内置引擎不通过此接口调用服务
+// Phase 3 Refactor: 内置引擎使用原有的直接调用方式，此方法仅用于满足接口要求
+func (o *OpenvinoProvider) InvokeService(ctx context.Context, serviceName string, authInfo string, request []byte) ([]byte, error) {
+	return nil, fmt.Errorf("InvokeService not supported for builtin engine, use direct HTTP/gRPC calls instead")
 }

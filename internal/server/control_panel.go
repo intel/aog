@@ -19,7 +19,6 @@ package server
 import (
 	"context"
 	"fmt"
-
 	"sort"
 	"strings"
 
@@ -226,11 +225,11 @@ func (c *ControlPanelImpl) GetSupportModelListCombine(ctx context.Context, reque
 			if err == nil && sp.AuthKey != "" {
 				authFields = []string{sp.AuthKey}
 			}
-			// if providerServiceDefaultInfo.AuthType == types.AuthTypeToken {
-			// 	authFields = []string{"secret_id", "secret_key"}
-			// } else if providerServiceDefaultInfo.AuthType == types.AuthTypeApiKey {
-			// 	authFields = []string{"api_key"}
-			// }
+			if providerServiceDefaultInfo.AuthType == types.AuthTypeToken {
+				authFields = []string{"secret_id", "secret_key"}
+			} else if providerServiceDefaultInfo.AuthType == types.AuthTypeApiKey {
+				authFields = []string{"api_key"}
+			}
 			modelData := dto.RecommendModelData{
 				Id:              smInfo.Id,
 				Name:            smInfo.Name,

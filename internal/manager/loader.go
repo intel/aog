@@ -9,6 +9,7 @@ import (
 	"github.com/intel/aog/internal/logger"
 	"github.com/intel/aog/internal/provider"
 	"github.com/intel/aog/internal/types"
+	sdktypes "github.com/intel/aog/plugin-sdk/types"
 )
 
 // ModelStatus 模型状态枚举
@@ -184,7 +185,7 @@ func (l *Loader) loadModel(ctx context.Context, modelState *ModelState) error {
 	defer l.mutex.Lock()
 
 	// 调用provider的LoadModel方法
-	loadReq := &types.LoadRequest{
+	loadReq := &sdktypes.LoadRequest{
 		Model: modelState.ModelName,
 	}
 
@@ -214,7 +215,7 @@ func (l *Loader) unloadModel(modelState *ModelState) error {
 		"model", modelState.ModelName)
 
 	// 调用provider的UnloadModel方法
-	unloadReq := &types.UnloadModelRequest{
+	unloadReq := &sdktypes.UnloadModelRequest{
 		Models: []string{modelState.ModelName},
 	}
 
@@ -490,8 +491,9 @@ func (l *Loader) InitializeRunningModels() {
 	}
 
 	for _, flavor := range supportedProviders {
-		providerInstance := provider.GetModelEngine(flavor)
-		if providerInstance == nil {
+		providerInstance, err := provider.GetModelEngine(flavor)
+		if err != nil {
+			logger.LogicLogger.Warn("[InitLoader] Failed to get engine", "flavor", flavor, "error", err)
 			continue
 		}
 
@@ -505,7 +507,7 @@ func (l *Loader) InitializeRunningModels() {
 func (l *Loader) cleanupProviderModels(flavor string, providerInstance provider.ModelServiceProvider) {
 	// 检查provider是否支持GetRunningModels方法
 	runningModelsProvider, ok := providerInstance.(interface {
-		GetRunningModels(context.Context) (*types.ListResponse, error)
+		GetRunningModels(context.Context) (*sdktypes.ListResponse, error)
 	})
 	if !ok {
 		logger.LogicLogger.Debug("[Loader] Provider does not support GetRunningModels",
@@ -550,7 +552,7 @@ func (l *Loader) asyncUnloadModel(modelName string, providerInstance provider.Mo
 		"model", modelName, "provider", flavor)
 
 	// 创建卸载请求
-	unloadReq := &types.UnloadModelRequest{
+	unloadReq := &sdktypes.UnloadModelRequest{
 		Models: []string{modelName},
 	}
 

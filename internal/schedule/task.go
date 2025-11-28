@@ -20,12 +20,15 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"math/rand"
 	"net"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -34,6 +37,7 @@ import (
 	"github.com/intel/aog/internal/logger"
 	"github.com/intel/aog/internal/manager"
 	"github.com/intel/aog/internal/types"
+	"github.com/intel/aog/internal/utils"
 )
 
 type TaskMiddleware interface {
@@ -188,6 +192,12 @@ func (st *ServiceTask) invokeHTTPServiceProvider(sp *types.ServiceProvider, cont
 	return invoker.Invoke(sp, content)
 }
 
+// Phase 3: 插件服务调用
+func (st *ServiceTask) invokePluginServiceProvider(sp *types.ServiceProvider, content types.HTTPContent) (*http.Response, error) {
+	invoker := NewPluginInvoker(st)
+	return invoker.Invoke(sp, content)
+}
+
 // BaseHandler provides a basic processor implementation
 type BaseHandler struct {
 	next ServiceHandler
@@ -251,6 +261,9 @@ func (h *RequestConversionHandler) Handle(ctx *ServiceContext) error {
 
 	if err := ds.Get(context.Background(), sp); err != nil {
 		return fmt.Errorf("service Provider not found for %s of Service %s", ctx.Task.Target.Location, ctx.Task.Request.Service)
+	}
+	if sp.ServiceName == types.ServiceSpeechToText && strings.Contains(sp.Flavor, types.FlavorAliYun) {
+		return h.HandleNext(ctx)
 	}
 
 	// Check if request header is binary data, skip conversion if so
@@ -345,10 +358,14 @@ func (h *ServiceInvokerHandler) Handle(ctx *ServiceContext) error {
 
 func (h *ServiceInvokerHandler) tryInvoke(ctx *ServiceContext) error {
 	var err error
-	if ctx.Task.Target.ServiceProvider.Flavor == types.FlavorOpenvino {
-		ctx.Response, err = ctx.Task.invokeGRPCServiceProvider(ctx.Task.Target.ServiceProvider, *ctx.Request)
+	sp := ctx.Task.Target.ServiceProvider
+
+	if sp.Scope == "plugin" {
+		ctx.Response, err = ctx.Task.invokePluginServiceProvider(sp, *ctx.Request)
+	} else if sp.Protocol == types.ProtocolGRPC || sp.Protocol == types.ProtocolGRPC_STREAM {
+		ctx.Response, err = ctx.Task.invokeGRPCServiceProvider(sp, *ctx.Request)
 	} else {
-		ctx.Response, err = ctx.Task.invokeHTTPServiceProvider(ctx.Task.Target.ServiceProvider, *ctx.Request)
+		ctx.Response, err = ctx.Task.invokeHTTPServiceProvider(sp, *ctx.Request)
 	}
 
 	if err != nil {
@@ -391,6 +408,10 @@ func (h *ResponseHandler) Handle(ctx *ServiceContext) error {
 		return fmt.Errorf("no response to handle")
 	}
 
+	if ctx.Task.Target.ServiceProvider.ServiceName == types.ServiceSpeechToTextWS {
+		return h.HandleNext(ctx)
+	}
+
 	defer ctx.Response.Body.Close()
 
 	respStreamMode := NewStreamMode(ctx.Response.Header)
@@ -428,6 +449,15 @@ func (h *ResponseHandler) handleNonStreamResponse(ctx *ServiceContext) error {
 		}
 	}
 
+	// Special handling for text-to-image service: decode base64 and save files
+	if ctx.Task.Request.Service == types.ServiceTextToImage && ctx.Task.Target.ServiceProvider.Protocol == types.ProtocolHTTP {
+		content, err = h.processTextToImageResponse(content)
+		if err != nil {
+			logger.LogicLogger.Error("[Service] Failed to process text-to-image response", "error", err)
+			return err
+		}
+	}
+
 	ctx.Task.Ch <- &types.ServiceResult{
 		Type:       types.ServiceResultDone,
 		TaskId:     ctx.Task.Schedule.Id,
@@ -436,6 +466,108 @@ func (h *ResponseHandler) handleNonStreamResponse(ctx *ServiceContext) error {
 	}
 
 	return nil
+}
+
+// processTextToImageResponse handles base64 decoding and file saving for HTTP text-to-image responses
+func (h *ResponseHandler) processTextToImageResponse(content types.HTTPContent) (types.HTTPContent, error) {
+	var responseMap map[string]interface{}
+	if err := json.Unmarshal(content.Body, &responseMap); err != nil {
+		return content, fmt.Errorf("failed to unmarshal response: %w", err)
+	}
+
+	// Extract data array from response
+	dataArray, ok := responseMap["data"].([]interface{})
+	if !ok || len(dataArray) == 0 {
+		return content, fmt.Errorf("invalid response format: missing or empty data array")
+	}
+
+	// Process each image in the data array
+	outputPaths := make([]string, 0, len(dataArray))
+	for i, item := range dataArray {
+		dataItem, ok := item.(map[string]interface{})
+		if !ok {
+			logger.LogicLogger.Warn("[Service] Invalid data item format", "index", i)
+			continue
+		}
+
+		// Extract base64 encoded image
+		b64Json, ok := dataItem["b64_json"].(string)
+		if !ok || b64Json == "" {
+			logger.LogicLogger.Warn("[Service] Missing b64_json in data item", "index", i)
+			continue
+		}
+
+		// Decode base64
+		imageData, err := base64.StdEncoding.DecodeString(b64Json)
+		if err != nil {
+			logger.LogicLogger.Error("[Service] Failed to decode base64 image", "error", err, "index", i)
+			continue
+		}
+
+		// Save image file
+		imagePath, err := h.saveTextToImage(imageData, i)
+		if err != nil {
+			logger.LogicLogger.Error("[Service] Failed to save image file", "error", err, "index", i)
+			continue
+		}
+
+		outputPaths = append(outputPaths, imagePath)
+	}
+
+	if len(outputPaths) == 0 {
+		return content, fmt.Errorf("no images were successfully processed")
+	}
+
+	// Create new response body with local file paths
+	newResponseMap := map[string]interface{}{
+		"created": responseMap["created"],
+		"data": []map[string]interface{}{
+			{
+				"url": outputPaths[0], // First image path for backwards compatibility
+			},
+		},
+	}
+
+	// If there are multiple images, add them all
+	if len(outputPaths) > 1 {
+		dataList := make([]map[string]interface{}, len(outputPaths))
+		for i, path := range outputPaths {
+			dataList[i] = map[string]interface{}{"url": path}
+		}
+		newResponseMap["data"] = dataList
+	}
+
+	newBody, err := json.Marshal(newResponseMap)
+	if err != nil {
+		return content, fmt.Errorf("failed to marshal new response: %w", err)
+	}
+
+	return types.HTTPContent{
+		Body:   newBody,
+		Header: content.Header,
+	}, nil
+}
+
+// saveTextToImage saves decoded image data to a file and returns the file path
+func (h *ResponseHandler) saveTextToImage(imageData []byte, index int) (string, error) {
+	now := time.Now()
+	randNum := rand.Intn(10000)
+	downloadPath, err := utils.GetDownloadDir()
+	if err != nil {
+		return "", fmt.Errorf("failed to get download directory: %w", err)
+	}
+
+	imageName := fmt.Sprintf("%d%02d%02d%02d%02d%02d%04d%01d.png",
+		now.Year(), now.Month(), now.Day(),
+		now.Hour(), now.Minute(), now.Second(),
+		randNum, index)
+	imagePath := fmt.Sprintf("%s/%s", downloadPath, imageName)
+
+	if err := os.WriteFile(imagePath, imageData, 0o644); err != nil {
+		return "", fmt.Errorf("failed to write image file: %w", err)
+	}
+
+	return imagePath, nil
 }
 
 func (h *ResponseHandler) handleStreamResponse(ctx *ServiceContext) error {

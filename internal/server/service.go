@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/intel/aog/internal/provider"
 
@@ -34,6 +33,7 @@ import (
 	"github.com/intel/aog/internal/types"
 	"github.com/intel/aog/internal/utils"
 	"github.com/intel/aog/internal/utils/bcode"
+	sdktypes "github.com/intel/aog/plugin-sdk/types"
 	"github.com/intel/aog/version"
 )
 
@@ -84,6 +84,27 @@ func (s *AIGCServiceImpl) updateServiceStatus(ctx context.Context, service *type
 	_ = s.Ds.Put(ctx, service) // Keep the original behavior of ignoring errors here
 }
 
+// buildFullURL constructs complete request URL by combining base URL and endpoint path
+func buildFullURL(serviceInfo schedule.ServiceDefaultInfo) string {
+	if len(serviceInfo.Endpoints) == 0 {
+		return serviceInfo.RequestUrl
+	}
+
+	// Extract path from first endpoint (format: "METHOD /path")
+	parts := strings.SplitN(serviceInfo.Endpoints[0], " ", 2)
+	if len(parts) != 2 {
+		return serviceInfo.RequestUrl
+	}
+
+	path := strings.TrimSpace(parts[1])
+	// Only append if path is not already part of the URL
+	if strings.HasSuffix(serviceInfo.RequestUrl, path) {
+		return serviceInfo.RequestUrl
+	}
+
+	return serviceInfo.RequestUrl + path
+}
+
 // Create remote service
 func (s *AIGCServiceImpl) createRemoteService(ctx context.Context, request *dto.CreateAIGCServiceRequest, sp *types.ServiceProvider, m *types.Model, providerServiceInfo schedule.ServiceDefaultInfo, service *types.Service) error {
 	// Set URL
@@ -119,7 +140,7 @@ func (s *AIGCServiceImpl) createRemoteService(ctx context.Context, request *dto.
 		}
 		// Save model
 		m.Status = ModelStatusDownloaded
-		m.UpdatedAt = time.Now()
+		m.UpdatedAt = types.Now()
 		if err := s.Ds.Put(ctx, m); err != nil {
 			logger.LogicLogger.Error("Add model error: %s", err.Error())
 			return bcode.ErrAddModel
@@ -186,8 +207,16 @@ func (s *AIGCServiceImpl) createLocalService(ctx context.Context, request *dto.C
 		sp.ProviderName = fmt.Sprintf("%s_%s_%s", request.ServiceSource, request.ApiFlavor, request.ServiceName)
 	}
 
+	// Determine which engine to use:
+	// - If user specified ApiFlavor, use it (could be plugin)
+	// - Otherwise use recommended engine (built-in only)
+	engineName := request.ApiFlavor
+	if engineName == "" {
+		engineName = recommendConfig.ModelEngine
+	}
+
 	// Ensure engine is ready
-	if err := provider.EnsureEngineReady(recommendConfig.ModelEngine); err != nil {
+	if err := provider.EnsureEngineReady(engineName); err != nil {
 		s.updateServiceStatus(ctx, service, ServiceStatusError)
 		logger.LogicLogger.Error("Ensure engine ready error: ", err.Error())
 		return err
@@ -197,7 +226,7 @@ func (s *AIGCServiceImpl) createLocalService(ctx context.Context, request *dto.C
 	s.updateServiceStatus(ctx, service, ServiceStatusReady)
 
 	// Configure service provider
-	sp.URL = providerServiceInfo.RequestUrl
+	sp.URL = buildFullURL(providerServiceInfo)
 	sp.ExtraJSONBody = ""
 	sp.ExtraHeaders = ""
 	sp.Properties = DefaultLocalServiceProperties
@@ -224,10 +253,20 @@ func (s *AIGCServiceImpl) createLocalService(ctx context.Context, request *dto.C
 
 // Handle local model logic
 func (s *AIGCServiceImpl) handleLocalModelLogic(ctx context.Context, request *dto.CreateAIGCServiceRequest, sp *types.ServiceProvider, m *types.Model, recommendConfig types.RecommendConfig, service *types.Service) (bool, error) {
-	engineProvider := provider.GetModelEngine(recommendConfig.ModelEngine)
+	// Determine which engine to use (same logic as createLocalService)
+	engineName := request.ApiFlavor
+	if engineName == "" {
+		engineName = recommendConfig.ModelEngine
+	}
+
+	engineProvider, err := provider.GetModelEngine(engineName)
+	if err != nil {
+		logger.EngineLogger.Error("Failed to get engine", "engine", engineName, "error", err)
+		return false, bcode.ErrProviderNotExist
+	}
 	models, err := engineProvider.ListModels(ctx)
 	if err != nil {
-		logger.LogicLogger.Error("Get "+recommendConfig.ModelEngine+" model list error: ", err.Error())
+		logger.LogicLogger.Error("Get "+engineName+" model list error: ", err.Error())
 		return false, bcode.ErrGetEngineModelList
 	}
 
@@ -269,7 +308,7 @@ func (s *AIGCServiceImpl) handleLocalModelLogic(ctx context.Context, request *dt
 			m.Status = ModelStatusDownloading
 		}
 		stream := false
-		pullReq := &types.PullModelRequest{
+		pullReq := &sdktypes.PullModelRequest{
 			Model:     recommendConfig.ModelName,
 			Stream:    &stream,
 			ModelType: sp.ServiceName,
@@ -326,7 +365,7 @@ func (s *AIGCServiceImpl) createRelatedService(ctx context.Context, request *dto
 	relatedSp.ServiceName = serviceName
 	relatedSp.Desc = strings.Replace(request.Desc, request.ServiceName, serviceName, -1)
 	relatedSp.Flavor = request.ApiFlavor
-	relatedSp.URL = serviceInfo.RequestUrl
+	relatedSp.URL = buildFullURL(serviceInfo)
 
 	// Check if related service provider already exists
 	// isExist, err := s.Ds.IsExist(ctx, relatedSp)
@@ -365,11 +404,11 @@ func (s *AIGCServiceImpl) CreateAIGCService(ctx context.Context, request *dto.Cr
 	if err != nil {
 		return nil, err
 	}
-	if service.Status != -1 {
-		logger.LogicLogger.Error("Service already installed ", service.Name)
-		return nil, bcode.ErrServiceIsInstalled
-	}
-	s.updateServiceStatus(ctx, service, ServiceStatusCreating)
+	//if service.Status != -1 {
+	//	logger.LogicLogger.Error("Service already installed ", service.Name)
+	//	return nil, bcode.ErrServiceIsInstalled
+	//}
+	//s.updateServiceStatus(ctx, service, ServiceStatusCreating)
 
 	// Get provider service information (API layer has validated service type and API flavor validity)
 	providerInfo := schedule.GetProviderServices(request.ApiFlavor)
@@ -551,7 +590,7 @@ func (s *AIGCServiceImpl) ImportService(ctx context.Context, request *dto.Import
 			if p.ServiceSource == types.ServiceSourceLocal && !utils.Contains(dbServices.ServiceProviders[providerName].Models, m) {
 				logger.LogicLogger.Info(fmt.Sprintf("Pull model %s start ...", m))
 				stream := false
-				pullReq := &types.PullModelRequest{
+				pullReq := &sdktypes.PullModelRequest{
 					Model:     m,
 					Stream:    &stream,
 					ModelType: p.ServiceName,
@@ -593,7 +632,7 @@ func (s *AIGCServiceImpl) ImportService(ctx context.Context, request *dto.Import
 				tmpModel.ModelName = m
 				tmpModel.ProviderName = tmpSp.ProviderName
 				tmpModel.Status = "downloaded"
-				tmpModel.UpdatedAt = time.Now()
+				tmpModel.UpdatedAt = types.Now()
 
 				isExist, err := s.Ds.IsExist(ctx, tmpModel)
 				if err != nil || !isExist {
@@ -745,12 +784,13 @@ func getAllServices(service *types.Service, provider *types.ServiceProvider, mod
 		localDefaultModelList, err := ds.List(context.Background(), dm, &datastore.ListOptions{
 			FilterOptions: datastore.FilterOptions{
 				Queries: []datastore.FuzzyQueryOption{
-					{Key: "IsDefault", Query: "true"},
+					{Key: "is_default", Query: "1"},
 					{Key: "service_name", Query: tmp.Name},
 					{Key: "service_source", Query: types.ServiceSourceLocal},
 				},
 			},
-			Page: 0, PageSize: 100})
+			Page: 0, PageSize: 100,
+		})
 		if err == nil && len(localDefaultModelList) > 0 {
 			localDmObj := localDefaultModelList[0].(*types.Model)
 			tmpService.ServiceProviders.Local = localDmObj.ProviderName
@@ -763,7 +803,8 @@ func getAllServices(service *types.Service, provider *types.ServiceProvider, mod
 					{Key: "service_source", Query: types.ServiceSourceRemote},
 				},
 			},
-			Page: 0, PageSize: 100})
+			Page: 0, PageSize: 100,
+		})
 		if err == nil && len(remoteDefaultModelList) > 0 {
 			RemoteDmObj := localDefaultModelList[0].(*types.Model)
 			tmpService.ServiceProviders.Remote = RemoteDmObj.ProviderName

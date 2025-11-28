@@ -22,16 +22,17 @@ import (
 	"log/slog"
 	"net/url"
 	"strings"
-	"time"
 
 	"github.com/intel/aog/internal/api/dto"
 	"github.com/intel/aog/internal/constants"
 	"github.com/intel/aog/internal/datastore"
+	"github.com/intel/aog/internal/logger"
 	"github.com/intel/aog/internal/provider"
 	"github.com/intel/aog/internal/schedule"
 	"github.com/intel/aog/internal/server/checker"
 	"github.com/intel/aog/internal/types"
 	"github.com/intel/aog/internal/utils/bcode"
+	sdktypes "github.com/intel/aog/plugin-sdk/types"
 )
 
 type ServiceProvider interface {
@@ -95,15 +96,19 @@ func (s *ServiceProviderImpl) CreateServiceProvider(ctx context.Context, request
 	if request.Properties == "" {
 		sp.Properties = "{}"
 	}
-	sp.CreatedAt = time.Now()
-	sp.UpdatedAt = time.Now()
+	sp.CreatedAt = types.Now()
+	sp.UpdatedAt = types.Now()
 
 	modelIsExist := make(map[string]bool)
 
 	if request.ServiceSource == types.ServiceSourceLocal {
-		engineProvider := provider.GetModelEngine(request.ApiFlavor)
-		engineConfig := engineProvider.GetConfig()
-		if engineConfig == nil {
+		engineProvider, err := provider.GetModelEngine(request.ApiFlavor)
+		if err != nil {
+			logger.EngineLogger.Error("Failed to get engine", "flavor", request.ApiFlavor, "error", err)
+			return nil, bcode.ErrProviderNotExist
+		}
+		engineConfig, err := engineProvider.GetConfig(ctx)
+		if err != nil || engineConfig == nil {
 			return nil, bcode.ErrEngineNotAvailable
 		}
 		if strings.Contains(request.Url, engineConfig.Host) {
@@ -114,14 +119,14 @@ func (s *ServiceProviderImpl) CreateServiceProvider(ctx context.Context, request
 			host := parseUrl.Host
 			engineConfig.Host = host
 		}
-		err := engineProvider.HealthCheck()
-		if err != nil {
-			return nil, err
+		healthErr := engineProvider.HealthCheck(ctx)
+		if healthErr != nil {
+			return nil, healthErr
 		}
 
-		modelList, err := engineProvider.ListModels(ctx)
-		if err != nil {
-			return nil, err
+		modelList, listErr := engineProvider.ListModels(ctx)
+		if listErr != nil {
+			return nil, listErr
 		}
 
 		for _, v := range modelList.Models {
@@ -138,7 +143,7 @@ func (s *ServiceProviderImpl) CreateServiceProvider(ctx context.Context, request
 			if !modelIsExist[mName] {
 				slog.Info("The model " + mName + " does not exist, ready to start pulling the model.")
 				stream := false
-				pullReq := &types.PullModelRequest{
+				pullReq := &sdktypes.PullModelRequest{
 					Model:  mName,
 					Stream: &stream,
 				}
@@ -180,8 +185,8 @@ func (s *ServiceProviderImpl) CreateServiceProvider(ctx context.Context, request
 				ModelName:    mName,
 				ProviderName: request.ProviderName,
 				Status:       "downloaded",
-				CreatedAt:    time.Now(),
-				UpdatedAt:    time.Now(),
+				CreatedAt:    types.Now(),
+				UpdatedAt:    types.Now(),
 			}
 
 			err := ds.Put(ctx, model)
@@ -235,25 +240,30 @@ func (s *ServiceProviderImpl) DeleteServiceProvider(ctx context.Context, request
 		// Delete the locally downloaded model.
 		// It is necessary to check whether the local model is jointly referenced by other service providers.
 		// If so, do not delete the local model but only delete the record.
-		engine := provider.GetModelEngine(sp.Flavor)
-		for _, m := range list {
-			dsModel := m.(*types.Model)
-			tmpModel := &types.Model{
-				ModelName: dsModel.ModelName,
-			}
-			count, err := ds.Count(ctx, tmpModel, &datastore.FilterOptions{})
-			if err != nil || count > 1 {
-				continue
-			}
-			if dsModel.Status == "downloaded" {
-				delReq := &types.DeleteRequest{Model: dsModel.ModelName}
-
-				err = engine.DeleteModel(ctx, delReq)
-				if err != nil {
-					return nil, err
+		engine, err := provider.GetModelEngine(sp.Flavor)
+		if err != nil {
+			logger.EngineLogger.Warn("Failed to get engine", "flavor", sp.Flavor, "error", err)
+			// Continue without deleting models
+		} else {
+			for _, m := range list {
+				dsModel := m.(*types.Model)
+				tmpModel := &types.Model{
+					ModelName: dsModel.ModelName,
 				}
-			}
+				count, err := ds.Count(ctx, tmpModel, &datastore.FilterOptions{})
+				if err != nil || count > 1 {
+					continue
+				}
+				if dsModel.Status == "downloaded" {
+					delReq := &sdktypes.DeleteRequest{Model: dsModel.ModelName}
 
+					err = engine.DeleteModel(ctx, delReq)
+					if err != nil {
+						return nil, err
+					}
+				}
+
+			}
 		}
 	}
 
@@ -342,7 +352,7 @@ func (s *ServiceProviderImpl) UpdateServiceProvider(ctx context.Context, request
 	if request.Properties != "" {
 		sp.Properties = request.Properties
 	}
-	sp.UpdatedAt = time.Now()
+	sp.UpdatedAt = types.Now()
 
 	for _, modelName := range request.Models {
 		model := types.Model{ProviderName: sp.ProviderName, ModelName: modelName, ServiceSource: sp.ServiceSource, ServiceName: sp.ServiceName}
@@ -480,10 +490,15 @@ func (s *ServiceProviderImpl) GetServiceProviders(ctx context.Context, request *
 			// }
 			serviceProviderStatus = 1
 		} else {
-			providerEngine := provider.GetModelEngine(dsProvider.Flavor)
-			err = providerEngine.HealthCheck()
-			if err == nil {
-				serviceProviderStatus = 1
+			providerEngine, err := provider.GetModelEngine(dsProvider.Flavor)
+			if err != nil {
+				logger.EngineLogger.Warn("Failed to get engine", "flavor", dsProvider.Flavor, "error", err)
+				serviceProviderStatus = 2
+			} else {
+				err = providerEngine.HealthCheck(ctx)
+				if err == nil {
+					serviceProviderStatus = 1
+				}
 			}
 		}
 

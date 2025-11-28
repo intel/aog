@@ -1,0 +1,112 @@
+version: "1.0"
+
+provider:
+  name: ollama-plugin
+  display_name: Ollama Plugin (External)
+  version: 1.0.0
+  type: local
+  author: AOG Team
+  description: External Ollama plugin for local LLM inference (requires Ollama to be installed)
+  homepage: https://github.com/intel/aog
+  engine_host: "http://127.0.0.1:16677"  # Ollama engine base URL (required for local plugins)
+
+services:
+  - service_name: chat
+    task_type: text-generation
+    protocol: HTTP
+    expose_protocol: HTTP
+    endpoint: /api/chat
+    auth_type: none
+    default_model: qwen3:0.6b
+    support_models:
+      - qwen3:0.6b
+    # Reuse built-in ollama conversion rules
+    # AOG automatically applies these conversion rules, plugin only handles Ollama native request/response
+    config_ref: ollama:chat
+    # Capability declaration
+    capabilities:
+      support_streaming: true  # Chat service supports HTTP streaming response
+      support_bidirectional: false  # HTTP protocol does not support bidirectional streaming
+
+  - service_name: embed
+    task_type: embedding
+    protocol: HTTP
+    expose_protocol: HTTP
+    endpoint: /api/embeddings
+    auth_type: none
+    default_model: nomic-embed-text
+    support_models:
+      - nomic-embed-text
+      - mxbai-embed-large
+    # Reuse built-in ollama conversion rules
+    config_ref: ollama:embed
+    # Capability declaration
+    capabilities:
+      support_streaming: false  # Embedding does not support streaming
+      support_bidirectional: false
+
+  - service_name: generate
+    task_type: text-generation
+    protocol: HTTP
+    expose_protocol: HTTP
+    endpoint: /api/generate
+    auth_type: none
+    default_model: qwen3:0.6b
+    support_models:
+      - qwen3:0.6b
+    # Reuse built-in ollama conversion rules
+    config_ref: ollama:generate
+    # Capability declaration
+    capabilities:
+      support_streaming: true  # Generate service supports HTTP streaming response
+      support_bidirectional: false
+
+platforms:
+  linux_amd64:
+    executable: bin/linux-amd64/ollama-plugin
+    dependencies: []
+  
+  linux_arm64:
+    executable: bin/linux-arm64/ollama-plugin
+    dependencies: []
+  
+  darwin_amd64:
+    executable: bin/darwin-amd64/ollama-plugin
+    dependencies: []
+  
+  darwin_arm64:
+    executable: bin/darwin-arm64/ollama-plugin
+    dependencies: []
+  
+  windows_amd64:
+    executable: bin/windows-amd64/ollama-plugin.exe
+    dependencies: []
+
+# Plugin resource configuration (consistent with built-in ollama engine)
+# Uses AOG unified data directory, can share storage space with built-in ollama
+resources:
+  # Data root directory (consistent with built-in engine)
+  # Supported environment variables:
+  #   ${AOG_DATA_DIR} - AOG unified data directory
+  #     - macOS: ~/Library/Application Support/AOG
+  #     - Linux: /var/lib/aog
+  #     - Windows: %LOCALAPPDATA%/AOG
+  #   ${PLUGIN_DIR} - Plugin executable directory
+  #   ${HOME} - User home directory
+  data_dir: "${AOG_DATA_DIR}/engine/ollama"
+  
+  # Ollama resource configuration (consistent with built-in engine)
+  ollama:
+    # Ollama executable path
+    # macOS prefers system-installed ollama: /Applications/Ollama.app/Contents/Resources/ollama
+    # Linux: /opt/aog/engine/ollama/bin/ollama
+    # Windows: %USERPROFILE%/ollama/ollama.exe
+    # If not system-installed, will be downloaded to ${DATA_DIR}/bin/ollama
+    executable: "${DATA_DIR}/bin/ollama"
+    
+    # Model storage directory (shared with built-in engine)
+    models_dir: "${DATA_DIR}/models"
+    
+    # Download temporary directory (uses system Downloads directory, consistent with built-in engine)
+    download_dir: "${HOME}/Downloads"
+

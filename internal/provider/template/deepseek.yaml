@@ -1,4 +1,4 @@
-version: "0.5"
+version: "v0.1"
 name: deepseek # the name should be aligned with file name
 services:
     chat: # service name defined by AOG

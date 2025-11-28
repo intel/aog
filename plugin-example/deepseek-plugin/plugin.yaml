@@ -1,0 +1,59 @@
+version: "1.0"
+
+provider:
+  name: deepseek-plugin
+  display_name: Deepseek Plugin (External)
+  version: 1.0.0
+  type: remote
+  author: AOG Team
+  description: External Deepseek plugin for local LLM inference (requires Deepseek to be installed)
+  homepage: https://github.com/intel/aog
+  engine_host: https://api.deepseek.com  # Deepseek engine base URL (required for local plugins)
+
+services:
+  - service_name: chat
+    task_type: text-generation
+    protocol: HTTP
+    expose_protocol: HTTP
+    endpoint: /chat/completions
+    auth_type: apikey
+    auth_fields:
+      - api_key
+    special_url: ""
+    extra_url: ""
+    extra_header: "{}"
+    default_model: deepseek-chat
+    support_models:
+      - deepseek-chat
+      - deepseek-reasoner
+    # 复用内置 deepseek 的转换规则
+    # AOG 会自动应用这些转换规则，插件只需处理 Deepseek 原生请求/响应
+    config_ref: deepseek:chat
+    # 🆕 能力声明
+    capabilities:
+      support_streaming: true  # ✅ Chat服务支持HTTP流式响应
+      support_bidirectional: false  # ❌ HTTP协议不支持双向流
+
+
+platforms:
+  linux_amd64:
+    executable: bin/linux-amd64/deepseek-plugin
+    dependencies: []
+  
+  linux_arm64:
+    executable: bin/linux-arm64/deepseek-plugin
+    dependencies: []
+  
+  darwin_amd64:
+    executable: bin/darwin-amd64/deepseek-plugin
+    dependencies: []
+  
+  darwin_arm64:
+    executable: bin/darwin-arm64/deepseek-plugin
+    dependencies: []
+  
+  windows_amd64:
+    executable: bin/windows-amd64/deepseek-plugin.exe
+    dependencies: []
+
+

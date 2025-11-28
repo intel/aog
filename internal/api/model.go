@@ -28,8 +28,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/intel/aog/internal/api/dto"
 	"github.com/intel/aog/internal/logger"
-	"github.com/intel/aog/internal/types"
 	"github.com/intel/aog/internal/utils/bcode"
+	sdktypes "github.com/intel/aog/plugin-sdk/types"
 )
 
 func (t *AOGCoreServer) CreateModel(c *gin.Context) {
@@ -151,7 +151,7 @@ func (t *AOGCoreServer) CreateModelStream(c *gin.Context) {
 			}
 
 			// 解析Ollama响应
-			var resp types.ProgressResponse
+			var resp sdktypes.ProgressResponse
 			if err := json.Unmarshal(data, &resp); err != nil {
 				log.Printf("Error unmarshaling response: %v", err)
 				continue

@@ -9,6 +9,7 @@ import (
 	"github.com/intel/aog/internal/provider"
 	"github.com/intel/aog/internal/types"
 	"github.com/intel/aog/internal/utils/bcode"
+	sdktypes "github.com/intel/aog/plugin-sdk/types"
 	"github.com/intel/aog/version"
 )
 
@@ -44,18 +45,26 @@ func (v *VersionImpl) GetVersion(ctx context.Context) (*dto.GetVersionResponse, 
 func (v *VersionImpl) GetEngineVersion(ctx context.Context, request *dto.GetEngineVersionRequest) (*dto.GetEngineVersionResponse, error) {
 	data := make(map[string]string)
 	if request.EngineName != "" {
-		engine := provider.GetModelEngine(request.EngineName)
-		var respData types.EngineVersionResponse
-		resp, err := engine.GetVersion(ctx, &respData)
+		engine, err := provider.GetModelEngine(request.EngineName)
 		if err != nil {
-			data[request.EngineName] = "get version failed"
+			data[request.EngineName] = "NOT_FOUND"
 		} else {
-			data[request.EngineName] = resp.Version
+			var respData sdktypes.EngineVersionResponse
+			resp, versionErr := engine.GetVersion(ctx, &respData)
+			if versionErr != nil {
+				data[request.EngineName] = "get version failed"
+			} else {
+				data[request.EngineName] = resp.Version
+			}
 		}
 	} else {
 		for _, modelEngineName := range types.SupportModelEngine {
-			engine := provider.GetModelEngine(modelEngineName)
-			var respData types.EngineVersionResponse
+			engine, err := provider.GetModelEngine(modelEngineName)
+			if err != nil {
+				data[modelEngineName] = "NOT_FOUND"
+				continue
+			}
+			var respData sdktypes.EngineVersionResponse
 			resp, err := engine.GetVersion(ctx, &respData)
 			if err != nil {
 				data[modelEngineName] = "get version failed"

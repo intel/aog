@@ -954,7 +954,7 @@ func (h *HTTPInvoker) setRequestHeaders(req *http.Request, sp *types.ServiceProv
 	}
 
 	// set extra headers
-	if sp.ExtraHeaders != "{}" {
+	if sp.ExtraHeaders != "{}" && sp.ExtraHeaders != "" {
 		var extraHeader map[string]interface{}
 		if err := json.Unmarshal([]byte(sp.ExtraHeaders), &extraHeader); err != nil {
 			logger.LogicLogger.Error("Error parsing extra headers:", err)
@@ -1102,6 +1102,7 @@ func (h *SpeechToTextWSHandler) prepareParams(content types.HTTPContent, isBinar
 	return params
 }
 
+// ProcessStreamResponse Process streaming responses
 func (h *SpeechToTextWSHandler) ProcessStreamResponse(streamResponse *grpc_client.ModelStreamInferResponse, wsConnID string) (*http.Response, bool, error) {
 	// Check if the response contains error messages
 	if streamResponse.ErrorMessage != "" {

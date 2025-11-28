@@ -31,7 +31,112 @@ import (
 	"github.com/intel/aog/internal/types"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
+
+var cstZone = time.FixedZone("CST", 8*3600)
+
+// LocalTimePlugin is a GORM plugin for automatically setting LocalTime type timestamp fields
+type LocalTimePlugin struct{}
+
+// Name returns the plugin name
+func (p *LocalTimePlugin) Name() string {
+	return "localtime"
+}
+
+// Initialize initializes the plugin and registers callbacks
+func (p *LocalTimePlugin) Initialize(db *gorm.DB) error {
+	// Register callback for setting timestamps on create
+	if err := db.Callback().Create().Before("gorm:create").Register("localtime:set_create_time", setCreateTime); err != nil {
+		return err
+	}
+
+	// Register callback for setting timestamps on update
+	if err := db.Callback().Update().Before("gorm:update").Register("localtime:set_update_time", setUpdateTime); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// setCreateTime sets CreatedAt and UpdatedAt fields before creating records
+func setCreateTime(db *gorm.DB) {
+	if db.Statement.Schema != nil {
+		setTimestampFields(db, "CreatedAt", "UpdatedAt")
+	}
+}
+
+// setUpdateTime sets UpdatedAt field before updating records
+func setUpdateTime(db *gorm.DB) {
+	if db.Statement.Schema != nil {
+		setTimestampFields(db, "UpdatedAt")
+	}
+}
+
+// setTimestampFields sets the specified timestamp fields
+func setTimestampFields(db *gorm.DB, fieldNames ...string) {
+	now := time.Now().In(cstZone)
+	rv := db.Statement.ReflectValue
+
+	// Handle both single objects and batch objects uniformly
+	forEachStruct(rv, func(structValue reflect.Value) {
+		setFieldsOnValue(db, structValue, now, fieldNames)
+	})
+}
+
+// forEachStruct iterates over reflection values and executes callback for each struct
+// Supports single structs, pointers, slices and arrays
+func forEachStruct(rv reflect.Value, fn func(reflect.Value)) {
+	switch rv.Kind() {
+	case reflect.Slice, reflect.Array:
+		// Batch operation: iterate through each element in the slice
+		for i := 0; i < rv.Len(); i++ {
+			if structValue := unwrapToStruct(rv.Index(i)); structValue.IsValid() {
+				fn(structValue)
+			}
+		}
+	default:
+		// Single operation: process directly
+		if structValue := unwrapToStruct(rv); structValue.IsValid() {
+			fn(structValue)
+		}
+	}
+}
+
+// unwrapToStruct unwraps a reflection value to a struct
+// Handles pointers, multiple levels of pointers, etc.
+func unwrapToStruct(v reflect.Value) reflect.Value {
+	// Dereference pointers
+	for v.Kind() == reflect.Ptr {
+		if v.IsNil() {
+			return reflect.Value{}
+		}
+		v = v.Elem()
+	}
+
+	// Verify if it's a valid struct
+	if !v.IsValid() || v.Kind() != reflect.Struct {
+		return reflect.Value{}
+	}
+
+	return v
+}
+
+// setFieldsOnValue sets timestamp fields on the given struct value
+func setFieldsOnValue(db *gorm.DB, structValue reflect.Value, now time.Time, fieldNames []string) {
+	if !structValue.IsValid() {
+		return
+	}
+
+	for _, field := range db.Statement.Schema.Fields {
+		for _, name := range fieldNames {
+			if field.Name == name {
+				_ = field.Set(db.Statement.Context, structValue, now)
+				break
+			}
+		}
+	}
+}
 
 // SQLite implements the Datastore interface
 type SQLite struct {
@@ -51,17 +156,64 @@ func New(dbPath string) (*SQLite, error) {
 		}
 	}
 
-	db, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{})
+	db, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{
+		Logger: logger.Default.LogMode(logger.Silent),
+		NowFunc: func() time.Time {
+			return time.Now().In(cstZone)
+		},
+	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %v", err)
+	}
+
+	// Use LocalTimePlugin to automatically set timestamps
+	if err := db.Use(&LocalTimePlugin{}); err != nil {
+		return nil, fmt.Errorf("failed to register LocalTimePlugin: %v", err)
 	}
 
 	return &SQLite{db: db}, nil
 }
 
+// migrateProtocolField intelligently sets Protocol field for existing records without it
+func (ds *SQLite) migrateProtocolField() error {
+	var providers []types.ServiceProvider
+	if err := ds.db.Find(&providers).Error; err != nil {
+		return err
+	}
+
+	for i := range providers {
+		p := &providers[i]
+		// Only update records without Protocol set
+		if p.Protocol == "" {
+			// Intelligent inference based on URL and service characteristics
+			if strings.Contains(p.URL, ":9000") {
+				// OpenVINO gRPC services on port 9000
+				if strings.Contains(p.ServiceName, "ws") || strings.Contains(p.ServiceName, "speech-to-text-ws") {
+					p.Protocol = types.ProtocolGRPC_STREAM
+				} else {
+					p.Protocol = types.ProtocolGRPC
+				}
+			} else if strings.HasPrefix(p.URL, "wss://") {
+				// WebSocket services
+				p.Protocol = types.ProtocolHTTP // WebSocket is handled as HTTP by HTTPInvoker
+			} else {
+				// Default to HTTP for all other cases
+				p.Protocol = types.ProtocolHTTP
+			}
+
+			// Save the updated record
+			if err := ds.db.Save(p).Error; err != nil {
+				return fmt.Errorf("failed to update protocol for provider %s: %v", p.ProviderName, err)
+			}
+		}
+	}
+
+	return nil
+}
+
 // Init TODO need to consider table structure changes here
 func (ds *SQLite) Init() error {
-	// 自动迁移表结构
+	// Auto-migrate table structures
 	if err := ds.db.AutoMigrate(
 		&types.ServiceProvider{},
 		&types.Service{},
@@ -73,6 +225,11 @@ func (ds *SQLite) Init() error {
 		&types.RagChunk{},
 	); err != nil {
 		return fmt.Errorf("failed to initialize database tables: %v", err)
+	}
+
+	// Migrate Protocol field for existing records
+	if err := ds.migrateProtocolField(); err != nil {
+		return fmt.Errorf("failed to migrate protocol field: %v", err)
 	}
 
 	if err := ds.insertInitialData(); err != nil {
@@ -103,6 +260,12 @@ func (ds *SQLite) insertInitialData() error {
 		Status:       -1,
 		CanInstall:   1,
 		Avatar:       types.ServiceEmbedAvatar,
+	}, &types.Service{
+		Name:         "rerank",
+		HybridPolicy: "default",
+		Status:       -1,
+		CanInstall:   1,
+		Avatar:       types.ServiceRerankAvatar,
 	}, &types.Service{
 		Name:         "generate",
 		HybridPolicy: "default",
@@ -178,7 +341,7 @@ func (ds *SQLite) insertInitialData() error {
 		}
 	}
 	if err := ds.db.CreateInBatches(initServiceProvider, len(initServiceProvider)).Error; err != nil {
-		return fmt.Errorf("failed to create initial service: %v", err)
+		return fmt.Errorf("failed to create initial service provider: %v", err)
 	}
 	return nil
 }
@@ -226,7 +389,11 @@ func (ds *SQLite) BatchAdd(ctx context.Context, entities []datastore.Entity) err
 	})
 }
 
-// Put updates or inserts a record
+func (ds *SQLite) isZeroValue(v interface{}) bool {
+	return v == reflect.Zero(reflect.TypeOf(v)).Interface()
+}
+
+// Put updates or inserts a record (upsert operation)
 func (ds *SQLite) Put(ctx context.Context, entity datastore.Entity) error {
 	if entity == nil {
 		return datastore.ErrNilEntity
@@ -238,32 +405,38 @@ func (ds *SQLite) Put(ctx context.Context, entity datastore.Entity) error {
 		return datastore.ErrTableNameEmpty
 	}
 
-	// Check if the record exists
+	// Check if the record exists (based on Index, not primary key)
 	exist, err := ds.IsExist(ctx, entity)
 	if err != nil {
 		return err
 	}
 
 	if exist {
-		// Update record
+		// Update existing record
 		fields, values, err := getEntityFieldsAndValues(entity)
 		if err != nil {
 			return err
 		}
 
 		updateMap := make(map[string]interface{})
+		primaryKeyFieldName := getPrimaryKeyFieldName(entity)
+
 		for i, field := range fields {
-			putFlag := true
-			switch values[i].(type) {
-			case string:
-				putFlag = values[i].(string) != ""
+			if field == primaryKeyFieldName {
+				continue
 			}
-			if putFlag {
-				updateMap[field] = values[i]
+			if ds.isZeroValue(values[i]) {
+				continue
 			}
 
+			updateMap[field] = values[i]
 		}
-		updateMap["updated_at"] = time.Now()
+
+		updateMap["updated_at"] = time.Now().In(cstZone)
+
+		if len(updateMap) == 1 {
+			return nil
+		}
 
 		db := ds.db.WithContext(ctx).Model(entity)
 		for key, value := range entity.Index() {
@@ -274,10 +447,28 @@ func (ds *SQLite) Put(ctx context.Context, entity datastore.Entity) error {
 			return fmt.Errorf("failed to update record: %v", err)
 		}
 	} else {
-		// Insert record
+		// Insert new record
 		return ds.Add(ctx, entity)
 	}
 	return nil
+}
+
+func getPrimaryKeyFieldName(entity datastore.Entity) string {
+	val := reflect.ValueOf(entity)
+	if val.Kind() == reflect.Ptr {
+		val = val.Elem()
+	}
+	typ := val.Type()
+
+	for i := 0; i < typ.NumField(); i++ {
+		field := typ.Field(i)
+		gormTag := field.Tag.Get("gorm")
+		if strings.Contains(gormTag, "primaryKey") {
+			return field.Name
+		}
+	}
+
+	return "ID"
 }
 
 // Delete removes a record

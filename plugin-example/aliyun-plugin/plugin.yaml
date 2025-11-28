@@ -1,0 +1,189 @@
+version: "1.0"
+
+provider:
+  name: aliyun-plugin
+  display_name: Aliyun Plugin (External)
+  version: 1.0.0
+  type: remote
+  author: AOG Team
+  description: External Aliyun plugin for remote LLM inference (requires Aliyun to be installed)
+  homepage: https://github.com/intel/aog
+  engine_host: https://dashscope.aliyuncs.com  # Aliyun engine base URL (required for remote plugins)
+
+services:
+  - service_name: chat
+    task_type: text-generation
+    protocol: HTTP
+    expose_protocol: HTTP
+    endpoint: /compatible-mode/v1/chat/completions
+    auth_type: apikey
+    auth_fields:
+      - api_key
+    special_url: ""
+    extra_url: ""
+    extra_header: "{}"
+    default_model: qwen-max
+    support_models:
+      - qwen-max
+      - qwen-plus
+    # 复用内置 aliyun 的转换规则
+    # AOG 会自动应用这些转换规则，插件只需处理 Aliyun 原生请求/响应
+    config_ref: aliyun:chat
+    # 🆕 能力声明
+    capabilities:
+      support_streaming: true  # ✅ Chat服务支持HTTP流式响应
+      support_bidirectional: false  # ❌ HTTP协议不支持双向流
+
+  - service_name: embed
+    task_type: embedding
+    protocol: HTTP
+    expose_protocol: HTTP
+    endpoint: /compatible-mode/v1/embeddings
+    auth_type: apikey
+    auth_fields:
+      - api_key
+    special_url: ""
+    extra_url: ""
+    extra_header: "{}"
+    default_model: text-embedding-v1
+    support_models:
+      - text-embedding-v1
+      - text-embedding-v2
+      - text-embedding-v3
+    # 复用内置 aliyun 的转换规则
+    config_ref: aliyun:embed
+    # 🆕 能力声明
+    capabilities:
+      support_streaming: false  # ❌ Embedding不支持流式
+      support_bidirectional: false
+
+  - service_name: text-to-image
+    task_type: text-to-image
+    protocol: HTTP
+    expose_protocol: HTTP
+    endpoint: /api/v1/services/aigc/text2image/image-synthesis
+    auth_type: apikey
+    auth_fields:
+      - api_key
+    special_url: ""
+    extra_url: https://dashscope.aliyuncs.com/api/v1/tasks
+    extra_header: '{"X-DashScope-Async": "enable"}'
+    default_model: wanx2.1-t2i-turbo
+    support_models:
+      - wanx2.1-t2i-turbo
+    # 复用内置 aliyun 的转换规则
+    config_ref: aliyun:text-to-image
+    # 🆕 能力声明
+    capabilities:
+      support_streaming: false  # ❌ text-to-image不支持流式
+      support_bidirectional: false
+
+  - service_name: image-to-image
+    task_type: image-to-image
+    protocol: HTTP
+    expose_protocol: HTTP
+    endpoint: /api/v1/services/aigc/image2image/image-synthesis
+    auth_type: apikey
+    auth_fields:
+      - api_key
+    special_url: ""
+    extra_url: https://dashscope.aliyuncs.com/api/v1/tasks
+    extra_header: '{"X-DashScope-Async": "enable"}'
+    default_model: wanx2.1-imageedit
+    support_models:
+      - wanx2.1-imageedit
+    config_ref: aliyun:image-to-image
+    # 🆕 能力声明
+    capabilities:
+      support_streaming: false  # ❌ imgae-to-image不支持流式
+      support_bidirectional: false
+
+  - service_name: speech-to-text
+    task_type: speech-to-text
+    protocol: HTTP
+    expose_protocol: HTTP
+    endpoint: ""
+    auth_type: token
+    auth_fields:
+      - app_key
+      - access_key_id
+      - access_key_secret
+    special_url: https://nls-gateway-cn-shanghai.aliyuncs.com/stream/v1/asr
+    extra_url: ""
+    extra_header: '{}'
+    default_model: asr
+    support_models:
+      - asr
+    config_ref: aliyun:speech-to-text
+    # 🆕 能力声明
+    capabilities:
+      support_streaming: false  # ❌ speech-to-text不支持流式
+      support_bidirectional: false
+
+  - service_name: speech-to-text-ws
+    task_type: speech-to-text
+    protocol: HTTP
+    expose_protocol: WEBSOCKET
+    endpoint: ""
+    auth_type: token
+    auth_fields:
+      - app_key
+      - access_key_id
+      - access_key_secret
+    special_url: wss://dashscope.aliyuncs.com/api-ws/v1/inference
+    extra_url: ""
+    extra_header: '{"X-DashScope-DataInspection": "enable"}'
+    default_model: paraformer-realtime-v2
+    support_models:
+      - paraformer-realtime-v2
+      - paraformer-realtime-v1
+      - paraformer-realtime-8k-v2
+    config_ref: aliyun:speech-to-text-ws
+    # 🆕 能力声明
+    capabilities:
+      support_streaming: false  # ❌ speech-to-text不支持流式
+      support_bidirectional: true
+
+  - service_name: text-to-speech
+    task_type: text-to-speech
+    protocol: HTTP
+    expose_protocol: HTTP
+    endpoint: /api/v1/services/aigc/multimodal-generation/generation
+    auth_type: apikey
+    auth_fields:
+      - api_key
+    special_url: ""
+    extra_url: https://dashscope.aliyuncs.com/api/v1/tasks
+    extra_header: "{}"
+    default_model: qwen-tts
+    support_models:
+      - qwen-tts
+    config_ref: aliyun:text-to-speech
+    # 🆕 能力声明
+    capabilities:
+      support_streaming: false  # ❌ text-to-speech不支持流式
+      support_bidirectional: false
+
+
+platforms:
+  linux_amd64:
+    executable: bin/linux-amd64/aliyun-plugin
+    dependencies: [ ]
+  
+  linux_arm64:
+    executable: bin/linux-arm64/aliyun-plugin
+    dependencies: [ ]
+  
+  darwin_amd64:
+    executable: bin/darwin-amd64/aliyun-plugin
+    dependencies: [ ]
+  
+  darwin_arm64:
+    executable: bin/darwin-arm64/aliyun-plugin
+    dependencies: [ ]
+  
+  windows_amd64:
+    executable: bin/windows-amd64/aliyun-plugin.exe
+    dependencies: [ ]
+
+

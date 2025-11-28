@@ -1,4 +1,4 @@
-version: "0.1"
+version: "v0.1"
 name: aliyun # the name should be aligned with file name
 services:
     models:
@@ -370,7 +370,7 @@ services:
                       }
 
     speech-to-text:
-        task_type: "text-to-image"
+        task_type: "speech-to-text"
         protocol: "HTTP"
         expose_protocol: "HTTP"
         url: "https://nls-gateway-cn-shanghai.aliyuncs.com/stream/v1/asr"
@@ -400,7 +400,6 @@ services:
                         - converter: jsonata
                           config: |
                               {
-                                 "speech": speech
                               }
                         - converter: header
                           config:
@@ -426,7 +425,7 @@ services:
                       }
 
     speech-to-text-ws:
-        task_type: "speech-to-text-ws"
+        task_type: "speech-to-text"
         protocol: "HTTP"
         expose_protocol: "WEBSOCKET"
         url: "wss://dashscope.aliyuncs.com/api-ws/v1/inference"
@@ -444,7 +443,7 @@ services:
                   config: |
                       {
                          "model": $model,
-                         "audio": audio,
+                         "action": action,
                          "params":params
                       }
 
@@ -458,7 +457,7 @@ services:
                   config: |
                       {
                          "model": $model,
-                         "audio": audio,
+                         "action": action,
                          "params":params
                       }
                 - converter: header

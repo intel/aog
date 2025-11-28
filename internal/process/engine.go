@@ -27,17 +27,18 @@ import (
 	"github.com/intel/aog/internal/logger"
 	"github.com/intel/aog/internal/types"
 	"github.com/intel/aog/internal/utils/bcode"
+	sdktypes "github.com/intel/aog/plugin-sdk/types"
 )
 
 // EngineProcessManager manages engine processes with specialized configuration building
 type EngineProcessManager struct {
 	ProcessManager
 	engineName   string
-	engineConfig *types.EngineRecommendConfig
+	engineConfig *sdktypes.EngineRecommendConfig
 }
 
 // NewEngineProcessManager creates a new engine process manager
-func NewEngineProcessManager(engineName string, config *types.EngineRecommendConfig) *EngineProcessManager {
+func NewEngineProcessManager(engineName string, config *sdktypes.EngineRecommendConfig) *EngineProcessManager {
 	return &EngineProcessManager{
 		ProcessManager: NewProcessManager(engineName),
 		engineName:     engineName,
@@ -388,7 +389,7 @@ call "%s\setupvars.bat"
 set PATH=%s\python\Scripts;%%PATH%%
 set HF_HOME=%s\.cache
 set HF_ENDPOINT=https://hf-mirror.com
-%s --port 9000 --grpc_bind_address 127.0.0.1 --config_path %s\config.json`,
+%s --port 9000 --rest_port 16666 --grpc_bind_address 127.0.0.1 --config_path %s\config.json`,
 		m.engineConfig.ExecPath,
 		m.engineConfig.ExecPath,
 		m.engineConfig.EnginePath,
@@ -407,7 +408,7 @@ func (m *EngineProcessManager) generateLinuxShellScript() string {
 export LD_LIBRARY_PATH=%s
 export PATH=$PATH:%s
 export PYTHONPATH=%s
-ovms --port 9000 --grpc_bind_address 127.0.0.1 --config_path %s/config.json`,
+ovms --port 9000 --rest_port 16666 --grpc_bind_address 127.0.0.1 --config_path %s/config.json`,
 		libPath,
 		envPath,
 		pythonPath,

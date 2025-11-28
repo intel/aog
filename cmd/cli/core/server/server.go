@@ -42,10 +42,12 @@ import (
 	"github.com/intel/aog/internal/datastore/sqlite"
 	"github.com/intel/aog/internal/logger"
 	"github.com/intel/aog/internal/manager"
+	"github.com/intel/aog/internal/plugin/registry"
 	"github.com/intel/aog/internal/process"
 	"github.com/intel/aog/internal/provider"
 	"github.com/intel/aog/internal/schedule"
 	"github.com/intel/aog/internal/types"
+	sdktypes "github.com/intel/aog/plugin-sdk/types"
 	"github.com/spf13/cobra"
 )
 
@@ -92,6 +94,8 @@ func NewStartApiServerCommand() *cobra.Command {
 				logLevel = config.LogLevelDebug
 			} else if isDaemon {
 				logLevel = config.DefaultLogLevel
+			} else {
+				logLevel = config.LogLevelDebug
 			}
 
 			config.GlobalEnvironment.LogLevel = logLevel
@@ -110,6 +114,97 @@ func NewStartApiServerCommand() *cobra.Command {
 					logger.EngineLogger.Error(fmt.Sprintf("Failed to detach process: %v", err))
 					return fmt.Errorf("failed to start in daemon mode: %v", err)
 				}
+			}
+
+			// Initialize Provider Factory
+			// 1. Create builtin factory for built-in engines
+			builtinFactory := provider.NewBuiltinProviderFactory()
+
+			// 2. Initialize converters before plugin discovery (plugins need converters for template loading)
+			if err := schedule.InitConverters(); err != nil {
+				logger.EngineLogger.Error("Failed to initialize converters", "error", err)
+				return fmt.Errorf("failed to initialize converters: %w", err)
+			}
+			logger.EngineLogger.Info("Converters initialized successfully")
+
+			// 3. Initialize datastore early for plugin service registration
+			ds, err := sqlite.New(config.GlobalEnvironment.Datastore)
+			if err != nil {
+				logger.EngineLogger.Error("Failed to initialize datastore", "error", err)
+				return fmt.Errorf("failed to initialize datastore: %w", err)
+			}
+			vm := sqlite.NewSQLiteVersionManager(ds)
+			if err := sqlite.MigrateToLatest(vm, ds); err != nil {
+				logger.EngineLogger.Error("Failed to migrate database", "error", err)
+				return fmt.Errorf("failed to migrate database: %w", err)
+			}
+			datastore.SetDefaultDatastore(ds)
+			logger.EngineLogger.Info("Datastore initialized successfully")
+
+			// 4. Create plugin registry and discover plugins
+			// Development mode: use current working directory's plugins/ if it exists
+			// Production mode: use configured plugin directory
+			pluginDir := filepath.Join(config.GlobalEnvironment.RootDir, "plugins")
+			if cwd, err := os.Getwd(); err == nil {
+				devPluginDir := filepath.Join(cwd, "plugins")
+				if _, err := os.Stat(devPluginDir); err == nil {
+					pluginDir = devPluginDir
+					logger.EngineLogger.Info("Using development plugin directory", "path", pluginDir)
+				}
+			}
+			logger.EngineLogger.Info("Initializing plugin system...", "pluginDir", pluginDir)
+
+			pluginRegistry := registry.NewPluginRegistry(pluginDir, ds)
+
+			registry.SetGlobalPluginRegistry(pluginRegistry)
+
+			pluginRegistry.SetFlavorRegistrar(func(manifest *sdktypes.PluginManifest) error {
+				flavor, err := schedule.NewPluginBasedAPIFlavor(manifest)
+				if err != nil {
+					return fmt.Errorf("failed to create plugin flavor: %w", err)
+				}
+				schedule.RegisterAPIFlavor(flavor)
+				logger.EngineLogger.Info("Plugin registered as APIFlavor",
+					"plugin", manifest.Provider.Name,
+					"services", len(manifest.Services))
+				return nil
+			})
+
+			if err := pluginRegistry.DiscoverPlugins(); err != nil {
+				logger.EngineLogger.Warn("Failed to discover plugins, continuing with built-in engines only", "error", err)
+			} else {
+				// 显示插件发现结果
+				manifests := pluginRegistry.GetAllManifests()
+				if len(manifests) > 0 {
+					logger.EngineLogger.Info("Plugin discovery succeeded",
+						"total", len(manifests),
+						"directory", pluginDir)
+					// 列出所有发现的插件
+					for name, wrapper := range manifests {
+						logger.EngineLogger.Info("Discovered plugin",
+							"name", name,
+							"version", wrapper.Manifest.Provider.Version,
+							"type", wrapper.Manifest.Provider.Type,
+							"services", len(wrapper.Manifest.Services))
+					}
+				} else {
+					logger.EngineLogger.Info("No plugins found in directory", "directory", pluginDir)
+				}
+			}
+			// Note: Plugin service providers are automatically registered to datastore
+			// during DiscoverPlugins() via FlavorRegistrar callback
+
+			// 5. Create composite factory (built-in engines first, then plugins)
+			compositeFactory := provider.NewCompositeProviderFactory(builtinFactory, pluginRegistry)
+			provider.InitProviderFactory(compositeFactory)
+
+			logger.EngineLogger.Info("Plugin hot-plug monitoring: planned for future release")
+
+			defer pluginRegistry.Shutdown()
+
+			if err := provider.InitEngines([]string{}); err != nil {
+				logger.EngineLogger.Error("Failed to initialize engines", "error", err)
+				return fmt.Errorf("failed to initialize engines: %v", err)
 			}
 
 			// Initialize global AOG service manager and inject engine manager
@@ -205,6 +300,12 @@ func sendUnixShutdownSignal() error {
 		return fmt.Errorf("failed to send SIGTERM: %v", err)
 	}
 
+	return nil
+}
+
+// Deprecated: Plugin flavor registration is now handled in PluginRegistry.DiscoverPlugins()
+func registerPluginFlavors(pluginRegistry *registry.PluginRegistry) error {
+	logger.EngineLogger.Debug("registerPluginFlavors called (deprecated, flavors already registered in DiscoverPlugins)")
 	return nil
 }
 
@@ -374,26 +475,17 @@ func Run(ctx context.Context, startMode string) error {
 }
 
 // initializeAOGServer initializes all AOG server components
+// Note: Datastore is already initialized before plugin discovery
 func initializeAOGServer(ctx context.Context) (*api.AOGCoreServer, error) {
-	// Initialize the datastore
-	ds, err := sqlite.New(config.GlobalEnvironment.Datastore)
-	if err != nil {
-		slog.Error("[Init] Failed to load datastore", "error", err)
-		return nil, err
+	// Get the already initialized datastore
+	ds := datastore.GetDefaultDatastore()
+	if ds == nil {
+		return nil, fmt.Errorf("datastore not initialized")
 	}
-
-	// Migrate data
-	vm := sqlite.NewSQLiteVersionManager(ds)
-	err = sqlite.MigrateToLatest(vm, ds)
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize database: %v", err)
-	}
-
-	datastore.SetDefaultDatastore(ds)
 
 	// Initialize control panel
 	jds := jsonds.NewJSONDatastore(jsondsTemplate.JsonDataStoreFS)
-	err = jds.Init()
+	err := jds.Init()
 	if err != nil {
 		fmt.Printf("Failed to initialize json file store: %v\n", err)
 	}

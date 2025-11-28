@@ -1,4 +1,4 @@
-version: "0.5"
+version: "v0.7"
 name: aog
 services:
     models:
@@ -9,6 +9,8 @@ services:
         endpoints: ["POST /generate"]
     embed:
         endpoints: ["POST /embed"]
+    rerank:
+      endpoints: [ "POST /rerank" ]
     text-to-speech:
         endpoints: ["POST /text-to-speech", "GET /text-to-speech"]
     text-to-image:

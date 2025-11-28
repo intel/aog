@@ -19,115 +19,76 @@ package provider
 import (
 	"context"
 	"fmt"
-	"runtime"
 	"strconv"
 	"sync"
 	"time"
 
 	"github.com/intel/aog/internal/logger"
-	"github.com/intel/aog/internal/provider/engine"
 	"github.com/intel/aog/internal/types"
 	"github.com/intel/aog/internal/utils/bcode"
+	sdkprovider "github.com/intel/aog/plugin-sdk/provider"
 )
 
-// EngineLifecycleManager defines core engine lifecycle operations
-type EngineLifecycleManager interface {
-	StartEngine(mode string) error
-	StopEngine() error
-	HealthCheck() error
-	GetConfig() *types.EngineRecommendConfig
-}
-
-// EngineInstaller defines engine installation and setup operations
-type EngineInstaller interface {
-	CheckEngine() bool
-	InstallEngine(cover bool) error
-	InitEnv() error
-	UpgradeEngine() error
-}
-
-// ModelManager defines model management operations
-type ModelManager interface {
-	PullModel(ctx context.Context, req *types.PullModelRequest, fn types.PullProgressFunc) (*types.ProgressResponse, error)
-	PullModelStream(ctx context.Context, req *types.PullModelRequest) (chan []byte, chan error)
-	DeleteModel(ctx context.Context, req *types.DeleteRequest) error
-	ListModels(ctx context.Context) (*types.ListResponse, error)
-	LoadModel(ctx context.Context, req *types.LoadRequest) error
-	UnloadModel(ctx context.Context, req *types.UnloadModelRequest) error
-	GetRunningModels(ctx context.Context) (*types.ListResponse, error)
-}
-
-// EngineInfoProvider defines informational operations
-type EngineInfoProvider interface {
-	GetVersion(ctx context.Context, resp *types.EngineVersionResponse) (*types.EngineVersionResponse, error)
-	GetOperateStatus() int
-	SetOperateStatus(status int)
-}
-
-// ModelServiceProvider defines the complete interface for AI model service providers
-// This is a composite interface that includes all specialized interfaces
-type ModelServiceProvider interface {
-	EngineLifecycleManager
-	EngineInstaller
-	ModelManager
-	EngineInfoProvider
-}
+// ModelServiceProvider is an alias to the unified interface in plugin-sdk
+// Both built-in engines and plugins implement this interface
+type ModelServiceProvider = sdkprovider.ModelServiceProvider
 
 // EngineManager defines unified engine management operations
 type EngineManager interface {
+	InitializeEngines(enabledEngines []string) error
+	RegisterEngine(name string, provider ModelServiceProvider) error
 	StartAllEngines(mode string) error
 	StopAllEngines() error
 	StartKeepAlive()
 	StopKeepAlive()
 	GetEngineStatus() map[string]string
-	RegisterEngine(name string, provider ModelServiceProvider)
 }
 
-// Engine instance cache using sync.Once for thread-safe singleton
+// Global provider factory
 var (
-	ollamaInstance   ModelServiceProvider
-	openvinoInstance ModelServiceProvider
-	ollamaOnce       sync.Once
-	openvinoOnce     sync.Once
+	globalProviderFactory ProviderFactory
+	factoryOnce           sync.Once
 )
 
-// GetModelEngine get model service provider by engine name (singleton pattern)
-func GetModelEngine(engineName string) ModelServiceProvider {
-	switch engineName {
-	case "ollama":
-		ollamaOnce.Do(func() {
-			ollamaInstance = engine.NewOllamaProvider(nil)
-		})
-		return ollamaInstance
-	case "openvino":
-		openvinoOnce.Do(func() {
-			openvinoInstance = engine.NewOpenvinoProvider(nil)
-		})
-		return openvinoInstance
-	default:
-		// Default to ollama for unknown engines
-		ollamaOnce.Do(func() {
-			ollamaInstance = engine.NewOllamaProvider(nil)
-		})
-		return ollamaInstance
+// InitProviderFactory 初始化全局 Provider 工厂（只能调用一次）
+func InitProviderFactory(factory ProviderFactory) {
+	factoryOnce.Do(func() {
+		globalProviderFactory = factory
+		logger.EngineLogger.Info("Provider factory initialized")
+	})
+}
+
+// GetModelEngine 根据引擎名称获取 model service provider
+// 不再提供默认兜底，未找到引擎将返回错误
+func GetModelEngine(engineName string) (ModelServiceProvider, error) {
+	if globalProviderFactory == nil {
+		return nil, fmt.Errorf("provider factory not initialized")
 	}
+	return globalProviderFactory.GetProvider(engineName)
 }
 
 // EnsureEngineReady ensures the engine is in ready state
 func EnsureEngineReady(engineName string) error {
-	engineProvider := GetModelEngine(engineName)
+	ctx := context.Background()
 
-	if engineName == types.FlavorOpenvino && runtime.GOOS == "linux" {
-		logger.EngineLogger.Info("OpenVINO engine is not supported on Linux currently.")
-		return fmt.Errorf("openvino engine is not supported on Linux currently")
+	engineProvider, err := GetModelEngine(engineName)
+	if err != nil {
+		logger.EngineLogger.Error("Failed to get engine", "engine", engineName, "error", err)
+		return fmt.Errorf("failed to get engine %s: %w", engineName, err)
 	}
 
 	// 1. Check if engine is installed
 	logger.EngineLogger.Info("Checking model engine " + engineName + " installation...")
 
-	if !engineProvider.CheckEngine() {
+	isInstalled, err := engineProvider.CheckEngine()
+	if err != nil {
+		logger.EngineLogger.Error("Check engine "+engineName+" failed", "error", err)
+		return fmt.Errorf("check engine failed: %w", err)
+	}
+
+	if !isInstalled {
 		logger.EngineLogger.Info("Model engine " + engineName + " not exist, start download...")
-		err := engineProvider.InstallEngine(false)
+		err := engineProvider.InstallEngine(ctx)
 		if err != nil {
 			logger.EngineLogger.Error("Install model "+engineName+" engine failed", "error", err)
 			return bcode.ErrAIGCServiceInstallEngine
@@ -137,14 +98,14 @@ func EnsureEngineReady(engineName string) error {
 
 	// 2. Initialize environment
 	logger.EngineLogger.Info("Setting env...")
-	err := engineProvider.InitEnv()
+	err = engineProvider.InitEnv()
 	if err != nil {
 		logger.EngineLogger.Error("Setting env error", "error", err)
 		return bcode.ErrAIGCServiceInitEnv
 	}
 
 	// 3. Check engine health status
-	err = engineProvider.HealthCheck()
+	err = engineProvider.HealthCheck(ctx)
 	if err != nil {
 		// If health check fails, try to start the engine
 		logger.EngineLogger.Info("Engine " + engineName + " not running, starting...")
@@ -158,7 +119,7 @@ func EnsureEngineReady(engineName string) error {
 		logger.EngineLogger.Info("Waiting " + engineName + " start 60s...")
 		for i := 60; i > 0; i-- {
 			time.Sleep(time.Second * 1)
-			err = engineProvider.HealthCheck()
+			err = engineProvider.HealthCheck(ctx)
 			if err == nil {
 				break
 			}
@@ -167,7 +128,7 @@ func EnsureEngineReady(engineName string) error {
 	}
 
 	// 4. Final health check
-	err = engineProvider.HealthCheck()
+	err = engineProvider.HealthCheck(ctx)
 	if err != nil {
 		logger.EngineLogger.Error(engineName + " failed start...")
 		return bcode.ErrAIGCServiceStartEngine
@@ -189,4 +150,10 @@ func GetEngineManager() EngineManager {
 		globalEngineManager = newEngineManager()
 	})
 	return globalEngineManager
+}
+
+// InitEngines 初始化引擎（便捷方法）
+func InitEngines(enabledEngines []string) error {
+	manager := GetEngineManager().(*engineManager)
+	return manager.InitializeEngines(enabledEngines)
 }

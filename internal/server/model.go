@@ -36,6 +36,7 @@ import (
 	"github.com/intel/aog/internal/types"
 	"github.com/intel/aog/internal/utils"
 	"github.com/intel/aog/internal/utils/bcode"
+	sdktypes "github.com/intel/aog/plugin-sdk/types"
 )
 
 type Model interface {
@@ -86,7 +87,11 @@ func (s *ModelImpl) CreateModel(ctx context.Context, request *dto.CreateModelReq
 
 	if request.Size != "" {
 		// 判断剩余空间
-		providerEngine := provider.GetModelEngine(sp.Flavor)
+		providerEngine, err := provider.GetModelEngine(sp.Flavor)
+		if err != nil {
+			logger.EngineLogger.Error("Failed to get engine", "flavor", sp.Flavor, "error", err)
+			return nil, bcode.ErrProviderNotExist
+		}
 		var modelSavePath string
 		switch eng := providerEngine.(type) {
 		case *engine.OpenvinoProvider:
@@ -126,8 +131,16 @@ func (s *ModelImpl) CreateModel(ctx context.Context, request *dto.CreateModelReq
 	if m.Status == "failed" {
 		m.Status = "downloading"
 	}
+	if m.ServiceSource == types.ServiceSourceRemote {
+		m.Status = "downloaded"
+		err = s.Ds.Put(ctx, m)
+		if err != nil {
+			return nil, err
+		}
+		return &dto.CreateModelResponse{}, nil
+	}
 	stream := false
-	pullReq := &types.PullModelRequest{
+	pullReq := &sdktypes.PullModelRequest{
 		Model:     request.ModelName,
 		Stream:    &stream,
 		ModelType: sp.ServiceName,
@@ -165,8 +178,12 @@ func (s *ModelImpl) DeleteModel(ctx context.Context, request *dto.DeleteModelReq
 
 	// Call engin to delete model.
 	if m.Status == "downloaded" {
-		modelEngine := provider.GetModelEngine(sp.Flavor)
-		deleteReq := &types.DeleteRequest{
+		modelEngine, err := provider.GetModelEngine(sp.Flavor)
+		if err != nil {
+			logger.EngineLogger.Error("Failed to get engine", "flavor", sp.Flavor, "error", err)
+			return nil, bcode.ErrProviderNotExist
+		}
+		deleteReq := &sdktypes.DeleteRequest{
 			Model: request.ModelName,
 		}
 
@@ -285,7 +302,12 @@ func (s *ModelImpl) CreateModelStream(ctx context.Context, request *dto.CreateMo
 
 	if request.Size != "" {
 		// 判断剩余空间
-		providerEngine := provider.GetModelEngine(sp.Flavor)
+		providerEngine, getErr := provider.GetModelEngine(sp.Flavor)
+		if getErr != nil {
+			logger.EngineLogger.Error("Failed to get engine", "flavor", sp.Flavor, "error", getErr)
+			newErrChan <- bcode.ErrProviderNotExist
+			return newDataChan, newErrChan
+		}
 		var modelSavePath string
 		switch eng := providerEngine.(type) {
 		case *engine.OpenvinoProvider:
@@ -322,11 +344,25 @@ func (s *ModelImpl) CreateModelStream(ctx context.Context, request *dto.CreateMo
 			newErrChan <- err
 		}
 	}
+	if m.ServiceSource == types.ServiceSourceRemote {
+		m.Status = "downloaded"
+		err = ds.Put(ctx, m)
+		if err != nil {
+			newErrChan <- err
+		}
+		newDataChan <- []byte("{\"status\": \"success\"}")
+		return newDataChan, newErrChan
+	}
 	modelName := request.ModelName
 
-	providerEngine := provider.GetModelEngine(sp.Flavor)
+	providerEngine, err := provider.GetModelEngine(sp.Flavor)
+	if err != nil {
+		logger.EngineLogger.Error("Failed to get engine", "flavor", sp.Flavor, "error", err)
+		newErrChan <- bcode.ErrProviderNotExist
+		return newDataChan, newErrChan
+	}
 	steam := true
-	req := types.PullModelRequest{
+	req := sdktypes.PullModelRequest{
 		Model:     modelName,
 		Stream:    &steam,
 		ModelType: request.ServiceName,
@@ -361,7 +397,7 @@ func (s *ModelImpl) CreateModelStream(ctx context.Context, request *dto.CreateMo
 					newErrorCh <- errors.New(string(data))
 					return
 				}
-				var resp types.ProgressResponse
+				var resp sdktypes.ProgressResponse
 				if err := json.Unmarshal(data, &resp); err != nil {
 					log.Printf("Error unmarshaling response: %v", err)
 
@@ -445,11 +481,17 @@ func (s *ModelImpl) ModelStreamCancel(ctx context.Context, req *dto.ModelStreamC
 	}, nil
 }
 
-func AsyncPullModel(sp *types.ServiceProvider, m *types.Model, pullReq *types.PullModelRequest) {
+func AsyncPullModel(sp *types.ServiceProvider, m *types.Model, pullReq *sdktypes.PullModelRequest) {
 	ctx := context.Background()
 	ds := datastore.GetDefaultDatastore()
-	modelEngine := provider.GetModelEngine(sp.Flavor)
-	_, err := modelEngine.PullModel(ctx, pullReq, nil)
+	modelEngine, err := provider.GetModelEngine(sp.Flavor)
+	if err != nil {
+		logger.EngineLogger.Error("Failed to get engine", "flavor", sp.Flavor, "error", err)
+		m.Status = "failed"
+		_ = ds.Put(ctx, m)
+		return
+	}
+	_, err = modelEngine.PullModel(ctx, pullReq, nil)
 	if err != nil {
 		logger.LogicLogger.Error("[Pull model] Pull model error: ", err.Error())
 		m.Status = "failed"

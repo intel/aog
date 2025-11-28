@@ -26,6 +26,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -146,13 +147,12 @@ func (m *SpeechToTextMiddleware) Handle(st *ServiceTask) error {
 		return err
 	}
 
-	if err := m.processFile(body, st.Target.Location); err != nil {
+	if err := m.processFile(body, st); err != nil {
 		return err
 	}
 	var newReqBody []byte
-	if st.Request.Service == types.ServiceSpeechToText && st.Target.ServiceProvider.Flavor == types.FlavorAliYun {
-		fileData := body["speech"].(string)
-		newReqBody, err = base64.StdEncoding.DecodeString(fileData)
+	if strings.Contains(st.Target.ServiceProvider.Flavor, types.FlavorAliYun) {
+		newReqBody = body["speech"].([]byte)
 		st.Request.HTTP.Header.Set("Content-Type", "application/octet-stream")
 	} else {
 		newReqBody, err = json.Marshal(body)
@@ -187,26 +187,31 @@ func (m *SpeechToTextMiddleware) validateFileParams(body map[string]interface{})
 	return nil
 }
 
-func (m *SpeechToTextMiddleware) processFile(body map[string]interface{}, location string) error {
+func (m *SpeechToTextMiddleware) processFile(body map[string]interface{}, st *ServiceTask) error {
 	imageType := body["file_type"].(string)
 	image := body["file"].(string)
 
 	switch {
-	case imageType == types.ImageTypePath && location == types.ServiceSourceRemote:
-		return m.handleLocalToRemote(body, image)
-	case imageType == types.ImageTypeUrl && location == types.ServiceSourceLocal:
+	case imageType == types.ImageTypePath && st.Target.Location == types.ServiceSourceRemote:
+		return m.handleLocalToRemote(body, image, st)
+	case imageType == types.ImageTypeUrl && st.Target.Location == types.ServiceSourceLocal:
 		return m.handleRemoteToLocal(body, image)
 	}
 	return nil
 }
 
-func (m *SpeechToTextMiddleware) handleLocalToRemote(body map[string]interface{}, filePath string) error {
+func (m *SpeechToTextMiddleware) handleLocalToRemote(body map[string]interface{}, filePath string, st *ServiceTask) error {
 	fileData, err := os.ReadFile(filePath)
 	if err != nil {
 		logger.LogicLogger.Error("[Middleware] Failed to read image file", "error", err)
 		return fmt.Errorf("read image file: %w", err)
 	}
-	body["speech"] = base64.StdEncoding.EncodeToString(fileData)
+	if strings.Contains(st.Target.ServiceProvider.Flavor, types.FlavorAliYun) {
+		body["speech"] = fileData
+	} else {
+		body["speech"] = base64.StdEncoding.EncodeToString(fileData)
+	}
+
 	body["len"] = len(fileData)
 	return nil
 }

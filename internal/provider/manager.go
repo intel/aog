@@ -19,7 +19,6 @@ package provider
 import (
 	"context"
 	"fmt"
-	"runtime"
 	"sync"
 	"time"
 
@@ -43,49 +42,59 @@ type engineManager struct {
 }
 
 // newEngineManager creates a new engine manager instance
-func newEngineManager() EngineManager {
+func newEngineManager() *engineManager {
 	manager := &engineManager{
 		engines: make(map[string]ModelServiceProvider),
 	}
-
-	// 自动注册默认引擎
-	manager.registerDefaultEngines()
-
 	return manager
 }
 
-// registerDefaultEngines 注册默认引擎
-func (m *engineManager) registerDefaultEngines() {
-	// todo
-	if runtime.GOOS == "darwin" {
-		logger.EngineLogger.Info("macOS detected, skipping engine registration")
-		return
+// InitializeEngines 初始化引擎（配置驱动，不再自动注册）
+func (m *engineManager) InitializeEngines(enabledEngines []string) error {
+	if globalProviderFactory == nil {
+		return fmt.Errorf("provider factory not initialized")
 	}
 
-	engines := []string{"openvino", "ollama"}
-	logger.EngineLogger.Info(fmt.Sprintf("Registering %d default engines...", len(engines)))
+	available := globalProviderFactory.ListAvailableProviders()
 
-	for _, engineName := range engines {
-		engineProvider := GetModelEngine(engineName)
-		if engineProvider == nil {
-			logger.EngineLogger.Warn(fmt.Sprintf("Engine provider %s not found", engineName))
+	// 如果未指定启用的引擎，则全部启用
+	if len(enabledEngines) == 0 {
+		enabledEngines = available
+		logger.EngineLogger.Info("No engines specified, enabling all available engines")
+	}
+
+	logger.EngineLogger.Info(fmt.Sprintf("Initializing %d engines...", len(enabledEngines)))
+
+	for _, name := range enabledEngines {
+		provider, err := globalProviderFactory.GetProvider(name)
+		if err != nil {
+			logger.EngineLogger.Warn("Failed to get engine", "name", name, "error", err)
 			continue
 		}
 
-		m.engines[engineName] = engineProvider
-		logger.EngineLogger.Info(fmt.Sprintf("Registered engine: %s", engineName))
+		if err := m.RegisterEngine(name, provider); err != nil {
+			logger.EngineLogger.Error("Failed to register engine", "name", name, "error", err)
+			return err
+		}
 	}
 
-	logger.EngineLogger.Info("Default engine registration completed")
+	logger.EngineLogger.Info(fmt.Sprintf("Engine initialization completed, %d engines registered", len(m.engines)))
+	return nil
 }
 
-// RegisterEngine registers an engine with the manager
-func (m *engineManager) RegisterEngine(name string, provider ModelServiceProvider) {
+// RegisterEngine 注册引擎（添加唯一性校验）
+func (m *engineManager) RegisterEngine(name string, provider ModelServiceProvider) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
+	// 唯一性校验
+	if _, exists := m.engines[name]; exists {
+		return fmt.Errorf("engine already registered: %s", name)
+	}
+
 	m.engines[name] = provider
-	logger.EngineLogger.Info(fmt.Sprintf("Engine %s registered with manager", name))
+	logger.EngineLogger.Info("Engine registered", "name", name)
+	return nil
 }
 
 // StartAllEngines starts all registered engines
@@ -141,7 +150,7 @@ func (m *engineManager) startSingleEngine(engineName string, engineProvider Mode
 
 	// 引擎启动成功后执行升级操作
 	logger.EngineLogger.Info(fmt.Sprintf("Upgrading engine %s...", engineName))
-	engineProvider.UpgradeEngine() // UpgradeEngine通常没有返回值，或者忽略错误
+	engineProvider.UpgradeEngine(context.Background())
 	logger.EngineLogger.Info(fmt.Sprintf("Engine %s upgraded successfully", engineName))
 
 	return nil
@@ -190,7 +199,7 @@ func (m *engineManager) GetEngineStatus() map[string]string {
 
 	status := make(map[string]string)
 	for name, engineProvider := range m.engines {
-		if err := engineProvider.HealthCheck(); err != nil {
+		if err := engineProvider.HealthCheck(context.Background()); err != nil {
 			status[name] = "stopped"
 		} else {
 			status[name] = "running"
@@ -335,7 +344,7 @@ func (m *engineManager) checkAndRestartEngine(engineName string) {
 	}
 
 	// 进行健康检查
-	err := engineProvider.HealthCheck()
+	err := engineProvider.HealthCheck(context.Background())
 	if err != nil {
 		logger.EngineLogger.Error(fmt.Sprintf("Engine %s health check failed: %v", engineName, err))
 
@@ -353,12 +362,8 @@ func (m *engineManager) checkAndRestartEngine(engineName string) {
 			return
 		}
 
-		logger.EngineLogger.Info(fmt.Sprintf("Successfully restarted engine %s", engineName))
-
 		// 重启成功后执行升级操作
-		logger.EngineLogger.Info(fmt.Sprintf("Upgrading restarted engine %s...", engineName))
-		engineProvider.UpgradeEngine() // UpgradeEngine通常没有返回值，或者忽略错误
-		logger.EngineLogger.Info(fmt.Sprintf("Restarted engine %s upgraded successfully", engineName))
+		engineProvider.UpgradeEngine(context.Background())
 	}
 }
 

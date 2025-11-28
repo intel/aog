@@ -158,7 +158,7 @@ func installRegularService(cmd *cobra.Command, serviceName string) {
 			return
 		}
 	} else {
-		if err := setupLocalService(&req, serviceName); err != nil {
+		if err := setupLocalService(cmd, &req, serviceName); err != nil {
 			fmt.Printf("❌ Error: %s\n", err.Error())
 			return
 		}
@@ -168,12 +168,8 @@ func installRegularService(cmd *cobra.Command, serviceName string) {
 	if err != nil {
 		skipModelFlag = false
 	}
-	modelName, err := cmd.Flags().GetString("model_name")
-	if err != nil {
-		modelName = ""
-	}
 	req.SkipModelFlag = skipModelFlag
-	req.ModelName = modelName
+	req.ModelName, _ = cmd.Flags().GetString("model")
 	req.ServiceName = serviceName
 	req.ProviderName = providerName
 	if req.ProviderName == "" {
@@ -236,18 +232,31 @@ func setupRemoteService(cmd *cobra.Command, req *dto.CreateAIGCServiceRequest) e
 }
 
 // setupLocalService configures local service parameters
-func setupLocalService(req *dto.CreateAIGCServiceRequest, serviceName string) error {
+func setupLocalService(cmd *cobra.Command, req *dto.CreateAIGCServiceRequest, serviceName string) error {
 	req.ServiceSource = types.ServiceSourceLocal
-	req.ApiFlavor = types.FlavorOllama
 
 	if serviceName == types.ServiceImageToVideo || serviceName == types.ServiceImageToImage {
 		return fmt.Errorf("local %s service is not supported yet, please use remote services instead (e.g., aliyun)", serviceName)
 	}
 
-	if serviceName == types.ServiceTextToImage || serviceName == types.ServiceSpeechToText ||
-		serviceName == types.ServiceTextToSpeech || serviceName == types.ServiceSpeechToTextWS {
-		req.ApiFlavor = types.FlavorOpenvino
+	// 获取用户指定的 flavor 参数
+	flavor, err := cmd.Flags().GetString("flavor")
+	if err != nil {
+		flavor = ""
 	}
+
+	// 如果用户指定了 flavor，使用用户指定的值
+	if flavor != "" {
+		req.ApiFlavor = flavor
+	} else {
+		// 否则使用默认推荐配置
+		req.ApiFlavor = types.FlavorOllama
+		if serviceName == types.ServiceTextToImage || serviceName == types.ServiceSpeechToText ||
+			serviceName == types.ServiceTextToSpeech || serviceName == types.ServiceSpeechToTextWS {
+			req.ApiFlavor = types.FlavorOpenvino
+		}
+	}
+
 	req.AuthType = types.AuthTypeNone
 
 	return nil

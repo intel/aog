@@ -22,7 +22,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -30,10 +29,12 @@ import (
 	"github.com/intel/aog/internal/datastore"
 	"github.com/intel/aog/internal/logger"
 	"github.com/intel/aog/internal/manager"
+	"github.com/intel/aog/internal/plugin/registry"
 	"github.com/intel/aog/internal/provider"
 	"github.com/intel/aog/internal/types"
 	"github.com/intel/aog/internal/utils"
 	"github.com/intel/aog/internal/utils/bcode"
+	sdktypes "github.com/intel/aog/plugin-sdk/types"
 )
 
 const (
@@ -118,22 +119,22 @@ func (ss *BasicServiceScheduler) Start() {
 }
 
 func (ss *BasicServiceScheduler) onTaskEnqueue(task *ServiceTask) {
-	logger.LogicLogger.Info("[Schedule] Enqueue", "task", task)
+	logger.LogicLogger.Info("[Schedule] Enqueue", "taskID", task.Schedule.Id, "service", task.Request.Service)
 	ss.addToList(task, "waiting")
 	task.Schedule.TimeEnqueue = time.Now()
 }
 
 func (ss *BasicServiceScheduler) onTaskDone(task *ServiceTask) {
-	logger.LogicLogger.Info("[Schedule] Task Done", "since queued", time.Since(task.Schedule.TimeEnqueue),
-		"since run", time.Since(task.Schedule.TimeRun), "task", task)
+	logger.LogicLogger.Info("[Schedule] Task Done", "taskID", task.Schedule.Id, "since queued", time.Since(task.Schedule.TimeEnqueue),
+		"since run", time.Since(task.Schedule.TimeRun))
 	task.Schedule.TimeComplete = time.Now()
 	close(task.Ch)
 	ss.removeFromList(task)
 }
 
 func (ss *BasicServiceScheduler) onTaskFailed(task *ServiceTask, err error) {
-	logger.LogicLogger.Error("[Service] Task Failed", "error", err.Error(), "since queued",
-		time.Since(task.Schedule.TimeEnqueue), "since run", time.Since(task.Schedule.TimeRun), "task", task)
+	logger.LogicLogger.Error("[Service] Task Failed", "taskID", task.Schedule.Id, "error", err.Error(), "since queued",
+		time.Since(task.Schedule.TimeEnqueue), "since run", time.Since(task.Schedule.TimeRun))
 	task.Error = err
 	task.Schedule.TimeComplete = time.Now()
 	close(task.Ch)
@@ -261,6 +262,11 @@ func (ss *BasicServiceScheduler) dispatch(task *ServiceTask) (*types.ServiceTarg
 			logger.LogicLogger.Error("[Schedule] model not found", "error", err, "model", task.Request.Model)
 			return nil, bcode.ErrModelRecordNotFound
 		}
+		if len(ms) == 0 {
+			logger.LogicLogger.Error("[Schedule] no downloaded models found",
+				"service", task.Request.Service)
+			return nil, bcode.ErrModelRecordNotFound
+		}
 		m = ms[0].(*types.Model)
 	}
 	providerName = m.ProviderName
@@ -270,13 +276,21 @@ func (ss *BasicServiceScheduler) dispatch(task *ServiceTask) (*types.ServiceTarg
 	}
 	err = ds.Get(context.Background(), sp)
 	if err != nil {
-		logger.LogicLogger.Error("[Schedule] service provider not found for ", location, " of Service ", task.Request.Service)
+		logger.LogicLogger.Error("[Schedule] service provider not found",
+			"location", location,
+			"service", task.Request.Service,
+			"error", err)
 		return nil, bcode.ErrProviderNotExist
 	}
 
 	location = sp.ServiceSource
 	providerProperties := &types.ServiceProviderProperties{}
-	err = json.Unmarshal([]byte(sp.Properties), providerProperties)
+	// 处理空字符串情况（旧数据可能为空）
+	propertiesJSON := sp.Properties
+	if propertiesJSON == "" {
+		propertiesJSON = "{}"
+	}
+	err = json.Unmarshal([]byte(propertiesJSON), providerProperties)
 	if err != nil {
 		logger.LogicLogger.Error("[Schedule] failed to unmarshal service provider properties", "error", err, "properties", sp.Properties)
 		return nil, bcode.ErrUnmarshalProviderProperties
@@ -348,7 +362,7 @@ func (ss *BasicServiceScheduler) dispatch(task *ServiceTask) (*types.ServiceTarg
 			}
 		}
 		if !stream {
-			slog.Warn("[Schedule] Asks for stream mode but it is not supported by the service provider",
+			logger.LogicLogger.Warn("[Schedule] Asks for stream mode but it is not supported by the service provider",
 				"id_service_provider", sp.ProviderName, "supported_response_mode", providerProperties.SupportedResponseMode)
 		}
 	}
@@ -357,64 +371,82 @@ func (ss *BasicServiceScheduler) dispatch(task *ServiceTask) (*types.ServiceTarg
 	// ================
 	// TODO: XPU selection
 
-	// 从YAML配置中获取服务协议类型
-	flavorDef := GetFlavorDef(sp.Flavor)
-	protocol := ""
-	exposeProtocol := ""
-	if serviceDef, exists := flavorDef.Services[task.Request.Service]; exists {
-		protocol = serviceDef.Protocol
-		exposeProtocol = serviceDef.ExposeProtocol
+	// 从配置中获取服务协议类型（支持内置和插件）
+	protocol, exposeProtocol, err := ss.getServiceProtocols(sp, task.Request.Service)
+	if err != nil {
+		logger.LogicLogger.Error("[Schedule] Failed to get service protocols",
+			"provider", sp.ProviderName,
+			"service", task.Request.Service,
+			"error", err)
+		return nil, bcode.WrapError(bcode.ErrServer, err)
 	}
 
 	// 模型内存管理：确保本地模型已加载
 	if location == types.ServiceSourceLocal && model != "" {
 		// 获取模型引擎实例
-		modelEngine := provider.GetModelEngine(sp.Flavor)
-		if modelEngine != nil {
-			mmm := manager.GetModelManager()
-			ctx := context.Background()
-
-			// 请求分流：判断是否需要进入排队机制
-			if manager.NeedsQueuing(location, task.Request.Service) {
-				// 本地非embed请求：进入排队机制
-				logger.LogicLogger.Debug("[Schedule] Enqueueing local non-embed model request",
-					"model", model, "service", task.Request.Service, "provider", sp.ProviderName)
-
-				readyChan, errorChan, err := mmm.EnqueueLocalModelRequest(ctx, model, modelEngine, sp.ProviderName, sp.Flavor, task.Schedule.Id)
-				if err != nil {
-					logger.LogicLogger.Error("[Schedule] Failed to enqueue local model request",
-						"model", model, "provider", sp.ProviderName, "error", err)
-					return nil, fmt.Errorf("failed to enqueue model request %s: %w", model, err)
-				}
-
-				logger.LogicLogger.Info("[Schedule] Local model request enqueued, waiting for model preparation",
-					"model", model, "provider", sp.ProviderName, "taskID", task.Schedule.Id)
-
-				// 等待队列处理完成（模型切换和准备）
-				select {
-				case <-readyChan:
-					// 检查是否有错误
-					select {
-					case queueErr := <-errorChan:
-						logger.LogicLogger.Error("[Schedule] Model preparation failed",
-							"model", model, "taskID", task.Schedule.Id, "error", queueErr)
-						return nil, fmt.Errorf("model preparation failed for %s: %w", model, queueErr)
-					default:
-						logger.LogicLogger.Info("[Schedule] Model preparation completed, ready to execute task",
-							"model", model, "taskID", task.Schedule.Id)
-					}
-				case <-ctx.Done():
-					logger.LogicLogger.Warn("[Schedule] Context cancelled while waiting for model preparation",
-						"model", model, "taskID", task.Schedule.Id, "error", ctx.Err())
-					return nil, ctx.Err()
-				case <-time.After(ModelPreparationTimeout):
-					logger.LogicLogger.Error("[Schedule] Timeout waiting for model preparation",
-						"model", model, "taskID", task.Schedule.Id, "timeout", ModelPreparationTimeout)
-					return nil, fmt.Errorf("timeout waiting for model preparation: %s (timeout: %v)", model, ModelPreparationTimeout)
-				}
-			}
-			// 远程请求或本地embed请求：直接走原有流程，不需要特殊处理
+		modelEngine, err := provider.GetModelEngine(sp.Flavor)
+		if err != nil {
+			logger.LogicLogger.Error("[Schedule] Failed to get model engine",
+				"flavor", sp.Flavor, "error", err)
+			return nil, bcode.ErrProviderNotExist
 		}
+
+		mmm := manager.GetModelManager()
+		ctx := context.Background()
+
+		// 请求分流：判断是否需要进入排队机制
+		if manager.NeedsQueuing(location, task.Request.Service) {
+			// 本地非embed请求：进入排队机制
+			logger.LogicLogger.Debug("[Schedule] Enqueueing local non-embed model request",
+				"model", model, "service", task.Request.Service, "provider", sp.ProviderName)
+
+			readyChan, errorChan, err := mmm.EnqueueLocalModelRequest(ctx, model, modelEngine, sp.ProviderName, sp.Flavor, task.Schedule.Id)
+			if err != nil {
+				logger.LogicLogger.Error("[Schedule] Failed to enqueue local model request",
+					"model", model, "provider", sp.ProviderName, "error", err)
+				return nil, fmt.Errorf("failed to enqueue model request %s: %w", model, err)
+			}
+
+			logger.LogicLogger.Info("[Schedule] Local model request enqueued, waiting for model preparation",
+				"model", model, "provider", sp.ProviderName, "taskID", task.Schedule.Id)
+
+			// 等待队列处理完成（模型切换和准备）
+			select {
+			case <-readyChan:
+				// 检查是否有错误
+				select {
+				case queueErr := <-errorChan:
+					logger.LogicLogger.Error("[Schedule] Model preparation failed",
+						"model", model, "taskID", task.Schedule.Id, "error", queueErr)
+					return nil, fmt.Errorf("model preparation failed for %s: %w", model, queueErr)
+				default:
+					logger.LogicLogger.Info("[Schedule] Model preparation completed, ready to execute task",
+						"model", model, "taskID", task.Schedule.Id)
+				}
+			case <-ctx.Done():
+				logger.LogicLogger.Warn("[Schedule] Context cancelled while waiting for model preparation",
+					"model", model, "taskID", task.Schedule.Id, "error", ctx.Err())
+				return nil, ctx.Err()
+			case <-time.After(ModelPreparationTimeout):
+				logger.LogicLogger.Error("[Schedule] Timeout waiting for model preparation",
+					"model", model, "taskID", task.Schedule.Id, "timeout", ModelPreparationTimeout)
+				return nil, fmt.Errorf("timeout waiting for model preparation: %s (timeout: %v)", model, ModelPreparationTimeout)
+			}
+		} else if location == types.ServiceSourceLocal && task.Request.Service == types.ServiceEmbed {
+			// Local embed request: ensure model is loaded (skip queuing to stay lightweight)
+			logger.LogicLogger.Debug("[Schedule] Ensuring embed model is loaded",
+				"model", model, "provider", sp.ProviderName)
+
+			if err := ensureModelLoaded(ctx, model, modelEngine, sp.ProviderName); err != nil {
+				logger.LogicLogger.Error("[Schedule] Failed to ensure embed model loaded",
+					"model", model, "provider", sp.ProviderName, "error", err)
+				return nil, fmt.Errorf("failed to load embed model %s: %w", model, err)
+			}
+
+			logger.LogicLogger.Debug("[Schedule] Embed model is ready",
+				"model", model, "provider", sp.ProviderName)
+		}
+		// Remote request: execute directly without model management
 	}
 
 	return &types.ServiceTarget{
@@ -426,6 +458,63 @@ func (ss *BasicServiceScheduler) dispatch(task *ServiceTask) (*types.ServiceTarg
 		ExposeProtocol:  exposeProtocol,
 		ServiceProvider: sp,
 	}, nil
+}
+
+// ensureModelLoaded ensures the model is loaded into memory
+// Used for services that don't need queuing (e.g. embed), loads model directly without going through queue
+// LoadModel internally checks if model is already loaded and returns immediately if so
+func ensureModelLoaded(ctx context.Context, modelName string, providerInstance provider.ModelServiceProvider, providerName string) error {
+	logger.LogicLogger.Debug("[Schedule] Ensuring model is loaded",
+		"model", modelName, "provider", providerName)
+
+	loadReq := &sdktypes.LoadRequest{
+		Model: modelName,
+	}
+
+	// LoadModel is idempotent: returns immediately if already loaded, otherwise loads the model
+	if err := providerInstance.LoadModel(ctx, loadReq); err != nil {
+		logger.LogicLogger.Error("[Schedule] Failed to load model",
+			"model", modelName, "provider", providerName, "error", err)
+		return fmt.Errorf("failed to load model: %w", err)
+	}
+
+	logger.LogicLogger.Debug("[Schedule] Model is ready",
+		"model", modelName, "provider", providerName)
+
+	return nil
+}
+
+// getServiceProtocols 获取服务的协议信息（支持内置和插件）
+func (ss *BasicServiceScheduler) getServiceProtocols(sp *types.ServiceProvider, serviceName string) (protocol, exposeProtocol string, err error) {
+	// 1. 检查是否为插件
+	if sp.Scope == "plugin" {
+		// 从插件 manifest 获取服务信息
+		pluginRegistry := registry.GetGlobalPluginRegistry()
+		if pluginRegistry == nil {
+			return "", "", fmt.Errorf("plugin registry not initialized")
+		}
+
+		manifest := pluginRegistry.GetManifest(sp.Flavor)
+		if manifest == nil {
+			return "", "", fmt.Errorf("plugin manifest not found for provider: %s", sp.Flavor)
+		}
+
+		// 在插件的服务定义中查找
+		serviceDef, err := manifest.GetServiceByName(serviceName)
+		if err != nil {
+			return "", "", fmt.Errorf("service %s not found in plugin %s: %w", serviceName, sp.Flavor, err)
+		}
+
+		return serviceDef.Protocol, serviceDef.ExposeProtocol, nil
+	}
+
+	// 2. 内置 provider：从 flavor 定义读取
+	flavorDef := GetFlavorDef(sp.Flavor)
+	if serviceDef, exists := flavorDef.Services[serviceName]; exists {
+		return serviceDef.Protocol, serviceDef.ExposeProtocol, nil
+	}
+
+	return "", "", fmt.Errorf("service %s not supported by provider %s", serviceName, sp.Flavor)
 }
 
 // this is invoked by schedule goroutine

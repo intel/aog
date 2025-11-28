@@ -9,6 +9,7 @@
     "auth_type": "none",
     "auth_key": "",
     "flavor": "ollama",
+    "protocol": "HTTP",
     "url": "http://127.0.0.1:16677/api/tags",
     "scope": "system"
   },
@@ -22,6 +23,7 @@
     "auth_type": "none",
     "auth_key": "",
     "flavor": "ollama",
+    "protocol": "HTTP",
     "url": "http://127.0.0.1:16677/api/chat",
     "scope": "system"
   },
@@ -35,6 +37,7 @@
     "auth_type": "none",
     "auth_key": "",
     "flavor": "ollama",
+    "protocol": "HTTP",
     "url": "http://127.0.0.1:16677/api/generate",
     "scope": "system"
   },
@@ -48,6 +51,7 @@
     "auth_type": "none",
     "auth_key": "",
     "flavor": "ollama",
+    "protocol": "HTTP",
     "url": "http://127.0.0.1:16677/api/embed",
     "scope": "system"
   },
@@ -61,6 +65,7 @@
     "auth_type": "none",
     "auth_key": "",
     "flavor": "deepseek",
+    "protocol": "HTTP",
     "url": "https://api.deepseek.com/chat/completions",
     "scope": "system"
   },
@@ -74,6 +79,7 @@
     "auth_type": "none",
     "auth_key": "",
     "flavor": "aliyun",
+    "protocol": "HTTP",
     "url": "https://dashscope.aliyuncs.com/api/v1/services/aigc/text2image/image-synthesis",
     "scope": "system"
   },
@@ -87,6 +93,7 @@
     "auth_type": "none",
     "auth_key": "",
     "flavor": "aliyun",
+    "protocol": "HTTP",
     "url": "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",
     "scope": "system"
   },
@@ -100,6 +107,7 @@
     "auth_type": "none",
     "auth_key": "",
     "flavor": "aliyun",
+    "protocol": "HTTP",
     "url": "https://dashscope.aliyuncs.com/compatible-mode/v1/embeddings",
     "scope": "system"
   },
@@ -113,6 +121,7 @@
     "auth_type": "none",
     "auth_key": "",
     "flavor": "baidu",
+    "protocol": "HTTP",
     "url": "https://qianfan.baidubce.com/v2/images/generations",
     "scope": "system"
   },
@@ -126,6 +135,7 @@
     "auth_type": "none",
     "auth_key": "",
     "flavor": "baidu",
+    "protocol": "HTTP",
     "url": "https://qianfan.baidubce.com/v2/chat/completions",
     "scope": "system"
   },
@@ -139,6 +149,7 @@
     "auth_type": "none",
     "auth_key": "",
     "flavor": "baidu",
+    "protocol": "HTTP",
     "url": "https://qianfan.baidubce.com/v2/embeddings",
     "scope": "system"
   },
@@ -152,6 +163,7 @@
     "auth_type": "none",
     "auth_key": "",
     "flavor": "tencent",
+    "protocol": "HTTP",
     "url": "https://hunyuan.tencentcloudapi.com/",
     "scope": "system"
   },
@@ -165,6 +177,7 @@
     "auth_type": "none",
     "auth_key": "",
     "flavor": "tencent",
+    "protocol": "HTTP",
     "url": "https://api.hunyuan.cloud.tencent.com/v1/chat/completions",
     "scope": "system"
   },
@@ -178,6 +191,7 @@
     "auth_type": "none",
     "auth_key": "",
     "flavor": "tencent",
+    "protocol": "HTTP",
     "url": "https://api.hunyuan.cloud.tencent.com/v1/embeddings",
     "scope": "system"
   },
@@ -191,7 +205,8 @@
     "auth_type": "none",
     "auth_key": "",
     "flavor": "openvino",
-    "url": "127.0.0.1:9000",
+    "protocol": "HTTP",
+    "url": "http://127.0.0.1:16666/v3/images/generations",
     "scope": "system"
   },
   {
@@ -204,6 +219,7 @@
     "auth_type": "none",
     "auth_key": "",
     "flavor": "openvino",
+    "protocol": "GRPC",
     "url": "127.0.0.1:9000",
     "scope": "system"
   },
@@ -217,6 +233,7 @@
     "auth_type": "none",
     "auth_key": "",
     "flavor": "openvino",
+    "protocol": "GRPC_STREAM",
     "url": "127.0.0.1:9000",
     "scope": "system"
   },
@@ -230,7 +247,64 @@
     "auth_type": "none",
     "auth_key": "",
     "flavor": "openvino",
+    "protocol": "GRPC",
     "url": "127.0.0.1:9000",
+    "scope": "system"
+  },
+  {
+    "provider_name": "local_openvino_chat",
+    "desc": "Local Openvino chat",
+    "service_name": "chat",
+    "service_source": "local",
+    "api_flavor": "openvino",
+    "method": "POST",
+    "auth_type": "none",
+    "auth_key": "",
+    "flavor": "openvino",
+    "protocol": "HTTP",
+    "url": "http://127.0.0.1:16666/v3/chat/completions",
+    "scope": "system"
+  },
+  {
+    "provider_name": "local_openvino_embed",
+    "desc": "Local Openvino embed",
+    "service_name": "embed",
+    "service_source": "local",
+    "api_flavor": "openvino",
+    "method": "POST",
+    "auth_type": "none",
+    "auth_key": "",
+    "flavor": "openvino",
+    "protocol": "HTTP",
+    "url": "http://127.0.0.1:16666/v3/embeddings",
+    "scope": "system"
+  },
+  {
+    "provider_name": "local_openvino_rerank",
+    "desc": "Local Openvino rerank",
+    "service_name": "rerank",
+    "service_source": "local",
+    "api_flavor": "openvino",
+    "method": "POST",
+    "auth_type": "none",
+    "auth_key": "",
+    "flavor": "openvino",
+    "protocol": "HTTP",
+    "url": "http://127.0.0.1:16666/v3/rerank",
+    "scope": "system"
+  },
+  {
+    "provider_name": "local_openvino_generate",
+    "desc": "Local Openvino generate",
+    "service_name": "generate",
+    "service_source": "local",
+    "api_flavor": "openvino",
+    "method": "POST",
+    "auth_type": "none",
+    "auth_key": "",
+    "flavor": "openvino",
+    "protocol": "HTTP",
+    "url": "http://127.0.0.1:16666/v3/completions",
     "scope": "system"
   },
   {
@@ -243,6 +317,7 @@
     "auth_type": "apikey",
     "auth_key": "",
     "flavor": "aliyun",
+    "protocol": "HTTP",
     "url": "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation",
     "scope": "system"
   },
@@ -256,6 +331,7 @@
     "auth_type": "apikey",
     "auth_key": "",
     "flavor": "aliyun",
+    "protocol": "HTTP",
     "url": "wss://dashscope.aliyuncs.com/api-ws/v1/inference",
     "scope": "system"
   },
@@ -269,6 +345,7 @@
     "auth_type": "apikey",
     "auth_key": "",
     "flavor": "aliyun",
+    "protocol": "HTTP",
     "url": "https://dashscope.aliyuncs.com/api/v1/services/aigc/video-generation/video-synthesis",
     "scope": "system"
   },
@@ -282,6 +359,7 @@
     "auth_type": "apikey",
     "auth_key": "",
     "flavor": "aliyun",
+    "protocol": "HTTP",
     "url": "https://dashscope.aliyuncs.com/api/v1/services/aigc/image2image/image-synthesis",
     "scope": "system"
   }

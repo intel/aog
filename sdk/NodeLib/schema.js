@@ -1,3 +1,4 @@
+      
 //*****************************************************************************
 // Copyright 2024-2025 Intel Corporation
 //
@@ -718,17 +719,11 @@ const imageToImageRequest = {
 const imageToImageResponse = {
     type: "object",
     properties: {
-        code: { type: "integer" },
-        msg: { type: "string" },
-        data: {
-            type: "object",
-            properties: {
-                id: { type: "string" },
-                url: { type: "array", items: { type: "string" } }
-            },
-            required: ["url"]
-        },
-        
+        id: { type: "string" },
+        url: {
+            type: "array",
+            items: { type: "string" }
+        }
     }
 };
 

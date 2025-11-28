@@ -17,8 +17,6 @@
 package dto
 
 import (
-	"time"
-
 	"github.com/intel/aog/internal/constants"
 	"github.com/intel/aog/internal/types"
 	"github.com/intel/aog/internal/utils"
@@ -224,12 +222,12 @@ type GetAIGCServicesResponse struct {
 }
 
 type Service struct {
-	ServiceName  string    `json:"service_name"`
-	HybridPolicy string    `json:"hybrid_policy"`
-	Status       int       `json:"status"`
-	Avatar       string    `json:"avatar"`
-	CreatedAt    time.Time `json:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at"`
+	ServiceName  string          `json:"service_name"`
+	HybridPolicy string          `json:"hybrid_policy"`
+	Status       int             `json:"status"`
+	Avatar       string          `json:"avatar"`
+	CreatedAt    types.LocalTime `json:"created_at"`
+	UpdatedAt    types.LocalTime `json:"updated_at"`
 }
 
 type CreateModelRequest struct {
@@ -298,15 +296,15 @@ type ModelStreamCancelResponse struct {
 }
 
 type Model struct {
-	ModelName     string    `json:"model_name"`
-	Avatar        string    `json:"avatar"`
-	ProviderName  string    `json:"provider_name"`
-	Status        string    `json:"status"`
-	ServiceName   string    `json:"service_name"`
-	ServiceSource string    `json:"service_source"`
-	IsDefault     bool      `json:"is_default"`
-	CreatedAt     time.Time `json:"created_at"`
-	UpdatedAt     time.Time `json:"updated_at"`
+	ModelName     string          `json:"model_name"`
+	Avatar        string          `json:"avatar"`
+	ProviderName  string          `json:"provider_name"`
+	Status        string          `json:"status"`
+	ServiceName   string          `json:"service_name"`
+	ServiceSource string          `json:"service_source"`
+	IsDefault     bool            `json:"is_default"`
+	CreatedAt     types.LocalTime `json:"created_at"`
+	UpdatedAt     types.LocalTime `json:"updated_at"`
 }
 
 type SetDefaultModelRequest struct {
@@ -329,35 +327,35 @@ type LocalSupportModelData struct {
 }
 
 type RecommendModelData struct {
-	Id              string    `json:"id"`
-	Service         string    `json:"service_name"`
-	ApiFlavor       string    `json:"api_flavor"`
-	Flavor          string    `json:"flavor"`
-	Method          string    `json:"method" default:"POST"`
-	Desc            string    `json:"desc"`
-	Url             string    `json:"url"`
-	AuthType        string    `json:"auth_type"`
-	AuthApplyUrl    string    `json:"auth_apply_url"`
-	AuthFields      []string  `json:"auth_fields"`
-	Name            string    `json:"name"`
-	ServiceProvider string    `json:"service_provider_name"`
-	Size            string    `json:"size"`
-	IsRecommended   bool      `json:"is_recommended" default:"false"`
-	Status          string    `json:"status"`
-	Avatar          string    `json:"avatar"`
-	CanSelect       bool      `json:"can_select" default:"false"`
-	Class           []string  `json:"class"`
-	OllamaId        string    `json:"ollama_id"`
-	ParamsSize      float32   `json:"params_size"`
-	InputLength     int       `json:"input_length"`
-	OutputLength    int       `json:"output_length"`
-	Source          string    `json:"source"`
-	IsDefault       string    `json:"is_default" default:"false"`
-	Think           bool      `json:"think"`
-	ThinkSwitch     bool      `json:"think_switch"`
-	Tools           bool      `json:"tools"` // 是否支持工具调用
-	Context         float32   `json:"context"`
-	CreatedAt       time.Time `json:"created_at"`
+	Id              string          `json:"id"`
+	Service         string          `json:"service_name"`
+	ApiFlavor       string          `json:"api_flavor"`
+	Flavor          string          `json:"flavor"`
+	Method          string          `json:"method" default:"POST"`
+	Desc            string          `json:"desc"`
+	Url             string          `json:"url"`
+	AuthType        string          `json:"auth_type"`
+	AuthApplyUrl    string          `json:"auth_apply_url"`
+	AuthFields      []string        `json:"auth_fields"`
+	Name            string          `json:"name"`
+	ServiceProvider string          `json:"service_provider_name"`
+	Size            string          `json:"size"`
+	IsRecommended   bool            `json:"is_recommended" default:"false"`
+	Status          string          `json:"status"`
+	Avatar          string          `json:"avatar"`
+	CanSelect       bool            `json:"can_select" default:"false"`
+	Class           []string        `json:"class"`
+	OllamaId        string          `json:"ollama_id"`
+	ParamsSize      float32         `json:"params_size"`
+	InputLength     int             `json:"input_length"`
+	OutputLength    int             `json:"output_length"`
+	Source          string          `json:"source"`
+	IsDefault       string          `json:"is_default" default:"false"`
+	Think           bool            `json:"think"`
+	ThinkSwitch     bool            `json:"think_switch"`
+	Tools           bool            `json:"tools"` // 是否支持工具调用
+	Context         float32         `json:"context"`
+	CreatedAt       types.LocalTime `json:"created_at"`
 }
 
 type CreateServiceProviderRequest struct {
@@ -425,18 +423,18 @@ type GetServiceProvidersResponse struct {
 }
 
 type ServiceProvider struct {
-	ProviderName  string    `json:"provider_name"`
-	ServiceName   string    `json:"service_name"`
-	ServiceSource string    `json:"service_source"`
-	Desc          string    `json:"desc"`
-	AuthType      string    `json:"auth_type"`
-	AuthKey       string    `json:"auth_key"`
-	Flavor        string    `json:"flavor"`
-	Properties    string    `json:"properties"`
-	Models        []string  `json:"models"`
-	Status        int       `json:"status"`
-	CreatedAt     time.Time `json:"created_at"`
-	UpdatedAt     time.Time `json:"updated_at"`
+	ProviderName  string          `json:"provider_name"`
+	ServiceName   string          `json:"service_name"`
+	ServiceSource string          `json:"service_source"`
+	Desc          string          `json:"desc"`
+	AuthType      string          `json:"auth_type"`
+	AuthKey       string          `json:"auth_key"`
+	Flavor        string          `json:"flavor"`
+	Properties    string          `json:"properties"`
+	Models        []string        `json:"models"`
+	Status        int             `json:"status"`
+	CreatedAt     types.LocalTime `json:"created_at"`
+	UpdatedAt     types.LocalTime `json:"updated_at"`
 }
 
 type ServiceWithModels struct {
@@ -472,22 +470,22 @@ type GetSupportModelResponse struct {
 	Data GetSupportModelResponseData `json:"data"`
 }
 type SupportModel struct {
-	Id            string    `json:"id"`
-	OllamaId      string    `json:"Ollama_id"`
-	Name          string    `json:"name"`
-	Avatar        string    `json:"avatar"`
-	Description   string    `json:"description"`
-	Class         []string  `json:"class"`
-	Flavor        string    `json:"flavor"`
-	ApiFlavor     string    `json:"api_flavor"`
-	Size          string    `json:"size"`
-	ParamSize     float32   `json:"params_size"`
-	InputLength   int       `json:"input_length"`
-	OutputLength  int       `json:"output_length"`
-	ServiceSource string    `json:"service_source"`
-	ServiceName   string    `json:"service_name"`
-	CreatedAt     time.Time `gorm:"column:created_at;default:CURRENT_TIMESTAMP" json:"created_at"`
-	UpdatedAt     time.Time `gorm:"column:updated_at;default:CURRENT_TIMESTAMP" json:"updated_at"`
+	Id            string          `json:"id"`
+	OllamaId      string          `json:"Ollama_id"`
+	Name          string          `json:"name"`
+	Avatar        string          `json:"avatar"`
+	Description   string          `json:"description"`
+	Class         []string        `json:"class"`
+	Flavor        string          `json:"flavor"`
+	ApiFlavor     string          `json:"api_flavor"`
+	Size          string          `json:"size"`
+	ParamSize     float32         `json:"params_size"`
+	InputLength   int             `json:"input_length"`
+	OutputLength  int             `json:"output_length"`
+	ServiceSource string          `json:"service_source"`
+	ServiceName   string          `json:"service_name"`
+	CreatedAt     types.LocalTime `gorm:"column:created_at;default:CURRENT_TIMESTAMP" json:"created_at"`
+	UpdatedAt     types.LocalTime `gorm:"column:updated_at;default:CURRENT_TIMESTAMP" json:"updated_at"`
 }
 
 type GetModelkeyRequest struct {

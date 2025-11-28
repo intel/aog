@@ -74,6 +74,8 @@ const (
 	EnvModelCleanupInterval   = "AOG_MODEL_CLEANUP_INTERVAL"
 	EnvLocalModelQueueSize    = "AOG_LOCAL_MODEL_QUEUE_SIZE"
 	EnvLocalModelQueueTimeout = "AOG_LOCAL_MODEL_QUEUE_TIMEOUT"
+	EnvPluginDir              = "AOG_PLUGIN_DIR"
+	EnvEnabledEngines         = "AOG_ENABLED_ENGINES"
 )
 
 var GlobalEnvironment *AOGEnvironment
@@ -95,6 +97,8 @@ type AOGEnvironment struct {
 	ModelCleanupInterval   time.Duration // model cleanup check interval
 	LocalModelQueueSize    int           // local model queue size
 	LocalModelQueueTimeout time.Duration // local model queue timeout
+	PluginDir              string        // plugin directory path
+	EnabledEngines         []string      // list of enabled engines (empty means all)
 }
 
 var (
@@ -256,6 +260,29 @@ func NewAOGEnvironment() *AOGEnvironment {
 		env.ConsoleLog = filepath.Join(env.LogDir, env.ConsoleLog)
 		if err := os.MkdirAll(env.LogDir, 0o750); err != nil {
 			panic("[Init Env] create logs path : " + err.Error())
+		}
+
+		// Read plugin configuration from environment variables
+		if pluginDir := Var(EnvPluginDir); pluginDir != "" {
+			env.PluginDir = pluginDir
+		} else {
+			// Default plugin directory: $AOG_DATA_DIR/plugins
+			env.PluginDir = filepath.Join(env.RootDir, "plugins")
+		}
+		// Create plugin directory if it doesn't exist
+		if err := os.MkdirAll(env.PluginDir, 0o750); err != nil {
+			slog.Warn("Failed to create plugin directory", "path", env.PluginDir, "error", err)
+		}
+
+		// Read enabled engines from environment variable
+		if enabledEnginesStr := Var(EnvEnabledEngines); enabledEnginesStr != "" {
+			engines := strings.Split(enabledEnginesStr, ",")
+			env.EnabledEngines = make([]string, 0, len(engines))
+			for _, engine := range engines {
+				if trimmed := strings.TrimSpace(engine); trimmed != "" {
+					env.EnabledEngines = append(env.EnabledEngines, trimmed)
+				}
+			}
 		}
 
 		envSingleton = &env

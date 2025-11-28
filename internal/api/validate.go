@@ -24,6 +24,7 @@ import (
 
 	"github.com/go-playground/validator/v10"
 	"github.com/intel/aog/internal/api/dto"
+	"github.com/intel/aog/internal/plugin/registry"
 	"github.com/intel/aog/internal/types"
 	"github.com/intel/aog/internal/utils"
 )
@@ -61,7 +62,7 @@ func init() {
 
 	// Register struct-level validation
 	validate.RegisterStructValidation(validateCreateAIGCServiceRequest, dto.CreateAIGCServiceRequest{})
-	//validate.RegisterStructValidation(validateUpdateAIGCServiceRequest, dto.UpdateAIGCServiceRequest{})
+	// validate.RegisterStructValidation(validateUpdateAIGCServiceRequest, dto.UpdateAIGCServiceRequest{})
 	validate.RegisterStructValidation(validateExportServiceRequest, dto.ExportServiceRequest{})
 }
 
@@ -86,7 +87,28 @@ func validateSupportedFlavor(fl validator.FieldLevel) bool {
 		return true // Allow empty, will use recommended configuration
 	}
 	flavor := fl.Field().String()
-	return utils.Contains(types.SupportFlavor, flavor)
+
+	// 1. Check if it's a built-in flavor
+	if utils.Contains(types.SupportFlavor, flavor) {
+		return true
+	}
+
+	// 2. Check if it's a registered plugin (only when registry is available)
+	// Note: In CLI process, registry might be nil, so we allow unknown flavors
+	// The server will validate plugin flavors during service creation
+	pluginRegistry := registry.GetGlobalPluginRegistry()
+	if pluginRegistry != nil {
+		// Try to get plugin provider (if exists, flavor is valid)
+		if _, err := pluginRegistry.GetProvider(flavor); err == nil {
+			return true
+		}
+		// If plugin registry exists but plugin not found, still return false
+		return false
+	}
+
+	// 3. If plugin registry is not initialized (CLI process),
+	// allow unknown flavors and let server validate them
+	return true
 }
 
 // Validate supported authentication types

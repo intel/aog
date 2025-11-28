@@ -47,6 +47,7 @@ func (srv *RagServiceImpl) GetFile(ctx context.Context, request *dto.RagGetFileR
 	if err := srv.Ds.Get(ctx, entity); err != nil {
 		return nil, err
 	}
+
 	return &dto.RagGetFileResponse{
 		Bcode: *bcode.RagSuccessCode,
 		Data:  *entity,
@@ -64,6 +65,7 @@ func (srv *RagServiceImpl) GetFiles(ctx context.Context) (*dto.RagGetFilesRespon
 			files = append(files, *rf)
 		}
 	}
+
 	return &dto.RagGetFilesResponse{
 		Bcode: *bcode.RagSuccessCode,
 		Data:  files,
@@ -103,8 +105,8 @@ func (srv *RagServiceImpl) UploadFile(c *gin.Context) (*dto.RagUploadFileRespons
 		FileType:  fileType,
 		FilePath:  dst,
 		Status:    1, // processing
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
+		CreatedAt: types.Now(),
+		UpdatedAt: types.Now(),
 	}
 	if err := srv.Ds.Add(c.Request.Context(), rf); err != nil {
 		return nil, err
@@ -113,6 +115,7 @@ func (srv *RagServiceImpl) UploadFile(c *gin.Context) (*dto.RagUploadFileRespons
 	data := &dto.RagUploadFileResponseData{
 		FileId: fileId,
 	}
+
 	return &dto.RagUploadFileResponse{
 		Bcode: *bcode.RagSuccessCode,
 		Data:  *data,
@@ -203,7 +206,7 @@ func ProcessFile(fileRecord *types.RagFile) error {
 				Content:    content,
 				ChunkIndex: i + j,
 				Embedding:  embeddingResp.Embeddings[j],
-				CreatedAt:  time.Now(),
+				CreatedAt:  types.Now(),
 			}
 			RagChunks = append(RagChunks, RagChunk)
 		}

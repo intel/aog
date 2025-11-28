@@ -19,6 +19,8 @@ package cli
 import (
 	"github.com/intel/aog/cmd/cli/core/common"
 	"github.com/intel/aog/cmd/cli/core/model"
+
+	// "github.com/intel/aog/cmd/cli/core/plugin" // TODO: 实现plugin CLI命令
 	"github.com/intel/aog/cmd/cli/core/provider"
 	"github.com/intel/aog/cmd/cli/core/server"
 	"github.com/intel/aog/cmd/cli/core/service"
@@ -69,6 +71,9 @@ Use 'aog <command> --help' for more information about a command.`,
 
 		// Model management
 		model.NewInstallModelCommand(),
+
+		// Plugin management
+		// plugin.NewPluginCommand(), // TODO: 实现plugin CLI命令
 	)
 
 	return cmds

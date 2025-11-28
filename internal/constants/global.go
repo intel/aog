@@ -41,7 +41,7 @@ const (
 // Network related
 const (
 	DefaultHTTPPort   = "16688"
-	DefaultHost       = "127.0.0.1"
+	DefaultHost       = "0.0.0.0"
 	DefaultHTTPSPort  = "443"
 	DefaultHTTPPort80 = "80"
 )

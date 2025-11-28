@@ -1,17 +1,17 @@
-version: "0.6"
+version: "v0.1"
 name: openvino # the name should be aligned with file name
 services:
     text-to-image:
         task_type: "text-to-image"
-        protocol: "GRPC"
+        protocol: "HTTP"
         expose_protocol: "HTTP"
-        url: "127.0.0.1:9000"
-        endpoints: [""]
+        url: "http://127.0.0.1:16666"
+        endpoints: ["POST /v3/images/generations"]
         extra_url: ""
         auth_type: ""
-        install_raw_routes: # also install routes without aog prefix in url path
+        install_raw_routes: true
         default_model: "OpenVINO/stable-diffusion-v1-5-fp16-ov"
-        request_segments: 1 # request
+        request_segments: 1
         extra_headers: "{}"
         request_to_aog:
             conversion:
@@ -20,14 +20,16 @@ services:
                       {
                          "model": $model,
                          "prompt": prompt,
-                         "batch":$exists(n) ? n : 1,
-                         "size": $exists(size) ? size : "1024*1024"
+                         "size": $exists(size) ? $replace(size, "*", "x") : "1024x1024",
+                         "num_inference_steps": $exists(num_inference_steps) ? num_inference_steps : 50,
+                         "rng_seed": $exists(rng_seed) ? rng_seed : 42
                       }
 
                 - converter: header
                   config:
                       set:
                           Content-Type: application/json
+
         request_from_aog:
             conversion:
                 - converter: jsonata
@@ -35,30 +37,33 @@ services:
                       {
                          "model": $model,
                          "prompt": prompt,
-                         "batch":$exists(n) ? n : 1,
-                         "size": $exists(size) ? size : "1024*1024"
+                         "size": $exists(size) ? $replace(size, "*", "x") : "1024x1024",
+                         "num_inference_steps": $exists(num_inference_steps) ? num_inference_steps : 50,
+                         "rng_seed": $exists(rng_seed) ? rng_seed : 42
                       }
 
                 - converter: header
                   config:
                       set:
                           Content-Type: application/json
+
         response_to_aog:
             conversion:
                 - converter: jsonata
                   config: |
                       {
-                          "url": local_path
+                          "created": created,
+                          "data": data,
+                          "b64_json": data[0].b64_json
                       }
+
         response_from_aog:
             conversion:
                 - converter: jsonata
                   config: |
                       {
-                           "id": request_id,
-                           "data": {
-                              "url": output.results[0].url
-                                  }
+                          "created": created,
+                          "data": data
                       }
     speech-to-text:
         task_type: "speech-to-text"
@@ -219,4 +224,374 @@ services:
                   config: |
                       {
                           "url": url
+                      }
+
+    # ============ HTTP-based Services (OVMS RESTful API) ============
+    chat:
+        task_type: "chat"
+        protocol: "HTTP"
+        expose_protocol: "HTTP"
+        url: "http://127.0.0.1:16666"
+        endpoints: ["POST /v3/chat/completions"]
+        extra_url: ""
+        auth_type: ""
+        install_raw_routes: true
+        default_model: "meta-llama/Llama-3.1-8B-Instruct"
+        request_segments: 1
+        extra_headers: "{}"
+        request_to_aog:
+            conversion:
+                - converter: jsonata
+                  config: |
+                      {
+                          "model": $model,
+                          "stream": $stream,
+                          "messages": messages,
+                          "temperature": temperature,
+                          "top_p": top_p,
+                          "max_tokens": $exists(max_tokens) ? max_tokens : max_completion_tokens,
+                          "stop": stop,
+                          "presence_penalty": presence_penalty,
+                          "frequency_penalty": frequency_penalty
+                      }
+
+                - converter: header
+                  config:
+                      set:
+                          Content-Type: application/json
+
+        request_from_aog:
+            conversion:
+                - converter: jsonata
+                  config: |
+                      {
+                          "model": $model,
+                          "stream": stream,
+                          "messages": messages,
+                          "temperature": temperature,
+                          "top_p": top_p,
+                          "max_tokens": max_tokens,
+                          "stop": stop,
+                          "presence_penalty": presence_penalty,
+                          "frequency_penalty": frequency_penalty
+                      }
+
+                - converter: header
+                  config:
+                      set:
+                          Content-Type: application/json
+
+        response_to_aog:
+            conversion:
+                - converter: jsonata
+                  config: |
+                      {
+                          "id": id,
+                          "model": model,
+                          "created_at": created,
+                          "message": choices[0].message,
+                          "finished": true,
+                          "finish_reason": choices[0].finish_reason,
+                          "usage": usage
+                      }
+
+        stream_response_to_aog:
+            conversion:
+                - converter: action_if
+                  config:
+                      trim: true
+                      pattern: "[DONE]"
+                      action: drop
+                - converter: jsonata
+                  config: |
+                      {
+                          "id": id,
+                          "model": model,
+                          "created_at": created,
+                          "message": choices[0].delta,
+                          "finished": choices[0].finish_reason = "stop" ? true : false,
+                          "finish_reason": choices[0].finish_reason
+                      }
+
+        response_from_aog:
+            conversion:
+                - converter: jsonata
+                  config: |
+                      {
+                          "id": id,
+                          "model": model,
+                          "object": "chat.completion",
+                          "created": $floor($toMillis(created_at)/1000),
+                          "choices": [{
+                                "index": 0,
+                                "message": message,
+                                "finish_reason": finish_reason
+                          }],
+                          "usage": usage
+                      }
+
+        stream_response_from_aog:
+            epilogue: ["data: [DONE]"]
+            conversion:
+                - converter: jsonata
+                  config: |
+                      {
+                          "id": id,
+                          "model": model,
+                          "object": "chat.completion.chunk",
+                          "created": $floor($toMillis(created_at)/1000),
+                          "choices": [{
+                                "index": 0,
+                                "delta": message,
+                                "finish_reason": finish_reason
+                          }]
+                      }
+
+    generate:
+        task_type: "generate"
+        protocol: "HTTP"
+        expose_protocol: "HTTP"
+        url: "http://127.0.0.1:16666"
+        endpoints: ["POST /v3/completions"]
+        extra_url: ""
+        auth_type: ""
+        install_raw_routes: true
+        default_model: "meta-llama/Llama-3.1-8B-Instruct"
+        request_segments: 1
+        extra_headers: "{}"
+        request_to_aog:
+            conversion:
+                - converter: jsonata
+                  config: |
+                      {
+                          "model": $model,
+                          "stream": $stream,
+                          "prompt": prompt,
+                          "temperature": temperature,
+                          "top_p": top_p,
+                          "max_tokens": $exists(max_tokens) ? max_tokens : max_completion_tokens,
+                          "stop": stop,
+                          "presence_penalty": presence_penalty,
+                          "frequency_penalty": frequency_penalty
+                      }
+
+                - converter: header
+                  config:
+                      set:
+                          Content-Type: application/json
+
+        request_from_aog:
+            conversion:
+                - converter: jsonata
+                  config: |
+                      {
+                          "model": $model,
+                          "stream": stream,
+                          "prompt": prompt,
+                          "temperature": temperature,
+                          "top_p": top_p,
+                          "max_tokens": max_tokens,
+                          "stop": stop,
+                          "presence_penalty": presence_penalty,
+                          "frequency_penalty": frequency_penalty
+                      }
+
+                - converter: header
+                  config:
+                      set:
+                          Content-Type: application/json
+
+        response_to_aog:
+            conversion:
+                - converter: jsonata
+                  config: |
+                      {
+                          "id": id,
+                          "model": model,
+                          "created_at": created,
+                          "text": choices[0].text,
+                          "finished": true,
+                          "finish_reason": choices[0].finish_reason,
+                          "usage": usage
+                      }
+
+        stream_response_to_aog:
+            conversion:
+                - converter: action_if
+                  config:
+                      trim: true
+                      pattern: "[DONE]"
+                      action: drop
+                - converter: jsonata
+                  config: |
+                      {
+                          "id": id,
+                          "model": model,
+                          "created_at": created,
+                          "text": choices[0].text,
+                          "finished": choices[0].finish_reason = "stop" ? true : false,
+                          "finish_reason": choices[0].finish_reason
+                      }
+
+        response_from_aog:
+            conversion:
+                - converter: jsonata
+                  config: |
+                      {
+                          "id": id,
+                          "model": model,
+                          "object": "text_completion",
+                          "created": $floor($toMillis(created_at)/1000),
+                          "choices": [{
+                                "index": 0,
+                                "text": text,
+                                "finish_reason": finish_reason
+                          }],
+                          "usage": usage
+                      }
+
+        stream_response_from_aog:
+            epilogue: ["data: [DONE]"]
+            conversion:
+                - converter: jsonata
+                  config: |
+                      {
+                          "id": id,
+                          "model": model,
+                          "object": "text_completion.chunk",
+                          "created": $floor($toMillis(created_at)/1000),
+                          "choices": [{
+                                "index": 0,
+                                "text": text,
+                                "finish_reason": finish_reason
+                          }]
+                      }
+
+    embed:
+        task_type: "embed"
+        protocol: "HTTP"
+        expose_protocol: "HTTP"
+        url: "http://127.0.0.1:16666"
+        endpoints: ["POST /v3/embeddings"]
+        extra_url: ""
+        auth_type: ""
+        install_raw_routes: true
+        default_model: "BAAI/bge-large-zh-v1.5"
+        request_segments: 1
+        extra_headers: "{}"
+        request_to_aog:
+            conversion:
+                - converter: jsonata
+                  config: |
+                      {
+                         "model": $model,
+                         "input": input,
+                         "encoding_format": encoding_format
+                      }
+
+                - converter: header
+                  config:
+                      set:
+                          Content-Type: application/json
+
+        request_from_aog:
+            conversion:
+                - converter: jsonata
+                  config: |
+                      {
+                         "model": $model,
+                         "input": input,
+                         "encoding_format": encoding_format
+                      }
+
+                - converter: header
+                  config:
+                      set:
+                          Content-Type: application/json
+
+        response_to_aog:
+            conversion:
+                - converter: jsonata
+                  config: |
+                      {
+                          "embeddings": data,
+                          "model": model,
+                          "usage": usage
+                      }
+
+        response_from_aog:
+            conversion:
+                - converter: jsonata
+                  config: |
+                      {
+                          "object": "list",
+                          "data": embeddings,
+                          "model": model,
+                          "usage": usage
+                      }
+
+    rerank:
+        task_type: "rerank"
+        protocol: "HTTP"
+        expose_protocol: "HTTP"
+        url: "http://127.0.0.1:16666"
+        endpoints: ["POST /v3/rerank"]
+        extra_url: ""
+        auth_type: ""
+        install_raw_routes: true
+        default_model: "BAAI/bge-reranker-v2-m3"
+        request_segments: 1
+        extra_headers: "{}"
+        request_to_aog:
+            conversion:
+                - converter: jsonata
+                  config: |
+                      {
+                         "model": $model,
+                         "query": query,
+                         "documents": documents,
+                         "top_n": top_n,
+                         "return_documents": return_documents
+                      }
+
+                - converter: header
+                  config:
+                      set:
+                          Content-Type: application/json
+
+        request_from_aog:
+            conversion:
+                - converter: jsonata
+                  config: |
+                      {
+                         "model": $model,
+                         "query": query,
+                         "documents": documents,
+                         "top_n": top_n,
+                         "return_documents": return_documents
+                      }
+
+                - converter: header
+                  config:
+                      set:
+                          Content-Type: application/json
+
+        response_to_aog:
+            conversion:
+                - converter: jsonata
+                  config: |
+                      {
+                          "results": results,
+                          "model": model,
+                          "usage": usage
+                      }
+
+        response_from_aog:
+            conversion:
+                - converter: jsonata
+                  config: |
+                      {
+                          "results": results,
+                          "model": model,
+                          "usage": usage
                       }

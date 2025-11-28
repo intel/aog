@@ -1,0 +1,122 @@
+version: "1.0"
+
+provider:
+  name: baidu-plugin
+  display_name: Baidu Plugin (External)
+  version: 1.0.0
+  type: remote
+  author: AOG Team
+  description: External Baidu plugin for local LLM inference (requires Baidu to be installed)
+  homepage: https://github.com/intel/aog
+  engine_host: https://qianfan.baidubce.com  # Baidu engine base URL (required for local plugins)
+
+services:
+  - service_name: chat
+    task_type: text-generation
+    protocol: HTTP
+    expose_protocol: HTTP
+    endpoint: /v2/chat/completions
+    auth_type: apikey
+    auth_fields:
+      - api_key
+    special_url: ""
+    extra_url: ""
+    extra_header: "{}"
+    default_model: ernie-3.5-8k
+    support_models:
+      - ernie-3.5-8k
+    # 复用内置 baidu 的转换规则
+    # AOG 会自动应用这些转换规则，插件只需处理 Baidu 原生请求/响应
+    config_ref: baidu:chat
+    # 🆕 能力声明
+    capabilities:
+      support_streaming: true  # ✅ Chat服务支持HTTP流式响应
+      support_bidirectional: false  # ❌ HTTP协议不支持双向流
+
+  - service_name: embed
+    task_type: embedding
+    protocol: HTTP
+    expose_protocol: HTTP
+    endpoint: /v2/embeddings
+    auth_type: apikey
+    auth_fields:
+      - api_key
+    special_url: ""
+    extra_url: ""
+    extra_header: "{}"
+    default_model: embedding-v1
+    support_models:
+      - embedding-v1
+    # 复用内置 baidu 的转换规则
+    config_ref: baidu:embed
+    # 🆕 能力声明
+    capabilities:
+      support_streaming: false  # ❌ Embedding不支持流式
+      support_bidirectional: false
+
+  - service_name: text-to-image
+    task_type: text-to-image
+    protocol: HTTP
+    expose_protocol: HTTP
+    endpoint: /v2/images/generations
+    auth_type: apikey
+    auth_fields:
+      - api_key
+    special_url: ""
+    extra_url: ""
+    extra_header: "{}"
+    default_model: irag-1.0
+    support_models:
+      - irag-1.0
+    # 复用内置 baidu 的转换规则
+    config_ref: baidu:text-to-image
+    # 🆕 能力声明
+    capabilities:
+      support_streaming: false  # ❌ Embedding不支持流式
+      support_bidirectional: false
+
+  - service_name: text-to-speech
+    task_type: text-to-speech
+    protocol: HTTP
+    expose_protocol: HTTP
+    endpoint: ""
+    auth_type: apikey
+    auth_fields:
+      - api_key
+    special_url: https://tsn.baidu.com/text2audio
+    extra_url: ""
+    extra_header: '{"Content-Type", "application/x-www-form-urlencoded"}'
+    default_model: tts
+    support_models:
+      - tts
+    # 复用内置 baidu 的转换规则
+    config_ref: baidu:text-to-image
+    # 🆕 能力声明
+    capabilities:
+      support_streaming: false  # ❌ Embedding不支持流式
+      support_bidirectional: false
+
+
+
+platforms:
+  linux_amd64:
+    executable: bin/linux-amd64/baidu-plugin
+    dependencies: []
+  
+  linux_arm64:
+    executable: bin/linux-arm64/baidu-plugin
+    dependencies: []
+  
+  darwin_amd64:
+    executable: bin/darwin-amd64/baidu-plugin
+    dependencies: []
+  
+  darwin_arm64:
+    executable: bin/darwin-arm64/baidu-plugin
+    dependencies: []
+  
+  windows_amd64:
+    executable: bin/windows-amd64/baidu-plugin.exe
+    dependencies: []
+
+

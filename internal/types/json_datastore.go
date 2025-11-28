@@ -36,8 +36,8 @@ type SupportModel struct {
 	OutputLength  int       `json:"output_length"`
 	ServiceSource string    `json:"service_source"`
 	ServiceName   string    `json:"service_name"`
-	CreatedAt     time.Time `gorm:"column:created_at;default:CURRENT_TIMESTAMP" json:"created_at"`
-	UpdatedAt     time.Time `gorm:"column:updated_at;default:CURRENT_TIMESTAMP" json:"updated_at"`
+	CreatedAt     LocalTime `gorm:"column:created_at;default:CURRENT_TIMESTAMP" json:"created_at"`
+	UpdatedAt     LocalTime `gorm:"column:updated_at;default:CURRENT_TIMESTAMP" json:"updated_at"`
 	Think         bool      `json:"think"`
 	ThinkSwitch   bool      `json:"think_switch"`
 	Tools         bool      `json:"tools"` // 是否支持工具调用
@@ -48,12 +48,12 @@ func (s *SupportModel) TableName() string {
 	return "support_model"
 }
 
-func (s *SupportModel) SetCreateTime(time time.Time) {
-	s.CreatedAt = time
+func (s *SupportModel) SetCreateTime(tm time.Time) {
+	s.CreatedAt = LocalTime(tm)
 }
 
-func (s *SupportModel) SetUpdateTime(time time.Time) {
-	s.UpdatedAt = time
+func (s *SupportModel) SetUpdateTime(tm time.Time) {
+	s.UpdatedAt = LocalTime(tm)
 }
 
 func (s *SupportModel) PrimaryKey() string {

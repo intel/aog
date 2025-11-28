@@ -85,37 +85,31 @@ func GetAPIFlavor(name string) (APIFlavor, error) {
 
 //------------------------------------------------------------
 
-type FlavorConversionDef struct {
-	Prologue   []string                  `yaml:"prologue"`
-	Epilogue   []string                  `yaml:"epilogue"`
-	Conversion []types.ConversionStepDef `yaml:"conversion"`
-}
-
 type ModelSelector struct {
 	ModelInRequest  string `yaml:"request"`
 	ModelInResponse string `yaml:"response"`
 }
 type FlavorServiceDef struct {
-	Protocol              string              `yaml:"protocol"`
-	ExposeProtocol        string              `yaml:"expose_protocol"`
-	TaskType              string              `yaml:"task_type"`
-	Endpoints             []string            `yaml:"endpoints"`
-	InstallRawRoutes      bool                `yaml:"install_raw_routes"`
-	DefaultModel          string              `yaml:"default_model"`
-	RequestUrl            string              `yaml:"url"`
-	RequestExtraUrl       string              `yaml:"extra_url"`
-	AuthType              string              `yaml:"auth_type"`
-	AuthApplyUrl          string              `yaml:"auth_apply_url"`
-	RequestSegments       int                 `yaml:"request_segments"`
-	ExtraHeaders          string              `yaml:"extra_headers"`
-	SupportModels         []string            `yaml:"support_models"`
-	ModelSelector         ModelSelector       `yaml:"model_selector"`
-	RequestToAOG          FlavorConversionDef `yaml:"request_to_aog"`
-	RequestFromAOG        FlavorConversionDef `yaml:"request_from_aog"`
-	ResponseToAOG         FlavorConversionDef `yaml:"response_to_aog"`
-	ResponseFromAOG       FlavorConversionDef `yaml:"response_from_aog"`
-	StreamResponseToAOG   FlavorConversionDef `yaml:"stream_response_to_aog"`
-	StreamResponseFromAOG FlavorConversionDef `yaml:"stream_response_from_aog"`
+	Protocol              string                    `yaml:"protocol"`
+	ExposeProtocol        string                    `yaml:"expose_protocol"`
+	TaskType              string                    `yaml:"task_type"`
+	Endpoints             []string                  `yaml:"endpoints"`
+	InstallRawRoutes      bool                      `yaml:"install_raw_routes"`
+	DefaultModel          string                    `yaml:"default_model"`
+	RequestUrl            string                    `yaml:"url"`
+	RequestExtraUrl       string                    `yaml:"extra_url"`
+	AuthType              string                    `yaml:"auth_type"`
+	AuthApplyUrl          string                    `yaml:"auth_apply_url"`
+	RequestSegments       int                       `yaml:"request_segments"`
+	ExtraHeaders          string                    `yaml:"extra_headers"`
+	SupportModels         []string                  `yaml:"support_models"`
+	ModelSelector         ModelSelector             `yaml:"model_selector"`
+	RequestToAOG          types.FlavorConversionDef `yaml:"request_to_aog"`
+	RequestFromAOG        types.FlavorConversionDef `yaml:"request_from_aog"`
+	ResponseToAOG         types.FlavorConversionDef `yaml:"response_to_aog"`
+	ResponseFromAOG       types.FlavorConversionDef `yaml:"response_from_aog"`
+	StreamResponseToAOG   types.FlavorConversionDef `yaml:"stream_response_to_aog"`
+	StreamResponseFromAOG types.FlavorConversionDef `yaml:"stream_response_from_aog"`
 }
 
 type FlavorDef struct {
@@ -140,10 +134,10 @@ func EnsureConversionNameValid(conversion string) {
 
 // Not all elements are defined in the YAML file. So need to handle and return nil
 // Example: getConversionDef("chat", "request_to_aog")
-func (f *FlavorDef) getConversionDef(service, conversion string) *FlavorConversionDef {
+func (f *FlavorDef) getConversionDef(service, conversion string) *types.FlavorConversionDef {
 	EnsureConversionNameValid(conversion)
 	if serviceDef, exists := f.Services[service]; exists {
-		var def FlavorConversionDef
+		var def types.FlavorConversionDef
 		switch conversion {
 		case "request_to_aog":
 			def = serviceDef.RequestToAOG
@@ -200,6 +194,11 @@ func GetFlavorDef(flavor string) FlavorDef {
 }
 
 //------------------------------------------------------------
+
+// InitConverters initializes all converter types (can be called separately before InitAPIFlavors)
+func InitConverters() error {
+	return convert.InitConverters()
+}
 
 func InitAPIFlavors() error {
 	err := convert.InitConverters()
@@ -411,6 +410,9 @@ func makeServiceRequestHandler(flavor APIFlavor, service string) func(c *gin.Con
 
 				// Handle error results using unified bcode.ReturnError
 				if data.Type == types.ServiceResultFailed && data.Error != nil {
+					if types.IsDropAction(data.Error) {
+						continue
+					}
 					logger.LogicLogger.Error("[Handler] Service task failed", "taskID", taskID, "error", data.Error)
 					bcode.ReturnError(c, data.Error)
 					isHTTPCompleted = true
@@ -957,6 +959,19 @@ func handleWebSocketMessage(wsConn *client.WebSocketConnection, flavor, service 
 	// Bind and write taskType and msgTaskID to wsConn
 	wsConn.SetTaskType(msgTaskID, taskType)
 
+	// Immediately notify client for run-task to reduce latency
+	if taskType == types.WSActionRunTask && !wsConn.HasTaskStartedEventSent(msgTaskID) {
+		startedEvent := types.NewTaskStartedEvent(wsConn.ID)
+		startedJSON, _ := json.Marshal(startedEvent)
+		if err := wsConn.WriteMessage(websocket.TextMessage, startedJSON); err != nil {
+			logger.LogicLogger.Error("[WebSocket] Failed to send immediate start event",
+				"error", err,
+				"connID", wsConn.ID)
+		} else {
+			wsConn.MarkTaskStartedEventSent(msgTaskID)
+		}
+	}
+
 	// If not a final task, add it to the active task list
 	if taskType != types.WSActionFinishTask {
 		wsConn.AddActiveTask(msgTaskID)
@@ -1002,14 +1017,16 @@ func processServiceResult(wsConn *client.WebSocketConnection, ch chan *types.Ser
 
 		logger.LogicLogger.Debug("[WebSocket] Received message task result", "result", data, "connID", wsConn.ID)
 
-		// First send the task start event
-		if taskType == types.WSActionRunTask {
+		// First send the task start event if it hasn't been emitted yet
+		if taskType == types.WSActionRunTask && !wsConn.HasTaskStartedEventSent(msgTaskID) {
 			startedEvent := types.NewTaskStartedEvent(wsConn.ID)
 			startedJSON, _ := json.Marshal(startedEvent)
 			if err := wsConn.WriteMessage(websocket.TextMessage, startedJSON); err != nil {
 				logger.LogicLogger.Error("[WebSocket] Failed to send start event",
 					"error", err,
 					"connID", wsConn.ID)
+			} else {
+				wsConn.MarkTaskStartedEventSent(msgTaskID)
 			}
 		}
 
@@ -1058,7 +1075,7 @@ func ConvertBetweenFlavors(from, to APIFlavor, service string, conv string, cont
 		var err error
 		content, err = from.Convert(service, firstConv, content, ctx)
 		if err != nil {
-			return types.HTTPContent{}, bcode.WrapError(bcode.ErrFlavorConvertRequest, err)
+			return types.HTTPContent{}, err
 		}
 	}
 	if from.Name() != types.FlavorAOG && to.Name() != types.FlavorAOG {
@@ -1096,9 +1113,25 @@ type ServiceDefaultInfo struct {
 var FlavorServiceDefaultInfoMap = make(map[string]map[string]ServiceDefaultInfo)
 
 func InitProviderDefaultModelTemplate(flavor APIFlavor) {
+	// 检查是否为插件 flavor（插件已经在创建时通过 InitServiceDefaultInfo 初始化）
+	if _, isPluginFlavor := flavor.(*PluginBasedAPIFlavor); isPluginFlavor {
+		logger.LogicLogger.Debug("[Provider] Skipping InitProviderDefaultModelTemplate for plugin flavor",
+			"flavor", flavor.Name())
+		return
+	}
+
+	// 检查是否已经存在数据（避免覆盖插件数据）
+	if existingData, exists := FlavorServiceDefaultInfoMap[flavor.Name()]; exists && len(existingData) > 0 {
+		logger.LogicLogger.Debug("[Provider] Service info already initialized for flavor",
+			"flavor", flavor.Name(),
+			"services", len(existingData))
+		return
+	}
+
 	def, err := LoadFlavorDef(flavor.Name())
 	if err != nil {
 		logger.LogicLogger.Error("[Provider]Failed to load file", "provider_name", flavor, "error", err.Error())
+		return // 失败时直接返回，不要用空 Map 覆盖
 	}
 	ServiceDefaultInfoMap := make(map[string]ServiceDefaultInfo)
 	for service, serviceDef := range def.Services {

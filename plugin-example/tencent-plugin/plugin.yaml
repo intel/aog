@@ -1,0 +1,123 @@
+version: "1.0"
+
+provider:
+  name: tencent-plugin
+  display_name: Tencent Plugin (External)
+  version: 1.0.0
+  type: remote
+  author: AOG Team
+  description: External Tencent plugin for local LLM inference (requires Tencent to be installed)
+  homepage: https://github.com/intel/aog
+  engine_host: https://api.hunyuan.cloud.tencent.com  # Tencent engine base URL (required for local plugins)
+
+services:
+  - service_name: chat
+    task_type: text-generation
+    protocol: HTTP
+    expose_protocol: HTTP
+    endpoint: /v1/chat/completions
+    auth_type: apikey
+    auth_fields:
+      - api_key
+    special_url: ""
+    extra_url: ""
+    extra_header: "{}"
+    default_model: hunyuan-turbo
+    support_models:
+      - hunyuan-turbo
+      - hunyuan-t1-latest
+      - hunyuan-large
+    # AOG 会自动应用这些转换规则，插件只需处理 Tencent 原生请求/响应
+    config_ref: tencent:chat
+    # 🆕 能力声明
+    capabilities:
+      support_streaming: true  # ✅ Chat服务支持HTTP流式响应
+      support_bidirectional: false  # ❌ HTTP协议不支持双向流
+
+  - service_name: embed
+    task_type: embedding
+    protocol: HTTP
+    expose_protocol: HTTP
+    endpoint: /v1/embeddings
+    auth_type: apikey
+    auth_fields:
+      - api_key
+    special_url: ""
+    extra_url: ""
+    extra_header: "{}"
+    default_model: hunyuan-embedding
+    support_models:
+      - hunyuan-embedding
+    # 复用内置 tencent 的转换规则
+    config_ref: tencent:embed
+    # 🆕 能力声明
+    capabilities:
+      support_streaming: false  # ❌ Embedding不支持流式
+      support_bidirectional: false
+
+  - service_name: text-to-image
+    task_type: text-to-image
+    protocol: HTTP
+    expose_protocol: HTTP
+    endpoint: ""
+    auth_type: sign
+    auth_fields:
+      - secret_id
+      - secret_key
+    special_url: https://hunyuan.tencentcloudapi.com/
+    extra_url: ""
+    extra_header: '{"Action": "TextToImageLite", "Version": "2023-09-01", "Region": "ap-guangzhou"}'
+    default_model: hunyuan-DiT
+    support_models:
+      - hunyuan-DiT
+    # 复用内置 tencent 的转换规则
+    config_ref: tencent:text-to-image
+    # 🆕 能力声明
+    capabilities:
+      support_streaming: false  # ❌ Embedding不支持流式
+      support_bidirectional: false
+
+  - service_name: text-to-speech
+    task_type: text-to-image
+    protocol: HTTP
+    expose_protocol: HTTP
+    endpoint: ""
+    auth_type: sign
+    auth_fields:
+      - secret_id
+      - secret_key
+    special_url: https://tts.tencentcloudapi.com
+    extra_url: ""
+    extra_header: '{"X-TC-Action": "TextToVoice","Version": "2019-08-23"}'
+    default_model: qwen-tts
+    support_models:
+      - qwen-tts
+    # 复用内置 tencent 的转换规则
+    config_ref: tencent:text-to-speech
+    # 🆕 能力声明
+    capabilities:
+      support_streaming: false  # ❌ Embedding不支持流式
+      support_bidirectional: false
+
+platforms:
+  linux_amd64:
+    executable: bin/linux-amd64/tencent-plugin
+    dependencies: []
+  
+  linux_arm64:
+    executable: bin/linux-arm64/tencent-plugin
+    dependencies: []
+  
+  darwin_amd64:
+    executable: bin/darwin-amd64/tencent-plugin
+    dependencies: []
+  
+  darwin_arm64:
+    executable: bin/darwin-arm64/tencent-plugin
+    dependencies: []
+  
+  windows_amd64:
+    executable: bin/windows-amd64/tencent-plugin.exe
+    dependencies: []
+
+

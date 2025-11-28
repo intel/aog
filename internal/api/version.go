@@ -1,11 +1,12 @@
 package api
 
 import (
+	"net/http"
+
 	"github.com/gin-gonic/gin"
 	"github.com/intel/aog/internal/api/dto"
 	"github.com/intel/aog/internal/logger"
 	"github.com/intel/aog/internal/utils/bcode"
-	"net/http"
 )
 
 func (t *AOGCoreServer) GetVersion(c *gin.Context) {
@@ -68,5 +69,4 @@ func (t *AOGCoreServer) UpdateHandler(c *gin.Context) {
 
 	logger.ApiLogger.Debug("[API] Update AOG version response:", resp)
 	c.JSON(http.StatusOK, resp)
-
 }

@@ -1,0 +1,291 @@
+syntax = "proto3";
+
+package protocol;
+
+// SDK independent package, does not depend on AOG internal packages
+option go_package = "github.com/intel/aog/plugin-sdk/protocol";
+
+// ProviderService defines the gRPC service for plugin Provider
+//
+// Note:
+//   - Remote plugins only need to implement partial methods (common methods + Auth methods)
+//   - Local plugins need to implement full lifecycle and model management methods
+//   - Unimplemented methods will return "not supported" error
+service ProviderService {
+    // GetManifest returns plugin metadata
+    rpc GetManifest(GetManifestRequest) returns (GetManifestResponse);
+    
+    // InvokeService invokes plugin service (core method - unary call)
+    rpc InvokeService(InvokeServiceRequest) returns (InvokeServiceResponse);
+    
+    // InvokeServiceStream server-side streaming call (for HTTP streaming: SSE/NDJSON)
+    // Only called when service declares capabilities.support_streaming = true
+    rpc InvokeServiceStream(InvokeServiceRequest) returns (stream InvokeServiceStreamResponse);
+    
+    // InvokeServiceBidi bidirectional streaming call (for WebSocket)
+    // Only called when service declares protocol = "WEBSOCKET" or capabilities.support_bidirectional = true
+    rpc InvokeServiceBidi(stream InvokeServiceBidiRequest) returns (stream InvokeServiceBidiResponse);
+    
+    // HealthCheck performs health check
+    rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse);
+    
+    // GetOperateStatus returns operational status
+    rpc GetOperateStatus(GetOperateStatusRequest) returns (GetOperateStatusResponse);
+    
+    // SetOperateStatus sets operational status
+    rpc SetOperateStatus(SetOperateStatusRequest) returns (SetOperateStatusResponse);
+    
+    // Remote plugin methods (cloud API plugins)
+    rpc SetAuth(SetAuthRequest) returns (SetAuthResponse);
+    rpc ValidateAuth(ValidateAuthRequest) returns (ValidateAuthResponse);
+    rpc RefreshAuth(RefreshAuthRequest) returns (RefreshAuthResponse);
+    
+    // Local plugin methods (local engine plugins)
+    
+    // Engine lifecycle management
+    rpc StartEngine(StartEngineRequest) returns (StartEngineResponse);
+    rpc StopEngine(StopEngineRequest) returns (StopEngineResponse);
+    rpc GetConfig(GetConfigRequest) returns (GetConfigResponse);
+    
+    // Engine installation and environment management
+    rpc CheckEngine(CheckEngineRequest) returns (CheckEngineResponse);
+    rpc InstallEngine(InstallEngineRequest) returns (InstallEngineResponse);
+    rpc InitEnv(InitEnvRequest) returns (InitEnvResponse);
+    rpc UpgradeEngine(UpgradeEngineRequest) returns (UpgradeEngineResponse);
+    
+    // Model management
+    rpc PullModel(PullModelRequest) returns (PullModelResponse);
+    rpc PullModelStream(PullModelStreamRequest) returns (stream PullModelStreamResponse);
+    rpc DeleteModel(DeleteModelRequest) returns (DeleteModelResponse);
+    rpc ListModels(ListModelsRequest) returns (ListModelsResponse);
+    rpc LoadModel(LoadModelRequest) returns (LoadModelResponse);
+    rpc UnloadModel(UnloadModelRequest) returns (UnloadModelResponse);
+    rpc GetRunningModels(GetRunningModelsRequest) returns (GetRunningModelsResponse);
+    
+    // Version information
+    rpc GetVersion(GetVersionRequest) returns (GetVersionResponse);
+}
+
+message GetManifestRequest {}
+
+message GetManifestResponse {
+    int32 code = 1;           // Error code: 0 or 200 = success, other = failure
+    string message = 2;       // Error message or success message
+    bytes manifest_json = 3;  // JSON serialized PluginManifest
+}
+
+message InvokeServiceRequest {
+    string service_name = 1;  // 服务名称: "chat", "embed", "text-to-image" 等
+    bytes request_data = 2;   // JSON 格式的请求数据
+    string auth_info = 3;   // 认证信息
+}
+
+message InvokeServiceResponse {
+    int32 code = 1;           // Error code: 0 or 200 = success, other = failure
+    string message = 2;       // Error message or success message
+    bytes response_data = 3;  // JSON format response data
+}
+
+message SetAuthRequest {
+    string auth_type = 1;                  // Auth type: "apikey", "token", "sign", "oauth"
+    map<string, string> credentials = 2;   // Authentication credentials
+}
+
+message SetAuthResponse {
+    int32 code = 1;           // Error code: 0 or 200 = success, other = failure
+    string message = 2;       // Error message or success message
+}
+
+message ValidateAuthRequest {}
+
+message ValidateAuthResponse {
+    int32 code = 1;           // Error code: 0 or 200 = success, other = failure
+    string message = 2;       // Error message or success message
+}
+
+message RefreshAuthRequest {}
+
+message RefreshAuthResponse {
+    int32 code = 1;           // Error code: 0 or 200 = success, other = failure
+    string message = 2;       // Error message or success message
+}
+
+
+message StartEngineRequest {
+    string mode = 1; // "cpu", "gpu", "auto"
+}
+
+message StartEngineResponse {
+    int32 code = 1;           // Error code: 0 or 200 = success, other = failure
+    string message = 2;       // Error message or success message
+}
+
+message StopEngineRequest {}
+
+message StopEngineResponse {
+    int32 code = 1;           // Error code: 0 or 200 = success, other = failure
+    string message = 2;       // Error message or success message
+}
+
+message HealthCheckRequest {}
+
+message HealthCheckResponse {
+    int32 code = 1;           // Error code: 0 or 200 = success, other = failure
+    string message = 2;       // Error message or success message
+}
+
+message GetConfigRequest {}
+
+message GetConfigResponse {
+    int32 code = 1;           // Error code: 0 or 200 = success, other = failure
+    string message = 2;       // Error message or success message
+    bytes config_json = 3;    // JSON serialized EngineConfig
+}
+
+message CheckEngineRequest {}
+
+message CheckEngineResponse {
+    int32 code = 1;           // Error code: 0 or 200 = success, other = failure
+    string message = 2;       // Error message or success message
+    bool installed = 3;       // Whether installed
+}
+
+message InstallEngineRequest {
+    bool cover = 1;
+}
+
+message InstallEngineResponse {
+    int32 code = 1;           // Error code: 0 or 200 = success, other = failure
+    string message = 2;       // Error message or success message
+}
+
+message InitEnvRequest {}
+
+message InitEnvResponse {
+    int32 code = 1;           // Error code: 0 or 200 = success, other = failure
+    string message = 2;       // Error message or success message
+}
+
+message UpgradeEngineRequest {}
+
+message UpgradeEngineResponse {
+    int32 code = 1;           // Error code: 0 or 200 = success, other = failure
+    string message = 2;       // Error message or success message
+}
+
+message PullModelRequest {
+    bytes request_json = 1; // JSON serialized PullModelRequest
+}
+
+message PullModelResponse {
+    int32 code = 1;           // Error code: 0 or 200 = success, other = failure
+    string message = 2;       // Error message or success message
+    bytes response_json = 3;  // JSON serialized ProgressResponse
+}
+
+message PullModelStreamRequest {
+    bytes request_json = 1;
+}
+
+message PullModelStreamResponse {
+    int32 code = 1;           // Error code: 0 or 200 = success, other = failure
+    string message = 2;       // Error message or success message
+    bytes data = 3;           // Stream data
+}
+
+message DeleteModelRequest {
+    bytes request_json = 1; // JSON serialized DeleteRequest
+}
+
+message DeleteModelResponse {
+    int32 code = 1;           // Error code: 0 or 200 = success, other = failure
+    string message = 2;       // Error message or success message
+}
+
+message ListModelsRequest {}
+
+message ListModelsResponse {
+    int32 code = 1;           // Error code: 0 or 200 = success, other = failure
+    string message = 2;       // Error message or success message
+    bytes response_json = 3;  // JSON serialized ListModelsResponse
+}
+
+message LoadModelRequest {
+    bytes request_json = 1; // JSON serialized LoadModelRequest
+}
+
+message LoadModelResponse {
+    int32 code = 1;           // Error code: 0 or 200 = success, other = failure
+    string message = 2;       // Error message or success message
+}
+
+message UnloadModelRequest {
+    bytes request_json = 1; // JSON serialized UnloadModelRequest
+}
+
+message UnloadModelResponse {
+    int32 code = 1;           // Error code: 0 or 200 = success, other = failure
+    string message = 2;       // Error message or success message
+}
+
+message GetRunningModelsRequest {}
+
+message GetRunningModelsResponse {
+    int32 code = 1;           // Error code: 0 or 200 = success, other = failure
+    string message = 2;       // Error message or success message
+    bytes response_json = 3;  // JSON serialized ListModelsResponse
+}
+
+message GetVersionRequest {
+    bytes request_json = 1; // JSON serialized EngineVersionResponse (as template)
+}
+
+message GetVersionResponse {
+    int32 code = 1;           // Error code: 0 or 200 = success, other = failure
+    string message = 2;       // Error message or success message
+    bytes response_json = 3;  // JSON serialized EngineVersionResponse
+}
+
+message GetOperateStatusRequest {}
+
+message GetOperateStatusResponse {
+    int32 status = 1;
+}
+
+message SetOperateStatusRequest {
+    int32 status = 1;
+}
+
+message SetOperateStatusResponse {}
+
+// InvokeServiceStreamResponse server-side streaming response
+// Used for transferring streaming data from plugin to AOG
+message InvokeServiceStreamResponse {
+    int32 code = 1;                    // Error code: 0 or 200 = success, other = failure
+    string message = 2;                // Error message or success message
+    bytes chunk_data = 3;              // Streaming data chunk
+    bool is_final = 4;                 // Whether this is the final chunk
+    map<string, string> metadata = 5;  // Metadata (e.g., content-type)
+}
+
+// InvokeServiceBidiRequest bidirectional streaming request
+// Used for bidirectional communication scenarios like WebSocket
+message InvokeServiceBidiRequest {
+    string service_name = 1;           // Service name (only in first message)
+    bytes data = 2;                    // Data chunk
+    string message_type = 3;           // Message type: "text", "binary", "ping", "pong", "close"
+    map<string, string> metadata = 4;  // Metadata
+    bool is_first = 5;                 // Whether this is the first message
+    string auth_info = 6;              // remote auth (only in first message)
+}
+
+// InvokeServiceBidiResponse bidirectional streaming response
+// Used for bidirectional communication scenarios like WebSocket
+message InvokeServiceBidiResponse {
+    int32 code = 1;                    // Error code: 0 or 200 = success, other = failure
+    string message = 2;                // Error message or success message
+    bytes data = 3;                    // Response data chunk
+    string message_type = 4;           // Message type: "text", "binary", "ping", "pong", "close"
+    map<string, string> metadata = 5;  // Metadata
+}
+
