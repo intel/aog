@@ -23,6 +23,8 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/intel/aog/internal/plugin/registry"
+
 	"github.com/intel/aog/internal/provider"
 
 	"github.com/intel/aog/internal/api/dto"
@@ -258,12 +260,27 @@ func (s *AIGCServiceImpl) handleLocalModelLogic(ctx context.Context, request *dt
 	if engineName == "" {
 		engineName = recommendConfig.ModelEngine
 	}
-
-	engineProvider, err := provider.GetModelEngine(engineName)
-	if err != nil {
-		logger.EngineLogger.Error("Failed to get engine", "engine", engineName, "error", err)
-		return false, bcode.ErrProviderNotExist
+	usePlugin := false
+	if strings.Contains(request.ProviderName, "plugin") {
+		usePlugin = true
 	}
+	var engineProvider provider.ModelServiceProvider
+	var err error
+	if usePlugin {
+		pluginRegistry := registry.GetGlobalPluginRegistry()
+		engineProvider, err = pluginRegistry.GetLocalPluginProvider(sp.Flavor)
+		if err != nil {
+			logger.LogicLogger.Error("Get local plugin provider error: %s", err.Error())
+			return false, err
+		}
+	} else {
+		engineProvider, err = provider.GetModelEngine(engineName)
+		if err != nil {
+			logger.EngineLogger.Error("Failed to get engine", "engine", engineName, "error", err)
+			return false, bcode.ErrProviderNotExist
+		}
+	}
+
 	models, err := engineProvider.ListModels(ctx)
 	if err != nil {
 		logger.LogicLogger.Error("Get "+engineName+" model list error: ", err.Error())
@@ -433,6 +450,18 @@ func (s *AIGCServiceImpl) CreateAIGCService(ctx context.Context, request *dto.Cr
 			return nil, err
 		}
 	}
+	usePlugin := false
+	if strings.Contains(request.ProviderName, "plugin") {
+		usePlugin = true
+	}
+	if usePlugin {
+		pluginRegistry := registry.GetGlobalPluginRegistry()
+		pluginStatus := pluginRegistry.GetPluginStatus(sp.Flavor)
+		if pluginStatus != constants.PluginStatusRunning {
+			return nil, bcode.ErrPluginNotRunning
+		}
+	}
+
 	// Initialize service provider and model objects
 	sp.ServiceSource = request.ServiceSource
 	sp.ServiceName = request.ServiceName

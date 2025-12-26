@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -28,6 +29,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -58,7 +60,6 @@ type HTTPInvoker struct {
 	task *ServiceTask
 }
 
-// 定义结构体来表示JSON数据
 type Header struct {
 	Action       string                 `json:"action"`
 	TaskID       string                 `json:"task_id"`
@@ -156,7 +157,6 @@ func (g *GRPCInvoker) Invoke(sp *types.ServiceProvider, content types.HTTPConten
 	return g.invokeNonStreamService(handler, content)
 }
 
-// 处理非流式服务
 func (g *GRPCInvoker) invokeNonStreamService(handler GRPCServiceHandler, content types.HTTPContent) (*http.Response, error) {
 	// Establish a gRPC connection
 	conn, err := grpc.Dial(g.task.Target.ServiceProvider.URL, grpc.WithInsecure())
@@ -194,7 +194,6 @@ func (g *GRPCInvoker) invokeNonStreamService(handler GRPCServiceHandler, content
 	return resp, nil
 }
 
-// 处理流式服务
 func (g *GRPCInvoker) invokeStreamService(handler GRPCServiceHandler, content types.HTTPContent) (*http.Response, error) {
 	// 1. Parsing WebSocket Connection ID and Task Type
 	wsConnID := content.Header.Get("X-WebSocket-ConnID")
@@ -588,6 +587,7 @@ func (h *HTTPInvoker) handleFinishTaskWS(sp *types.ServiceProvider, content type
 
 func (h *HTTPInvoker) invokeNonWSService(sp *types.ServiceProvider, content types.HTTPContent) (*http.Response, error) {
 	invokeURL := sp.URL
+
 	if strings.ToUpper(sp.Method) == http.MethodGet && len(content.Body) > 0 {
 		u, err := utils.BuildGetRequestURL(sp.URL, content.Body)
 		if err != nil {
@@ -660,6 +660,12 @@ func (h *HTTPInvoker) invokeNonWSService(sp *types.ServiceProvider, content type
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response body: %w", err)
 	}
+
+	// Handle audio service response: convert Base64 to file path
+	if sp.ServiceName == types.ServiceTextToSpeech {
+		newBody = h.handleTextToSpeechResponse(newBody)
+	}
+
 	resp.Body = io.NopCloser(bytes.NewReader(newBody))
 	// 10. Log the response
 	logger.LogicLogger.Debug("[Service] Response Receiving",
@@ -1170,7 +1176,7 @@ func (h *SpeechToTextWSHandler) ProcessStreamResponse(streamResponse *grpc_clien
 	if inferResponse.Parameters != nil {
 		if eosParam, exists := inferResponse.Parameters["eos"]; exists {
 			if eosParam.GetBoolParam() {
-				continueStream = false // 如果收到EOS标记，不再继续接收
+				continueStream = false
 			}
 		}
 	}
@@ -1195,7 +1201,6 @@ func (h *SpeechToTextWSHandler) getAudioData(content types.HTTPContent, isBinary
 	return []byte{}
 }
 
-// buildModelInferRequest 构建模型推理请求
 func (h *SpeechToTextWSHandler) buildModelInferRequest(modelName string, audioBytes []byte, params *types.SpeechToTextParams) *grpc_client.ModelInferRequest {
 	paramsJSON, err := params.ToJSON()
 	if err != nil {
@@ -1382,7 +1387,6 @@ func (h *SpeechToTextHandler) PrepareRequest(content types.HTTPContent, target *
 		return nil, err
 	}
 
-	// 解析音频文件路径
 	audioPath, ok := requestMap["audio"].(string)
 	if !ok {
 		logger.LogicLogger.Error("[Service] Failed to get audio path from request body")
@@ -1555,8 +1559,7 @@ func (h *TextToSpeechHandler) PrepareRequest(content types.HTTPContent, target *
 		return nil, fmt.Errorf("failed to get text from request body")
 	}
 
-	// parse timbre
-	voice := types.VoiceMale // 默认男声
+	voice := types.VoiceMale
 	if _, ok := requestMap["voice"].(string); ok {
 		voice = requestMap["voice"].(string)
 	}
@@ -1655,4 +1658,105 @@ func (h *TextToSpeechHandler) PrepareStreamRequest(content types.HTTPContent, st
 func (h *TextToSpeechHandler) ProcessStreamResponse(streamResponse *grpc_client.ModelStreamInferResponse, wsConnID string) (*http.Response, bool, error) {
 	// Here you can implement text-to-speech streaming response processing logic
 	return nil, false, fmt.Errorf("text-to-speech streaming response  not implemented")
+}
+
+// handleTextToSpeechResponse handles text-to-speech response: save binary WAV data to file
+func (h *HTTPInvoker) handleTextToSpeechResponse(responseBody []byte) []byte {
+	// Check if response is binary WAV data (starts with "RIFF")
+	if len(responseBody) > 4 && string(responseBody[0:4]) == "RIFF" {
+		// This is binary WAV data, save it directly
+		logger.LogicLogger.Debug("[Service] Detected binary WAV response")
+
+		// Generate file name
+		now := time.Now()
+		randNum := rand.Intn(10000)
+		downloadPath, err := utils.GetDownloadDir()
+		if err != nil {
+			logger.LogicLogger.Error("[Service] Failed to get download dir", "error", err)
+			return responseBody
+		}
+
+		audioName := fmt.Sprintf("%d%02d%02d%02d%02d%02d%04d.wav",
+			now.Year(), now.Month(), now.Day(),
+			now.Hour(), now.Minute(), now.Second(), randNum)
+		audioPath := filepath.Join(downloadPath, audioName)
+
+		// Save audio file
+		if err := os.WriteFile(audioPath, responseBody, 0o644); err != nil {
+			logger.LogicLogger.Error("[Service] Failed to write audio file", "path", audioPath, "error", err)
+			return responseBody
+		}
+
+		logger.LogicLogger.Debug("[Service] Saved binary WAV file",
+			"path", audioPath,
+			"size", len(responseBody))
+
+		// Return JSON response with url field
+		jsonResponse := map[string]interface{}{
+			"url": audioPath,
+		}
+		modifiedBody, err := json.Marshal(jsonResponse)
+		if err != nil {
+			logger.LogicLogger.Error("[Service] Failed to marshal response", "error", err)
+			return responseBody
+		}
+		return modifiedBody
+	}
+
+	// Try to parse as JSON (for Base64 encoded responses)
+	var responseMap map[string]interface{}
+	if err := json.Unmarshal(responseBody, &responseMap); err != nil {
+		logger.LogicLogger.Error("[Service] Failed to unmarshal response body", "error", err)
+		return responseBody
+	}
+
+	// Get Base64 audio data
+	audioBase64, ok := responseMap["audio"].(string)
+	if !ok || audioBase64 == "" {
+		logger.LogicLogger.Warn("[Service] No audio field in response or not a string")
+		return responseBody
+	}
+
+	// Decode Base64
+	audioBytes, err := base64.StdEncoding.DecodeString(audioBase64)
+	if err != nil {
+		logger.LogicLogger.Error("[Service] Failed to decode Base64 audio", "error", err)
+		return responseBody
+	}
+
+	// Generate file name
+	now := time.Now()
+	randNum := rand.Intn(10000)
+	downloadPath, err := utils.GetDownloadDir()
+	if err != nil {
+		logger.LogicLogger.Error("[Service] Failed to get download dir", "error", err)
+		return responseBody
+	}
+
+	audioName := fmt.Sprintf("%d%02d%02d%02d%02d%02d%04d.wav",
+		now.Year(), now.Month(), now.Day(),
+		now.Hour(), now.Minute(), now.Second(), randNum)
+	audioPath := filepath.Join(downloadPath, audioName)
+
+	// Save audio file
+	if err := os.WriteFile(audioPath, audioBytes, 0o644); err != nil {
+		logger.LogicLogger.Error("[Service] Failed to write audio file", "path", audioPath, "error", err)
+		return responseBody
+	}
+
+	// Modify response, add url field
+	responseMap["url"] = audioPath
+
+	// Re-serialize
+	modifiedBody, err := json.Marshal(responseMap)
+	if err != nil {
+		logger.LogicLogger.Error("[Service] Failed to marshal modified response", "error", err)
+		return responseBody
+	}
+
+	logger.LogicLogger.Debug("[Service] Saved audio file and added URL to response",
+		"path", audioPath,
+		"size", len(audioBytes))
+
+	return modifiedBody
 }

@@ -1068,7 +1068,7 @@
     "class":[
       "文本转语音"
     ],
-    "description": "微软开源的一款语音合成模型，仅支持英文。",
+    "description": "微软开源的一款语音合成模型，仅支持英文。当前仅支持 female（女声）音色。",
     "flavor": "openvino",
     "id": "e722a6ef",
     "max_input": 0,

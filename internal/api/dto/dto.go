@@ -394,7 +394,12 @@ type DeleteServiceProviderRequest struct {
 	ProviderName string `json:"provider_name" validate:"required"`
 }
 
-type GetServiceProviderRequest struct{}
+type GetServiceProviderRequest struct {
+	ServiceName   string `json:"service_name,omitempty"`
+	ServiceSource string `json:"service_source,omitempty"`
+	ProviderName  string `json:"provider_name,omitempty"`
+	ApiFlavor     string `json:"api_flavor,omitempty"`
+}
 
 type GetServiceProvidersRequest struct {
 	ServiceName   string `json:"service_name,omitempty"`
@@ -415,7 +420,10 @@ type DeleteServiceProviderResponse struct {
 	bcode.Bcode
 }
 
-type GetServiceProviderResponse struct{}
+type GetServiceProviderResponse struct {
+	bcode.Bcode
+	Data ServiceProvider `json:"data"`
+}
 
 type GetServiceProvidersResponse struct {
 	bcode.Bcode
@@ -591,4 +599,51 @@ type GetEngineHealthRequest struct {
 type GetEngineHealthResponse struct {
 	bcode.Bcode
 	Data map[string]string `json:"data"`
+}
+
+type GetPluginInfoResponseData struct {
+	Name         string   `json:"name"`
+	ProviderName string   `json:"provider_name"`
+	Services     []string `json:"services"`
+	Status       int      `json:"status"`
+	Version      string   `json:"version"`
+	Description  string   `json:"description"`
+}
+
+type GetPluginInfoRequest struct {
+	Name string `json:"name"`
+}
+
+type GetPluginInfoResponse struct {
+	bcode.Bcode
+	Data GetPluginInfoResponseData `json:"data"`
+}
+
+type GetPluginListResponse struct {
+	bcode.Bcode
+	Data []GetPluginInfoResponseData `json:"data"`
+}
+
+type PluginStopRequest struct {
+	Name string `json:"name"`
+}
+
+type PluginStopResponse struct {
+	bcode.Bcode
+}
+
+type PluginDeleteRequest struct {
+	Name string `json:"name"`
+}
+
+type PluginDeleteResponse struct {
+	bcode.Bcode
+}
+
+type PluginLoadRequest struct {
+	Name string `json:"name"`
+}
+
+type PluginLoadResponse struct {
+	bcode.Bcode
 }

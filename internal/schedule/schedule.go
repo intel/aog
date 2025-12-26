@@ -494,8 +494,8 @@ func (ss *BasicServiceScheduler) getServiceProtocols(sp *types.ServiceProvider, 
 			return "", "", fmt.Errorf("plugin registry not initialized")
 		}
 
-		manifest := pluginRegistry.GetManifest(sp.Flavor)
-		if manifest == nil {
+		manifest, err := pluginRegistry.GetPluginManifest(sp.Flavor)
+		if err != nil {
 			return "", "", fmt.Errorf("plugin manifest not found for provider: %s", sp.Flavor)
 		}
 

@@ -179,14 +179,6 @@ func NewStartApiServerCommand() *cobra.Command {
 					logger.EngineLogger.Info("Plugin discovery succeeded",
 						"total", len(manifests),
 						"directory", pluginDir)
-					// 列出所有发现的插件
-					for name, wrapper := range manifests {
-						logger.EngineLogger.Info("Discovered plugin",
-							"name", name,
-							"version", wrapper.Manifest.Provider.Version,
-							"type", wrapper.Manifest.Provider.Type,
-							"services", len(wrapper.Manifest.Services))
-					}
 				} else {
 					logger.EngineLogger.Info("No plugins found in directory", "directory", pluginDir)
 				}
@@ -210,8 +202,10 @@ func NewStartApiServerCommand() *cobra.Command {
 			// Initialize global AOG service manager and inject engine manager
 			globalServiceManager = process.GetAOGServiceManager()
 			globalServiceManager.SetEngineManager(provider.GetEngineManager())
+			ctx := context.Background()
+			go pluginRegistry.ScheduleLoadPlugin(ctx)
 
-			return Run(context.Background(), startMode)
+			return Run(ctx, startMode)
 		},
 	}
 
@@ -300,12 +294,6 @@ func sendUnixShutdownSignal() error {
 		return fmt.Errorf("failed to send SIGTERM: %v", err)
 	}
 
-	return nil
-}
-
-// Deprecated: Plugin flavor registration is now handled in PluginRegistry.DiscoverPlugins()
-func registerPluginFlavors(pluginRegistry *registry.PluginRegistry) error {
-	logger.EngineLogger.Debug("registerPluginFlavors called (deprecated, flavors already registered in DiscoverPlugins)")
 	return nil
 }
 
@@ -561,6 +549,14 @@ func handleGracefulShutdown(c *gin.Context) {
 // performGracefulShutdown performs graceful shutdown of all components
 func performGracefulShutdown(ctx context.Context) error {
 	logger.EngineLogger.Info("Performing graceful shutdown...")
+
+	// Shutdown plugins first (before engines, to avoid hanging connections)
+	pluginRegistry := registry.GetGlobalPluginRegistry()
+	if pluginRegistry != nil {
+		logger.EngineLogger.Info("Shutting down all plugins...")
+		pluginRegistry.Shutdown()
+		logger.EngineLogger.Info("All plugins shut down successfully")
+	}
 
 	// Stop AOG internal services (includes engines)
 	if globalServiceManager != nil {

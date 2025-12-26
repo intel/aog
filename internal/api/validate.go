@@ -99,7 +99,8 @@ func validateSupportedFlavor(fl validator.FieldLevel) bool {
 	pluginRegistry := registry.GetGlobalPluginRegistry()
 	if pluginRegistry != nil {
 		// Try to get plugin provider (if exists, flavor is valid)
-		if _, err := pluginRegistry.GetProvider(flavor); err == nil {
+		_, err := pluginRegistry.GetProvider(flavor)
+		if err == nil {
 			return true
 		}
 		// If plugin registry exists but plugin not found, still return false

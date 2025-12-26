@@ -44,6 +44,8 @@ type PluginProvider interface {
 	// HealthCheck performs a health check.
 	HealthCheck(ctx context.Context) error
 
+	GetSupportModelList(ctx context.Context) ([]types.RecommendModelData, error)
+
 	// InvokeService invokes a plugin service (core method).
 	// serviceName: Service name (e.g., "chat", "embed")
 	// request: Serialized request data

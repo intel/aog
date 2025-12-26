@@ -1,0 +1,12 @@
+# AOG Jupyter Notebook 示例依赖包
+
+# Jupyter Notebook 环境
+jupyter>=1.0.0
+notebook>=6.4.0
+
+# HTTP 客户端（用于 API 调用）
+requests>=2.25.0
+
+# 图像处理和显示
+pillow>=8.0.0
+matplotlib>=3.3.0

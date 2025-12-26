@@ -65,7 +65,11 @@ type ServiceDef struct {
 	// ConfigRef references an existing template configuration, format: "flavor:service"
 	ConfigRef string `json:"config_ref,omitempty" yaml:"config_ref,omitempty"`
 
-	// Timeout is the service invocation timeout in seconds, 0 means use default.
+	// Timeout is the service invocation timeout in seconds.
+	// - Not set (0): Use default timeout (60s for unary, 300s for streaming)
+	// - Positive value (N > 0): Custom timeout of N seconds
+	// - Negative value (N < 0): No timeout limit (recommended for time-consuming services like text-to-image, model downloads)
+	// AOG uses context.WithTimeout for positive values and context.WithCancel for negative values.
 	Timeout int `json:"timeout,omitempty" yaml:"timeout,omitempty"`
 
 	Middlewares  []string            `json:"middlewares,omitempty" yaml:"middlewares,omitempty"`

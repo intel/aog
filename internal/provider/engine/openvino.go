@@ -1103,7 +1103,7 @@ func (o *OpenvinoProvider) generateGraphPBTxt(modelName, modelType string) error
 	case types.ServiceSpeechToTextWS:
 		template = fmt.Sprintf(GraphPBTxtSpeechToText, modelName, enginePath)
 	case types.ServiceTextToSpeech:
-		template = fmt.Sprintf(GraphPBTxtTextToSpeech, modelName, enginePath)
+		template = fmt.Sprintf(GraphPBTxtTextToSpeech, enginePath, modelName)
 	case types.ServiceChat:
 		toolParser := o.inferToolParser(modelName)
 		reasoningParser := "qwen3"
@@ -1251,23 +1251,20 @@ node: {
   }
 }`
 
-	GraphPBTxtTextToSpeech = `input_stream: "OVMS_PY_TENSOR:text"
-input_stream: "OVMS_PY_TENSOR_VOICE:voice"
-input_stream: "OVMS_PY_TENSOR_PARAMS:params"
-output_stream: "OVMS_PY_TENSOR:audio"
+	GraphPBTxtTextToSpeech = `input_stream: "HTTP_REQUEST_PAYLOAD:input"
+output_stream: "HTTP_RESPONSE_PAYLOAD:output"
 
 node {
-  name: "%s"
-  calculator: "PythonExecutorCalculator"
-  input_side_packet: "PYTHON_NODE_RESOURCES:py"
-
-  input_stream: "INPUT:text"
-  input_stream: "VOICE:voice"
-  input_stream: "PARAMS:params"
-  output_stream: "OUTPUT:audio"
+  name: "T2sExecutor"
+  input_side_packet: "TTS_NODE_RESOURCES:t2s_servable"
+  calculator: "T2sCalculator"
+  input_stream: "HTTP_REQUEST_PAYLOAD:input"
+  output_stream: "HTTP_RESPONSE_PAYLOAD:output"
   node_options: {
-    [type.googleapis.com/mediapipe.PythonExecutorCalculatorOptions]: {
-      handler_path: "%s/scripts/text-to-speech/text-to-speech.py"
+    [type.googleapis.com / mediapipe.T2sCalculatorOptions]: {
+      models_path: "%s/models/%s",
+      plugin_config: '{ "NUM_STREAMS": "1" }',
+      target_device: "CPU"
     }
   }
 }`

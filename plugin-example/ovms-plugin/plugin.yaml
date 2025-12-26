@@ -1,0 +1,150 @@
+version: "1.0"
+
+provider:
+  name: ovms-plugin
+  display_name: OVMS Plugin (External)
+  version: 1.0.0
+  type: local
+  author: AOG Team
+  description: External OpenVINO Model Server (OVMS) plugin for local AI inference
+  homepage: https://github.com/intel/aog
+  engine_host: "http://127.0.0.1:16666"
+
+services:
+  - service_name: chat
+    task_type: text-generation
+    protocol: http
+    expose_protocol: HTTP
+    endpoint: /v3/chat/completions
+    auth_type: none
+    default_model: meta-llama/Llama-3.1-8B-Instruct
+    support_models:
+      - meta-llama/Llama-3.1-8B-Instruct
+    config_ref: openvino:chat
+    capabilities:
+      support_streaming: true
+      support_bidirectional: false
+
+  - service_name: generate
+    task_type: text-generation
+    protocol: http
+    expose_protocol: HTTP
+    endpoint: /v3/completions
+    auth_type: none
+    default_model: meta-llama/Llama-3.1-8B-Instruct
+    support_models:
+      - meta-llama/Llama-3.1-8B-Instruct
+    config_ref: openvino:generate
+    capabilities:
+      support_streaming: true
+      support_bidirectional: false
+
+  - service_name: embed
+    task_type: embedding
+    protocol: http
+    expose_protocol: HTTP
+    endpoint: /v3/embeddings
+    auth_type: none
+    default_model: BAAI/bge-large-zh-v1.5
+    support_models:
+      - BAAI/bge-large-zh-v1.5
+    config_ref: openvino:embed
+    capabilities:
+      support_streaming: false
+      support_bidirectional: false
+
+  - service_name: rerank
+    task_type: reranking
+    protocol: http
+    expose_protocol: HTTP
+    endpoint: /v3/rerank
+    auth_type: none
+    default_model: BAAI/bge-reranker-v2-m3
+    support_models:
+      - BAAI/bge-reranker-v2-m3
+    config_ref: openvino:rerank
+    capabilities:
+      support_streaming: false
+      support_bidirectional: false
+
+  - service_name: text-to-image
+    task_type: text-to-image
+    protocol: http
+    expose_protocol: HTTP
+    endpoint: /v3/images/generations
+    auth_type: none
+    default_model: OpenVINO/stable-diffusion-v1-5-fp16-ov
+    support_models:
+      - OpenVINO/stable-diffusion-v1-5-fp16-ov
+    config_ref: openvino:text-to-image
+    timeout: -1  # No timeout for image generation (can take several minutes)
+    capabilities:
+      support_streaming: false
+      support_bidirectional: false
+
+  - service_name: speech-to-text
+    task_type: speech-to-text
+    protocol: grpc
+    expose_protocol: HTTP
+    endpoint: ""
+    auth_type: none
+    default_model: NamoLi/whisper-large-v3-ov
+    support_models:
+      - NamoLi/whisper-large-v3-ov
+    config_ref: openvino:speech-to-text
+    capabilities:
+      support_streaming: false
+      support_bidirectional: false
+
+  - service_name: speech-to-text-ws
+    task_type: speech-to-text
+    protocol: grpc
+    expose_protocol: WEBSOCKET
+    endpoint: ""
+    auth_type: none
+    default_model: NamoLi/whisper-large-v3-ov
+    support_models:
+      - NamoLi/whisper-large-v3-ov
+    config_ref: openvino:speech-to-text-ws
+    timeout: -1  # No timeout for bidirectional streaming
+    capabilities:
+      support_streaming: true
+      support_bidirectional: true
+
+  - service_name: text-to-speech
+    task_type: text-to-speech
+    protocol: grpc
+    expose_protocol: HTTP
+    endpoint: ""
+    auth_type: none
+    default_model: NamoLi/speecht5-tts
+    support_models:
+      - NamoLi/speecht5-tts
+    config_ref: openvino:text-to-speech
+    capabilities:
+      support_streaming: false
+      support_bidirectional: false
+
+platforms:
+  linux_amd64:
+    executable: bin/linux-amd64/ovms-plugin
+    dependencies: []
+  linux_arm64:
+    executable: bin/linux-arm64/ovms-plugin
+    dependencies: []
+  darwin_amd64:
+    executable: bin/darwin-amd64/ovms-plugin
+    dependencies: []
+  darwin_arm64:
+    executable: bin/darwin-arm64/ovms-plugin
+    dependencies: []
+  windows_amd64:
+    executable: bin/windows-amd64/ovms-plugin.exe
+    dependencies: []
+
+resources:
+  data_dir: "${AOG_DATA_DIR}/engine/openvino"
+  ovms:
+    engine_dir: "${DATA_DIR}"
+    exec_dir: "${DATA_DIR}/ovms"
+    download_dir: "${HOME}/Downloads"

@@ -76,3 +76,9 @@ const (
 	ServiceStatusUnhealthy  = "unhealthy"
 	ProviderScopeSystem     = "system"
 )
+
+const (
+	PluginStatusRunning = 1
+	PluginStatStopped   = 2
+	PluginStatusUnload  = 3
+)

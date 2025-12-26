@@ -47,6 +47,7 @@ func InjectRouter(e *AOGCoreServer) {
 	r.Handle(http.MethodGet, "/service", e.GetAIGCServices)
 
 	r.Handle(http.MethodGet, "/service_provider", e.GetServiceProviders)
+	r.Handle(http.MethodGet, "/service_provider/detail", e.GetServiceProvider)
 	r.Handle(http.MethodPost, "/service_provider", e.CreateServiceProvider)
 	r.Handle(http.MethodPut, "/service_provider", e.UpdateServiceProvider)
 	r.Handle(http.MethodDelete, "/service_provider", e.DeleteServiceProvider)
@@ -71,6 +72,14 @@ func InjectRouter(e *AOGCoreServer) {
 	r.Handle(http.MethodPost, "/rag/file", e.RagUploadFile)
 	r.Handle(http.MethodDelete, "/rag/file", e.RagDeleteFile)
 	r.Handle(http.MethodPost, "/rag/retrieval", e.RagRetrieval)
+
+	// plugin service
+	p := r.Group("/plugin")
+	p.Handle(http.MethodGet, "/list", e.PluginList)
+	p.Handle(http.MethodGet, "/info", e.PluginInfo)
+	p.Handle(http.MethodDelete, "/delete", e.PluginDelete)
+	p.Handle(http.MethodPost, "/stop", e.PluginStop)
+	p.Handle(http.MethodPost, "/load", e.PluginLoad)
 
 	slog.Info("Gateway started", "host", config.GlobalEnvironment.ApiHost)
 }

@@ -23,12 +23,13 @@ var (
 	PluginCode = NewBcode(http.StatusOK, 100000, "Plugin operation success")
 
 	// Plugin Framework Errors (100001-100099)
-	ErrPluginNotFound    = NewBcode(http.StatusNotFound, 100001, "Plugin not found")
-	ErrPluginLoadFailed  = NewBcode(http.StatusInternalServerError, 100002, "Plugin load failed")
-	ErrPluginNotRunning  = NewBcode(http.StatusServiceUnavailable, 100003, "Plugin not running")
-	ErrPluginInvalid     = NewBcode(http.StatusBadRequest, 100004, "Plugin configuration invalid")
-	ErrPluginTimeout     = NewBcode(http.StatusRequestTimeout, 100005, "Plugin request timeout")
-	ErrPluginUnavailable = NewBcode(http.StatusServiceUnavailable, 100006, "Plugin service unavailable")
+	ErrPluginNotFound              = NewBcode(http.StatusNotFound, 100001, "Plugin not found")
+	ErrPluginLoadFailed            = NewBcode(http.StatusInternalServerError, 100002, "Plugin load failed")
+	ErrPluginNotRunning            = NewBcode(http.StatusServiceUnavailable, 100003, "Plugin not running")
+	ErrPluginInvalid               = NewBcode(http.StatusBadRequest, 100004, "Plugin configuration invalid")
+	ErrPluginTimeout               = NewBcode(http.StatusRequestTimeout, 100005, "Plugin request timeout")
+	ErrPluginUnavailable           = NewBcode(http.StatusServiceUnavailable, 100006, "Plugin service unavailable")
+	ErrPluginDuplicateRegistration = NewBcode(http.StatusBadRequest, 100007, "Plugin duplicate registration")
 
 	// Authentication Errors (100100-100199) - Remote Plugins
 	ErrPluginAuthRequired = NewBcode(http.StatusUnauthorized, 100101, "Plugin authentication required")

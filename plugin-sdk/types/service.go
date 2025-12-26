@@ -16,7 +16,11 @@
 
 package types
 
-import "time"
+import (
+	"time"
+)
+
+type LocalTime time.Time
 
 // ModelInfo represents model information.
 type ModelInfo struct {
@@ -132,6 +136,38 @@ type HealthStatus struct {
 type Credentials struct {
 	Type   string            `json:"type"`   // apikey, token, oauth, etc.
 	Values map[string]string `json:"values"` // key-value pairs
+}
+
+type RecommendModelData struct {
+	Id              string    `json:"id"`
+	Service         string    `json:"service_name"`
+	ApiFlavor       string    `json:"api_flavor"`
+	Flavor          string    `json:"flavor"`
+	Method          string    `json:"method" default:"POST"`
+	Desc            string    `json:"desc"`
+	Url             string    `json:"url"`
+	AuthType        string    `json:"auth_type"`
+	AuthApplyUrl    string    `json:"auth_apply_url"`
+	AuthFields      []string  `json:"auth_fields"`
+	Name            string    `json:"name"`
+	ServiceProvider string    `json:"service_provider_name"`
+	Size            string    `json:"size"`
+	IsRecommended   bool      `json:"is_recommended" default:"false"`
+	Status          string    `json:"status"`
+	Avatar          string    `json:"avatar"`
+	CanSelect       bool      `json:"can_select" default:"false"`
+	Class           []string  `json:"class"`
+	OllamaId        string    `json:"ollama_id"`
+	ParamsSize      float32   `json:"params_size"`
+	InputLength     int       `json:"input_length"`
+	OutputLength    int       `json:"output_length"`
+	Source          string    `json:"source"`
+	IsDefault       string    `json:"is_default" default:"false"`
+	Think           bool      `json:"think"`
+	ThinkSwitch     bool      `json:"think_switch"`
+	Tools           bool      `json:"tools"` // 是否支持工具调用
+	Context         float32   `json:"context"`
+	CreatedAt       LocalTime `json:"created_at"`
 }
 
 // ListResponse is an alias of ListModelsResponse for backward compatibility.

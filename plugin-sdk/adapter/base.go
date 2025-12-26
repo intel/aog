@@ -83,6 +83,56 @@ func (b *BasePluginProvider) HealthCheck(ctx context.Context) error {
 	return nil
 }
 
+// GetSupportModelList returns the list of supported models based on plugin manifest.
+//
+// Default implementation builds model list from manifest.Services[].SupportModels.
+// Plugin implementations can override this method if they need more advanced logic.
+func (b *BasePluginProvider) GetSupportModelList(ctx context.Context) ([]types.RecommendModelData, error) {
+	manifest := b.GetManifest()
+	if manifest == nil {
+		return nil, b.WrapError("get_support_model_list", fmt.Errorf("plugin manifest is not loaded"))
+	}
+
+	var models []types.RecommendModelData
+	for _, svc := range manifest.Services {
+		for _, name := range svc.SupportModels {
+			m := types.RecommendModelData{
+				Id:              fmt.Sprintf("%s:%s:%s", manifest.Provider.Name, svc.ServiceName, name),
+				Service:         svc.ServiceName,
+				ApiFlavor:       "",
+				Flavor:          "",
+				Method:          "POST",
+				Desc:            manifest.Provider.Description,
+				Url:             svc.Endpoint,
+				AuthType:        svc.AuthType,
+				AuthApplyUrl:    manifest.Provider.Homepage,
+				AuthFields:      nil,
+				Name:            name,
+				ServiceProvider: manifest.Provider.Name,
+				Size:            "",
+				IsRecommended:   name == svc.DefaultModel,
+				Status:          "",
+				Avatar:          "",
+				CanSelect:       true,
+				Class:           nil,
+				OllamaId:        "",
+				ParamsSize:      0,
+				InputLength:     0,
+				OutputLength:    0,
+				Source:          manifest.Provider.Type,
+				IsDefault:       fmt.Sprintf("%v", name == svc.DefaultModel),
+				Think:           false,
+				ThinkSwitch:     false,
+				Tools:           false,
+				Context:         0,
+			}
+			models = append(models, m)
+		}
+	}
+
+	return models, nil
+}
+
 // InvokeService Service invocation (must be implemented by a subclass)
 //
 // This is the core approach of a plug-in and must be implemented by a specific plug-in.

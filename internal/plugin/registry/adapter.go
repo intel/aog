@@ -11,14 +11,6 @@
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
-// distributed under the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
 // limitations under the License.
 //*****************************************************************************
 
@@ -119,6 +111,10 @@ func (a *localPluginAdapter) UnloadModel(ctx context.Context, req *sdktypes.Unlo
 
 func (a *localPluginAdapter) GetRunningModels(ctx context.Context) (*sdktypes.ListResponse, error) {
 	return a.local.GetRunningModels(ctx)
+}
+
+func (a *localPluginAdapter) GetSupportModelList(ctx context.Context) ([]sdktypes.RecommendModelData, error) {
+	return a.local.GetSupportModelList(ctx)
 }
 
 // ==================== EngineInfoProvider ====================
@@ -257,6 +253,10 @@ func (a *remotePluginAdapter) UnloadModel(ctx context.Context, req *sdktypes.Unl
 
 func (a *remotePluginAdapter) GetRunningModels(ctx context.Context) (*sdktypes.ListResponse, error) {
 	return nil, fmt.Errorf("remote plugin does not support model management")
+}
+
+func (a *remotePluginAdapter) GetSupportModelList(ctx context.Context) ([]sdktypes.RecommendModelData, error) {
+	return a.remote.GetSupportModelList(ctx)
 }
 
 // ==================== EngineInfoProvider ====================

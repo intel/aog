@@ -36,4 +36,6 @@ var (
 	ErrProviderServiceUrlNotFormat = NewBcode(http.StatusBadRequest, 20007, "provider service url is irregular")
 
 	ErrSystemProviderCannotDelete = NewBcode(http.StatusBadRequest, 20008, "system provider cannot be deleted")
+
+	ErrProviderNotFound = NewBcode(http.StatusNotFound, 20009, "service provider is not found")
 )

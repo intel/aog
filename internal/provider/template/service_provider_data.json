@@ -247,8 +247,8 @@
     "auth_type": "none",
     "auth_key": "",
     "flavor": "openvino",
-    "protocol": "GRPC",
-    "url": "127.0.0.1:9000",
+    "protocol": "HTTP",
+    "url": "http://127.0.0.1:16666/v3/audio/speech",
     "scope": "system"
   },
   {

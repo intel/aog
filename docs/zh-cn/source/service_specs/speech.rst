@@ -485,10 +485,10 @@ Provider` 中定义的常见属性外, 语音合成服务提供商还可以将�
      - 描述
    * - voice
      - string
-     - 指定语音合成的音色，如"male"、"female"、"girl"等
+     - 指定语音合成的音色。本地服务（OpenVINO）仅支持"female"（女声）；云服务（如Aliyun）支持多种音色
    * - language
      - string
-     - 指定合成语音的语言，当前仅支持"en"（英文）
+     - 指定合成语音的语言。本地服务当前仅支持"en"（英文）
 
 请求格式
 --------------------------------------------
@@ -519,11 +519,11 @@ ______________
    * - text
      - string
      - 必需
-     - 需要转换为语音的文本内容，当前仅支持英文文本
+     - 需要转换为语音的文本内容。本地服务当前仅支持英文文本
    * - voice
      - string
      - 可选
-     - 语音音色，支持"male"（男声）、"female"（女声）、"girl"(女孩)，默认为"male"
+     - 语音音色。本地服务（OpenVINO）仅支持"female"（女声）；云服务（如Aliyun）支持多种音色，默认为"female"
 
 .. _`response_text-to-speech`:
 
@@ -561,7 +561,7 @@ ______________
     --data '{
         "model": "NamoLi/speecht5-tts",
         "text": "Unless required by applicable law or agreed to in writing,",
-        "voice": "male"
+        "voice": "female"
     }'
 
 返回响应
@@ -591,6 +591,10 @@ ______________
 
 **限制说明**
 
-* **语言支持**: 当前仅支持英文文本的语音合成
-* **音色支持**: 支持"male"（男声）、"female"（女声）、"girl"(女孩)、"baby"(幼儿)四种音色
+* **语言支持**: 本地服务（OpenVINO）当前仅支持英文文本的语音合成；云服务支持情况请参考各服务商文档
+* **音色支持**: 
+  
+  * 本地服务（OpenVINO）：仅支持"female"（女声）一种音色
+  * 云服务（如Aliyun）：支持多种音色，具体请参考各服务商文档
+  
 * **输出格式**: 生成的音频文件为WAV格式

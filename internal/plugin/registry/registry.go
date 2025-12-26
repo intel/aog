@@ -27,6 +27,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/intel/aog/internal/constants"
+	"github.com/intel/aog/internal/utils"
+
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/go-plugin"
 	"github.com/intel/aog/internal/datastore"
@@ -37,6 +40,13 @@ import (
 	sdkserver "github.com/intel/aog/plugin-sdk/server"
 	sdktypes "github.com/intel/aog/plugin-sdk/types"
 	"github.com/intel/aog/version"
+)
+
+const (
+	pluginDownloadBaseUrl     = ""
+	pluginDownloadPathWindows = ""
+	pluginDownloadPathDarwin  = ""
+	pluginDownloadPathLinux   = ""
 )
 
 // FlavorRegistrar is a callback function type for registering APIFlavors.
@@ -63,6 +73,10 @@ type pluginHandle struct {
 
 	loadOnce sync.Once
 	loadErr  error
+
+	// status records the current lifecycle state of the plugin.
+	// Uses constants.PluginStatus* values.
+	status int
 
 	providerRaw interface{}
 
@@ -152,6 +166,42 @@ func (r *PluginRegistry) SetFlavorRegistrar(registrar FlavorRegistrar) {
 	r.flavorRegistrar = registrar
 }
 
+func (r *PluginRegistry) GetPluginDir() string {
+	return r.pluginDir
+}
+
+func (r *PluginRegistry) RegisterPlugin(pluginName string, pluginPath string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	// load file
+	err := r.discoverPlugin(pluginPath)
+	if err != nil {
+		logger.EngineLogger.Error("Failed to discover plugin")
+		return err
+	}
+	manifest, exists := r.manifests[pluginName]
+	if !exists {
+		return fmt.Errorf("plugin not found: %s", pluginName)
+	}
+
+	if r.flavorRegistrar != nil {
+		if err := r.flavorRegistrar(manifest); err != nil {
+			logger.EngineLogger.Error("Failed to register plugin flavor", "plugin", pluginName, "error", err)
+			return err
+		}
+	}
+
+	// add data to db
+	if r.datastore != nil {
+		if err := r.registerPluginServices(manifest); err != nil {
+			logger.EngineLogger.Error("Failed to register services for plugin", "plugin", pluginName, "error", err)
+			return err
+		}
+	}
+
+	return nil
+}
+
 func (r *PluginRegistry) registerAllPluginFlavors() error {
 	if r.flavorRegistrar == nil {
 		logger.EngineLogger.Warn("FlavorRegistrar not set, skipping plugin flavor registration")
@@ -217,6 +267,7 @@ func (r *PluginRegistry) discoverPlugin(pluginPath string) error {
 	r.manifests[pluginName] = manifest
 	r.plugins[pluginName] = &pluginHandle{
 		manifest: manifest,
+		status:   constants.PluginStatStopped,
 	}
 
 	logger.EngineLogger.Info("Plugin discovered",
@@ -255,20 +306,16 @@ func (r *PluginRegistry) GetProvider(name string) (provider.ModelServiceProvider
 		adapter := NewLocalPluginAdapter(handle.localPlugin)
 		logger.EngineLogger.Debug("Adapting LocalPluginProvider to ModelServiceProvider",
 			"plugin", name,
-			"localPlugin_type", fmt.Sprintf("%T", handle.localPlugin),
-			"adapter_type", fmt.Sprintf("%T", adapter),
-			"adapter_value", fmt.Sprintf("%#v", adapter))
+			"localPlugin_type", fmt.Sprintf("%T", handle.localPlugin))
 		return adapter, nil
 	}
 
 	// TODO: Support RemotePluginProvider adapter
 	if handle.remotePlugin != nil {
 		adapter := NewRemotePluginAdapter(handle.remotePlugin)
-		logger.EngineLogger.Debug("Adapting LocalPluginProvider to ModelServiceProvider",
+		logger.EngineLogger.Debug("Adapting RemotePluginProvider to ModelServiceProvider",
 			"plugin", name,
-			"localPlugin_type", fmt.Sprintf("%T", handle.localPlugin),
-			"adapter_type", fmt.Sprintf("%T", adapter),
-			"adapter_value", fmt.Sprintf("%#v", adapter))
+			"remotePlugin_type", fmt.Sprintf("%T", handle.remotePlugin))
 		return adapter, nil
 	}
 
@@ -351,6 +398,114 @@ func (r *PluginRegistry) GetLocalPluginProvider(name string) (sdkclient.LocalPlu
 	return handle.localPlugin, nil
 }
 
+func (r *PluginRegistry) GetPluginStatus(name string) int {
+	r.mu.RLock()
+	handle, exists := r.plugins[name]
+	defer r.mu.RUnlock()
+	if !exists {
+		return constants.PluginStatusUnload
+	}
+	return handle.status
+}
+
+func (r *PluginRegistry) StopPluginProcess(name string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	handle, exists := r.plugins[name]
+	if !exists {
+		return fmt.Errorf("plugin not found: %s", name)
+	}
+	if handle.client != nil {
+		logger.EngineLogger.Info("Shutting down plugin", "name", name)
+		handle.client.Kill()
+		// mark as registered but not running
+		handle.status = constants.PluginStatStopped
+	}
+	return nil
+}
+
+func (r *PluginRegistry) UninstallPlugin(name string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if _, exists := r.plugins[name]; exists {
+		delete(r.plugins, name)
+	}
+	if _, manifestExists := r.manifests[name]; manifestExists {
+		delete(r.manifests, name)
+	}
+	return nil
+}
+
+func (r *PluginRegistry) ScheduleLoadPlugin(ctx context.Context) {
+	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			err := r.CheckNewPluginAndLoaded()
+			if err != nil {
+				logger.EngineLogger.Warn("Failed to check new plugin", "error", err)
+			}
+		case <-ctx.Done():
+			logger.EngineLogger.Info("Shutting down plugin registry")
+			return
+		}
+	}
+}
+
+func (r *PluginRegistry) CheckNewPluginAndLoaded() error {
+	logger.EngineLogger.Info("[Schedule load plugin]Starting plugin discovery", "directory", r.pluginDir)
+
+	if _, err := os.Stat(r.pluginDir); os.IsNotExist(err) {
+		logger.EngineLogger.Info("[Schedule load plugin]Plugin directory does not exist, skipping plugin discovery", "dir", r.pluginDir)
+		return nil
+	}
+
+	entries, err := os.ReadDir(r.pluginDir)
+	if err != nil {
+		return fmt.Errorf("failed to read plugin directory: %w", err)
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		pluginPath := filepath.Join(r.pluginDir, entry.Name())
+		err = r.RegisterPlugin(entry.Name(), pluginPath)
+		if err != nil {
+			logger.EngineLogger.Warn("[Schedule load plugin]Failed to register plugin", "plugin", entry.Name(), "err", err)
+			continue
+		}
+		logger.EngineLogger.Info("[Schedule load plugin]Plugin loaded", "plugin", entry.Name())
+	}
+	return nil
+}
+
+func (r *PluginRegistry) DownloadPlugin(pluginName string) (string, error) {
+	pluginPath := filepath.Join(r.pluginDir, pluginName)
+	if _, err := os.Stat(pluginPath); !os.IsNotExist(err) {
+		return pluginPath, nil
+	}
+	var downloadUrl string
+	switch runtime.GOOS {
+	case "darwin":
+		downloadUrl = pluginDownloadBaseUrl + pluginDownloadPathDarwin + pluginName
+	case "windows":
+		downloadUrl = pluginDownloadBaseUrl + pluginDownloadPathWindows + pluginName
+	case "linux":
+		downloadUrl = pluginDownloadBaseUrl + pluginDownloadPathLinux + pluginName
+	default:
+		return "", fmt.Errorf("unsupported platform: %s", runtime.GOOS)
+	}
+	filePath, err := utils.DownloadFile(downloadUrl, r.pluginDir, false)
+	if err != nil {
+		logger.EngineLogger.Warn("Failed to download plugin", "plugin", pluginName, "err", err)
+		return "", err
+	}
+	logger.EngineLogger.Info("Downloading plugin successfully", "plugin", pluginName, "file", filePath)
+	return filePath, nil
+}
+
 // ListAvailableProviders lists all available plugins.
 func (r *PluginRegistry) ListAvailableProviders() []string {
 	r.mu.RLock()
@@ -371,8 +526,18 @@ func (r *PluginRegistry) loadPluginAndIdentifyType(handle *pluginHandle) {
 	executable, err := r.getExecutableForPlatform(manifest)
 	if err != nil {
 		handle.loadErr = fmt.Errorf("failed to get executable: %w", err)
+		handle.status = constants.PluginStatStopped
 		return
 	}
+
+	// Create a logger for the plugin that integrates with AOG's logging system
+	// Use os.Stderr for now, which will be captured by AOG's logging system
+	pluginLogger := hclog.New(&hclog.LoggerOptions{
+		Name:   fmt.Sprintf("plugin-%s", manifest.Provider.Name),
+		Level:  hclog.Debug, // Set to Debug to capture all plugin logs
+		Output: os.Stderr,   // Output to stderr, which AOG captures
+		Color:  hclog.AutoColor,
+	})
 
 	// CRITICAL: Use SDK's PluginHandshake and PluginMap to ensure Host and Plugin use the same definitions
 	clientConfig := &plugin.ClientConfig{
@@ -380,21 +545,16 @@ func (r *PluginRegistry) loadPluginAndIdentifyType(handle *pluginHandle) {
 		Plugins:          sdkserver.PluginMap,
 		Cmd:              r.buildCommand(executable),
 		AllowedProtocols: []plugin.Protocol{plugin.ProtocolGRPC},
-		Logger:           hclog.NewNullLogger(), // Disable plugin framework logs to avoid interfering with AOG logs
-		// Do not set SyncStdout/SyncStderr, let go-plugin use default pipe handling
-		// This avoids pipe blocking and file I/O issues
+		Logger:           pluginLogger, // Use real logger to capture plugin logs
+		// Capture stdout and stderr to see plugin output
+		SyncStdout: os.Stdout,
+		SyncStderr: os.Stderr,
 	}
 
 	logger.EngineLogger.Debug("Creating plugin client", "name", manifest.Provider.Name, "executable", executable)
-	logger.EngineLogger.Debug("Config details", "name", manifest.Provider.Name,
-		"handshake_version", clientConfig.HandshakeConfig.ProtocolVersion,
-		"magic_cookie_key", clientConfig.HandshakeConfig.MagicCookieKey)
 
 	// This will start the plugin process
 	client := plugin.NewClient(clientConfig)
-	logger.EngineLogger.Debug("plugin.NewClient() returned", "name", manifest.Provider.Name)
-
-	logger.EngineLogger.Debug("Establishing RPC connection", "name", manifest.Provider.Name)
 
 	// Use goroutine + channel to implement timeout mechanism
 	type rpcResult struct {
@@ -403,9 +563,7 @@ func (r *PluginRegistry) loadPluginAndIdentifyType(handle *pluginHandle) {
 	}
 	rpcChan := make(chan rpcResult, 1)
 	go func() {
-		logger.EngineLogger.Debug("RPC connection goroutine started", "name", manifest.Provider.Name)
 		c, e := client.Client()
-		logger.EngineLogger.Debug("client.Client() returned", "name", manifest.Provider.Name, "error", e)
 		rpcChan <- rpcResult{client: c, err: e}
 	}()
 
@@ -419,58 +577,52 @@ func (r *PluginRegistry) loadPluginAndIdentifyType(handle *pluginHandle) {
 			client.Kill()
 			handle.loadErr = fmt.Errorf("failed to get RPC client: %w", err)
 			logger.EngineLogger.Error("RPC connection failed", "name", manifest.Provider.Name, "error", err)
+			handle.status = constants.PluginStatStopped
 			return
 		}
+		logger.EngineLogger.Debug("RPC connection established", "name", manifest.Provider.Name)
 	case <-time.After(10 * time.Second):
 		client.Kill()
 		handle.loadErr = fmt.Errorf("RPC connection timeout after 10s")
 		logger.EngineLogger.Error("RPC connection timeout", "name", manifest.Provider.Name)
+		handle.status = constants.PluginStatStopped
 		return
 	}
-	logger.EngineLogger.Debug("RPC connection established", "name", manifest.Provider.Name)
 
 	// Use SDK-defined plugin type identifier
-	logger.EngineLogger.Debug("Dispensing plugin", "name", manifest.Provider.Name, "type", sdkserver.PluginTypeProvider)
 	raw, err := rpcClient.Dispense(sdkserver.PluginTypeProvider)
 	if err != nil {
 		client.Kill()
 		handle.loadErr = fmt.Errorf("failed to dispense plugin: %w", err)
 		logger.EngineLogger.Error("Dispense failed", "name", manifest.Provider.Name, "error", err)
+		handle.status = constants.PluginStatStopped
 		return
 	}
-	logger.EngineLogger.Debug("Plugin dispensed successfully", "name", manifest.Provider.Name)
 
 	handle.providerRaw = raw
 	handle.client = client
 
-	logger.EngineLogger.Debug("Plugin raw type",
-		"name", manifest.Provider.Name,
-		"type", fmt.Sprintf("%T", raw))
-
 	// SDK's GRPCClient now returns *sdkclient.GRPCProviderClient which implements all SDK interfaces
+	var implementedInterfaces []string
 	if basePlugin, ok := raw.(sdkclient.PluginProvider); ok {
 		handle.basePlugin = basePlugin
-		logger.EngineLogger.Debug("✅ Plugin implements SDK PluginProvider interface",
-			"name", manifest.Provider.Name)
-	} else {
-		logger.EngineLogger.Debug("❌ Plugin does NOT implement SDK PluginProvider interface",
-			"name", manifest.Provider.Name)
+		implementedInterfaces = append(implementedInterfaces, "PluginProvider")
 	}
 
 	if remotePlugin, ok := raw.(sdkclient.RemotePluginProvider); ok {
 		handle.remotePlugin = remotePlugin
-		logger.EngineLogger.Debug("✅ Plugin implements SDK RemotePluginProvider interface",
-			"name", manifest.Provider.Name)
+		implementedInterfaces = append(implementedInterfaces, "RemotePluginProvider")
 	}
 
 	if localPlugin, ok := raw.(sdkclient.LocalPluginProvider); ok {
 		handle.localPlugin = localPlugin
-		logger.EngineLogger.Debug("✅ Plugin implements SDK LocalPluginProvider interface",
-			"name", manifest.Provider.Name)
-	} else {
-		logger.EngineLogger.Debug("ℹ️  Plugin does NOT implement SDK LocalPluginProvider interface (may be remote plugin)",
-			"name", manifest.Provider.Name)
+		implementedInterfaces = append(implementedInterfaces, "LocalPluginProvider")
 	}
+
+	logger.EngineLogger.Debug("Plugin interface detection",
+		"name", manifest.Provider.Name,
+		"type", fmt.Sprintf("%T", raw),
+		"interfaces", implementedInterfaces)
 
 	// Backward compatibility: try to identify legacy interface
 	if oldProvider, ok := raw.(provider.ModelServiceProvider); ok {
@@ -478,6 +630,9 @@ func (r *PluginRegistry) loadPluginAndIdentifyType(handle *pluginHandle) {
 		logger.EngineLogger.Debug("Plugin implements legacy ModelServiceProvider interface",
 			"name", manifest.Provider.Name)
 	}
+
+	// At this point, plugin process is up, gRPC connection established, and provider dispensed successfully.
+	handle.status = constants.PluginStatusRunning
 
 	logger.EngineLogger.Info("Plugin loaded successfully",
 		"name", manifest.Provider.Name,
@@ -585,18 +740,17 @@ func (r *PluginRegistry) createServiceProvider(manifest *sdktypes.PluginManifest
 		fullURL = manifest.Provider.EngineHost + service.Endpoint
 	}
 
-	logger.EngineLogger.Debug("Creating service provider",
-		"plugin", manifest.Provider.Name,
-		"service", service.ServiceName,
-		"engine_host", manifest.Provider.EngineHost,
-		"endpoint", service.Endpoint,
-		"fullURL", fullURL)
+	// Capitalize first letter of service name for description
+	serviceName := service.ServiceName
+	if len(serviceName) > 0 {
+		serviceName = strings.ToUpper(serviceName[:1]) + serviceName[1:]
+	}
 
 	return &types.ServiceProvider{
 		ProviderName:  fmt.Sprintf("%s_%s_%s", manifest.Provider.Type, manifest.Provider.Name, service.ServiceName),
 		ServiceName:   service.ServiceName, // chat, embed, etc.
 		ServiceSource: manifest.Provider.Type,
-		Desc:          fmt.Sprintf("%s Plugin - %s Service", manifest.Provider.Name, strings.Title(service.ServiceName)),
+		Desc:          fmt.Sprintf("%s Plugin - %s Service", manifest.Provider.Name, serviceName),
 		Method:        r.protocolToMethod(service.Protocol),
 		AuthType:      service.AuthType,
 		AuthKey:       "",
@@ -634,17 +788,26 @@ func IsEntityNotFound(err error) bool {
 		strings.Contains(err.Error(), "record not found")
 }
 
-// Shutdown closes all plugins.
+// Shutdown closes all plugins and cleans up registry state.
 func (r *PluginRegistry) Shutdown() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+
+	logger.EngineLogger.Info("Shutting down plugin registry", "plugin_count", len(r.plugins))
 
 	for name, handle := range r.plugins {
 		if handle.client != nil {
 			logger.EngineLogger.Info("Shutting down plugin", "name", name)
 			handle.client.Kill()
+			handle.status = constants.PluginStatStopped
 		}
 	}
+
+	// Clear all maps to ensure clean state for next startup
+	r.manifests = make(map[string]*sdktypes.PluginManifest)
+	r.plugins = make(map[string]*pluginHandle)
+
+	logger.EngineLogger.Info("Plugin registry shutdown completed")
 }
 
 // GetPluginManifest returns the plugin's manifest.
@@ -675,6 +838,18 @@ func (r *PluginRegistry) getExecutableForPlatform(manifest *sdktypes.PluginManif
 
 	if _, err := os.Stat(execPath); os.IsNotExist(err) {
 		return "", fmt.Errorf("executable not found: %s", execPath)
+	} else if err != nil {
+		return "", fmt.Errorf("failed to stat executable: %w", err)
+	}
+
+	// Ensure executable has proper permissions (especially important on Windows after ZIP extraction)
+	// On Unix systems, chmod +x sets execute permission
+	// On Windows, this ensures the file can be executed
+	if err := os.Chmod(execPath, 0o755); err != nil {
+		logger.EngineLogger.Warn("Failed to set executable permissions",
+			"path", execPath,
+			"error", err)
+		// Don't fail here, as Windows may not need explicit chmod
 	}
 
 	return execPath, nil
@@ -687,12 +862,12 @@ func (r *PluginRegistry) buildCommand(executable string) *exec.Cmd {
 	// Pass AOG version to plugin for selecting correct engine version
 	cmd.Env = append(os.Environ(), fmt.Sprintf("AOG_VERSION=%s", version.AOGVersion))
 
+	// Set working directory to plugin directory (important for finding plugin.yaml)
+	pluginDir := filepath.Dir(filepath.Dir(executable)) // Go up two levels: bin/platform -> plugin root
+	cmd.Dir = pluginDir
+
 	return cmd
 }
-
-// Note: getHandshakeConfig and getPluginMap methods have been removed.
-// Now directly using PluginHandshake and PluginMap exported from plugin-sdk/server.
-// This ensures Host and Plugin use exactly the same definitions, which is a core requirement of go-plugin.
 
 // PluginManifestWrapper wraps plugin manifest with path information.
 type PluginManifestWrapper struct {
@@ -714,13 +889,6 @@ func (r *PluginRegistry) GetAllManifests() map[string]*PluginManifestWrapper {
 		}
 	}
 	return result
-}
-
-// GetManifest returns the specified plugin's manifest.
-func (r *PluginRegistry) GetManifest(name string) *sdktypes.PluginManifest {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	return r.manifests[name]
 }
 
 // ========== Global PluginRegistry Access ===========

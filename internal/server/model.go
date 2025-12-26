@@ -25,6 +25,9 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/intel/aog/internal/constants"
+	"github.com/intel/aog/internal/plugin/registry"
+
 	"github.com/intel/aog/internal/api/dto"
 	"github.com/intel/aog/internal/client"
 	"github.com/intel/aog/internal/datastore"
@@ -63,6 +66,7 @@ func NewModel() Model {
 
 func (s *ModelImpl) CreateModel(ctx context.Context, request *dto.CreateModelRequest) (*dto.CreateModelResponse, error) {
 	// ensure service avaliable first
+	usePlugin := false
 	service := &types.Service{Name: request.ServiceName}
 	err := s.Ds.Get(ctx, service)
 	if err != nil {
@@ -73,7 +77,9 @@ func (s *ModelImpl) CreateModel(ctx context.Context, request *dto.CreateModelReq
 	}
 	sp := new(types.ServiceProvider)
 	sp.ProviderName = request.ProviderName
-
+	if strings.Contains(request.ProviderName, "plugin") {
+		usePlugin = true
+	}
 	sp.ServiceName = request.ServiceName
 	sp.ServiceSource = request.ServiceSource
 
@@ -82,12 +88,40 @@ func (s *ModelImpl) CreateModel(ctx context.Context, request *dto.CreateModelReq
 		// todo debug log output
 		return nil, bcode.ErrServer
 	} else if errors.Is(err, datastore.ErrEntityInvalid) {
+		if usePlugin {
+			return nil, bcode.ErrPluginNotFound
+		}
 		return nil, bcode.ErrServiceRecordNotFound
+	}
+	// check plugin status
+	var providerEngine provider.ModelServiceProvider
+	if usePlugin {
+		pluginRegistry := registry.GetGlobalPluginRegistry()
+		pluginStatus := pluginRegistry.GetPluginStatus(sp.Flavor)
+		if pluginStatus != constants.PluginStatusRunning {
+			return nil, bcode.ErrPluginNotRunning
+		}
+		if request.ServiceSource == types.ServiceSourceLocal {
+			providerEngine, err = pluginRegistry.GetLocalPluginProvider(sp.Flavor)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		if err != nil {
+			logger.EngineLogger.Error("Failed to get plugin engine", "flavor", sp.Flavor, "error", err)
+			return nil, err
+		}
+	} else {
+		providerEngine, err = provider.GetModelEngine(sp.Flavor)
+		if err != nil {
+			logger.EngineLogger.Error("Failed to get engine", "flavor", sp.Flavor, "error", err)
+			return nil, err
+		}
 	}
 
 	if request.Size != "" {
 		// 判断剩余空间
-		providerEngine, err := provider.GetModelEngine(sp.Flavor)
 		if err != nil {
 			logger.EngineLogger.Error("Failed to get engine", "flavor", sp.Flavor, "error", err)
 			return nil, bcode.ErrProviderNotExist
@@ -299,6 +333,40 @@ func (s *ModelImpl) CreateModelStream(ctx context.Context, request *dto.CreateMo
 		newErrChan <- err
 		return newDataChan, newErrChan
 	}
+	usePlugin := false
+	if strings.Contains(request.ProviderName, "plugin") {
+		usePlugin = true
+	}
+	// check plugin status
+	var providerEngine provider.ModelServiceProvider
+	if usePlugin {
+		pluginRegistry := registry.GetGlobalPluginRegistry()
+		pluginStatus := pluginRegistry.GetPluginStatus(sp.Flavor)
+		if pluginStatus != constants.PluginStatusRunning {
+			newErrChan <- err
+			return newDataChan, newErrChan
+		}
+		if request.ServiceSource == types.ServiceSourceLocal {
+			providerEngine, err = pluginRegistry.GetLocalPluginProvider(sp.Flavor)
+			if err != nil {
+				newErrChan <- err
+				return newDataChan, newErrChan
+			}
+		}
+
+		if err != nil {
+			logger.EngineLogger.Error("Failed to get plugin engine", "flavor", sp.Flavor, "error", err)
+			newErrChan <- err
+			return newDataChan, newErrChan
+		}
+	} else {
+		providerEngine, err = provider.GetModelEngine(sp.Flavor)
+		if err != nil {
+			logger.EngineLogger.Error("Failed to get engine", "flavor", sp.Flavor, "error", err)
+			newErrChan <- err
+			return newDataChan, newErrChan
+		}
+	}
 
 	if request.Size != "" {
 		// 判断剩余空间
@@ -354,8 +422,6 @@ func (s *ModelImpl) CreateModelStream(ctx context.Context, request *dto.CreateMo
 		return newDataChan, newErrChan
 	}
 	modelName := request.ModelName
-
-	providerEngine, err := provider.GetModelEngine(sp.Flavor)
 	if err != nil {
 		logger.EngineLogger.Error("Failed to get engine", "flavor", sp.Flavor, "error", err)
 		newErrChan <- bcode.ErrProviderNotExist

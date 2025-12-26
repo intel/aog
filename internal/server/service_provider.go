@@ -368,9 +368,6 @@ func (s *ServiceProviderImpl) UpdateServiceProvider(ctx context.Context, request
 		if server == nil {
 			model.Status = "failed"
 			err = ds.Put(ctx, sp)
-			if err != nil {
-				return nil, err
-			}
 			if err != nil && !errors.Is(err, datastore.ErrEntityInvalid) {
 				return nil, err
 			} else if errors.Is(err, datastore.ErrEntityInvalid) {
@@ -430,7 +427,25 @@ func (s *ServiceProviderImpl) UpdateServiceProvider(ctx context.Context, request
 }
 
 func (s *ServiceProviderImpl) GetServiceProvider(ctx context.Context, request *dto.GetServiceProviderRequest) (*dto.GetServiceProviderResponse, error) {
-	return &dto.GetServiceProviderResponse{}, nil
+	sp := new(types.ServiceProvider)
+	sp.ProviderName = request.ProviderName
+	err := s.Ds.Get(ctx, sp)
+	if err != nil && !errors.Is(err, datastore.ErrEntityInvalid) {
+		return nil, err
+	} else if errors.Is(err, datastore.ErrEntityInvalid) {
+		return nil, bcode.ErrProviderNotFound
+	}
+	data := new(dto.ServiceProvider)
+	data.ProviderName = sp.ProviderName
+	data.ServiceName = sp.ServiceName
+	data.ServiceSource = sp.ServiceSource
+	data.Flavor = sp.Flavor
+	data.Status = sp.Status
+
+	return &dto.GetServiceProviderResponse{
+		Bcode: *bcode.ServiceProviderCode,
+		Data:  *data,
+	}, nil
 }
 
 func (s *ServiceProviderImpl) GetServiceProviders(ctx context.Context, request *dto.GetServiceProvidersRequest) (*dto.GetServiceProvidersResponse, error) {

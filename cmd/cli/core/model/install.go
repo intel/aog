@@ -17,17 +17,23 @@
 package model
 
 import (
+	"bufio"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 
-	"github.com/intel/aog/internal/utils/progress"
-
 	"github.com/intel/aog/cmd/cli/core/common"
+	"github.com/intel/aog/config"
 	"github.com/intel/aog/internal/api/dto"
+	"github.com/intel/aog/internal/constants"
+	"github.com/intel/aog/internal/logger"
+	"github.com/intel/aog/internal/plugin/registry"
+	"github.com/intel/aog/internal/schedule"
 	"github.com/intel/aog/internal/types"
+	"github.com/intel/aog/internal/utils/progress"
 	"github.com/intel/aog/version"
 	"github.com/spf13/cobra"
 )
@@ -98,8 +104,62 @@ func PullHandler(cmd *cobra.Command, args []string) {
 	}
 	req.ServiceName = serviceName
 	req.ProviderName = providerName
-
 	c := common.NewAOGClient()
+	// check plugin status
+	if strings.Contains(providerName, "plugin") {
+		pluginName := strings.Split(providerName, "_")[1]
+
+		pluginRegistry := registry.GetGlobalPluginRegistry()
+		confirm := func(pluginName string) bool {
+			reader := bufio.NewReader(os.Stdin)
+
+			fmt.Printf(
+				"plugin %s not exists, download now? [y/N]: ",
+				pluginName,
+			)
+
+			input, _ := reader.ReadString('\n')
+			input = strings.ToLower(strings.TrimSpace(input))
+
+			return input == "y" || input == "yes"
+		}
+
+		pluginStatus := pluginRegistry.GetPluginStatus(pluginName)
+		if pluginStatus != constants.PluginStatusRunning {
+			pluginDir := filepath.Join(config.GlobalEnvironment.RootDir, "plugins", pluginName)
+			if os.Stat(pluginDir); os.IsNotExist(err) {
+				if !confirm(pluginName) {
+					fmt.Println("cancelled by user")
+					return
+				}
+			}
+		}
+		path, err := pluginRegistry.DownloadPlugin(pluginName)
+		if err != nil {
+			fmt.Printf("\rDownload plugin %s failed: %s", pluginName, err.Error())
+		}
+		fmt.Println("\rPlugin successfully downloaded")
+		fmt.Println("\rPlugin start to load")
+		err = pluginRegistry.RegisterPlugin(pluginName, path)
+		if err != nil {
+			fmt.Printf("\rRegister plugin %s failed: %s", pluginName, err.Error())
+		}
+		manifest, err := pluginRegistry.GetPluginManifest(pluginName)
+		if err != nil {
+			fmt.Printf("\rLoad plugin %s failed: %s", pluginName, err.Error())
+		}
+		flavor, err := schedule.NewPluginBasedAPIFlavor(manifest)
+		if err != nil {
+			fmt.Errorf("failed to create plugin flavor: %w", err)
+		}
+		schedule.RegisterAPIFlavor(flavor)
+		logger.EngineLogger.Info("Plugin registered as APIFlavor",
+			"plugin", manifest.Provider.Name,
+			"services", len(manifest.Services))
+		fmt.Println("\rPlugin loaded successfully")
+
+	}
+
 	routerPath := fmt.Sprintf("/aog/%s/model/stream", version.SpecVersion)
 
 	//

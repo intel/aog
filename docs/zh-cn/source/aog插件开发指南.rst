@@ -184,6 +184,78 @@ AOG 支持两种类型的插件：
 
 AOG 会自动将配置的认证信息注入到插件的服务请求中。
 
+**超时配置 (timeout)**
+
+``timeout`` 字段用于控制 AOG 调用插件服务时的超时时间（单位：秒）。合理配置超时时间对于不同类型的服务至关重要。
+
+**配置规则：**
+
+- **不设置 timeout**：使用默认超时
+  
+  - 普通调用（Unary）：60 秒
+  - 流式调用（Stream）：300 秒（5 分钟）
+  - 双向流（Bidirectional）：无超时
+
+- **timeout: N** (N > 0)：自定义超时时间为 N 秒
+
+- **timeout: -1**：无超时限制（推荐用于耗时服务）
+
+**使用场景：**
+
+.. list-table::
+   :header-rows: 1
+   :widths: 25 35 40
+
+   * - 服务类型
+     - 推荐配置
+     - 说明
+   * - **快速推理服务**
+       
+       (chat, embed, rerank)
+     - 不设置或 ``timeout: 30``
+     - 使用默认超时或自定义较短超时
+   * - **耗时推理服务**
+       
+       (text-to-image, video-generation)
+     - ``timeout: -1``
+     - 图像/视频生成可能需要几分钟，建议无超时
+   * - **模型下载服务**
+       
+       (PullModel)
+     - ``timeout: -1``
+     - 大模型下载可能需要几十分钟，必须无超时
+   * - **长时间流式服务**
+       
+       (长对话、实时语音)
+     - ``timeout: -1``
+     - 长时间交互场景建议无超时
+
+**配置示例：**
+
+.. code-block:: yaml
+
+    services:
+      # 快速服务 - 使用默认超时
+      - service_name: chat
+        task_type: text-generation
+        # timeout 未设置，使用默认 60 秒
+        
+      # 快速服务 - 自定义超时
+      - service_name: embed
+        task_type: embedding
+        timeout: 30  # 自定义 30 秒超时
+        
+      # 耗时服务 - 无超时限制
+      - service_name: text-to-image
+        task_type: text-to-image
+        timeout: -1  # 无超时，适合图像生成
+        
+      # 长时间流式服务 - 无超时限制
+      - service_name: speech-to-text-ws
+        task_type: speech-to-text
+        timeout: -1  # 无超时，适合实时语音识别
+
+
 **其他重要字段说明**
 
 .. list-table::
@@ -193,6 +265,9 @@ AOG 会自动将配置的认证信息注入到插件的服务请求中。
    * - 字段名
      - 说明
      - 是否必需
+   * - ``timeout``
+     - 服务调用超时时间（秒）。不设置使用默认值，``-1`` 表示无超时
+     - 否
    * - ``special_url``
      - 特殊 URL，用于某些服务的特定端点（如 WebSocket 连接）
      - 否

@@ -129,6 +129,52 @@ func (c *GRPCProviderClient) InvokeServiceBidirectional(
 	return nil
 }
 
+func (c *GRPCProviderClient) GetSupportModelList(ctx context.Context) ([]types.RecommendModelData, error) {
+	manifest := c.GetManifest()
+	if manifest == nil {
+		return nil, fmt.Errorf("failed to get plugin manifest")
+	}
+
+	var models []types.RecommendModelData
+	for _, svc := range manifest.Services {
+		for _, name := range svc.SupportModels {
+			m := types.RecommendModelData{
+				Id:              fmt.Sprintf("%s:%s:%s", manifest.Provider.Name, svc.ServiceName, name),
+				Service:         svc.ServiceName,
+				ApiFlavor:       "",
+				Flavor:          "",
+				Method:          "POST",
+				Desc:            manifest.Provider.Description,
+				Url:             svc.Endpoint,
+				AuthType:        svc.AuthType,
+				AuthApplyUrl:    manifest.Provider.Homepage,
+				AuthFields:      nil,
+				Name:            name,
+				ServiceProvider: manifest.Provider.Name,
+				Size:            "",
+				IsRecommended:   name == svc.DefaultModel,
+				Status:          "",
+				Avatar:          "",
+				CanSelect:       true,
+				Class:           nil,
+				OllamaId:        "",
+				ParamsSize:      0,
+				InputLength:     0,
+				OutputLength:    0,
+				Source:          manifest.Provider.Type,
+				IsDefault:       fmt.Sprintf("%v", name == svc.DefaultModel),
+				Think:           false,
+				ThinkSwitch:     false,
+				Tools:           false,
+				Context:         0,
+			}
+			models = append(models, m)
+		}
+	}
+
+	return models, nil
+}
+
 // NewGRPCProviderClient creates a gRPC client
 //
 // Parameters:

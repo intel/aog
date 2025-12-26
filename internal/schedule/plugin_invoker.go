@@ -97,12 +97,10 @@ func (p *PluginInvoker) Invoke(sp *types.ServiceProvider, content types.HTTPCont
 				"error", err)
 			return nil, fmt.Errorf("failed to get plugin provider: %w", err)
 		}
-		// 🔍 Debugging: Printing the actual type
 		logger.LogicLogger.Debug("[Plugin] Got provider instance",
 			"provider", sp.ProviderName,
 			"flavor", sp.Flavor,
-			"type", fmt.Sprintf("%T", providerInst),
-			"value_type", fmt.Sprintf("%#v", providerInst))
+			"type", fmt.Sprintf("%T", providerInst))
 	} else if sp.ServiceSource == types.ServiceSourceRemote {
 		// Get remote plugin
 		pluginRegistry := registry.GetGlobalPluginRegistry()
@@ -184,8 +182,16 @@ func (p *PluginInvoker) invokeUnary(
 		"service", sp.ServiceName)
 
 	timeout := p.getTimeout(serviceDef, 60*time.Second)
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
+	var ctx context.Context
+	var cancel context.CancelFunc
+	if timeout > 0 {
+		ctx, cancel = context.WithTimeout(context.Background(), timeout)
+		defer cancel()
+	} else {
+		// No timeout for long-running services (e.g., text-to-image, model pull)
+		ctx, cancel = context.WithCancel(context.Background())
+		defer cancel()
+	}
 
 	// call plugin
 	respData, err := providerInst.InvokeService(ctx, sp.ServiceName, sp.AuthKey, content.Body)
@@ -216,10 +222,8 @@ func (p *PluginInvoker) invokeStream(
 		"provider", sp.ProviderName,
 		"service", sp.ServiceName)
 
-	// 🔍Debugging: checking before type assertions
 	logger.LogicLogger.Debug("[Plugin] Before type assertion",
-		"provider_type", fmt.Sprintf("%T", providerInst),
-		"provider_value", fmt.Sprintf("%#v", providerInst))
+		"provider_type", fmt.Sprintf("%T", providerInst))
 
 	// ⚠️ Strict check: Plugins must implement StreamablePlugin
 	streamablePlugin, ok := providerInst.(sdkclient.StreamablePlugin)
@@ -234,7 +238,14 @@ func (p *PluginInvoker) invokeStream(
 		"streamable_type", fmt.Sprintf("%T", streamablePlugin))
 
 	timeout := p.getTimeout(serviceDef, 300*time.Second)
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	var ctx context.Context
+	var cancel context.CancelFunc
+	if timeout > 0 {
+		ctx, cancel = context.WithTimeout(context.Background(), timeout)
+	} else {
+		// No timeout for long-running streaming services
+		ctx, cancel = context.WithCancel(context.Background())
+	}
 
 	// Invoke plug-in streaming interface
 	chunkChan, err := streamablePlugin.InvokeServiceStream(ctx, sp.ServiceName, sp.AuthKey, content.Body)
@@ -248,7 +259,7 @@ func (p *PluginInvoker) invokeStream(
 
 	go func() {
 		defer pipeWriter.Close()
-		defer cancel() // ✅ Cancel the context after the streaming read is complete
+		defer cancel() // Cancel the context after the streaming read is complete
 
 		for chunk := range chunkChan {
 			if chunk.Error != nil {
@@ -337,6 +348,34 @@ func (p *PluginInvoker) invokeWebSocket(
 			isFirst = true
 		}
 
+		// Ensure model is loaded before starting bidirectional communication
+		if isFirst && sp.ServiceName == "speech-to-text-ws" {
+			sttParams := wsConn.GetSTTParams()
+			if sttParams.Model != "" {
+				logger.LogicLogger.Debug("[Plugin] Ensuring model is loaded before WebSocket communication",
+					"model", sttParams.Model,
+					"provider", sp.ProviderName)
+
+				loadReq := &sdktypes.LoadRequest{
+					Model: sttParams.Model,
+				}
+
+				// Load model and wait for it to be ready
+				if err := providerInst.LoadModel(ctx, loadReq); err != nil {
+					logger.LogicLogger.Error("[Plugin] Failed to load model for WebSocket service",
+						"model", sttParams.Model,
+						"provider", sp.ProviderName,
+						"error", err)
+					closeBridge("model_load_failed", err)
+					return nil, fmt.Errorf("failed to load model %s: %w", sttParams.Model, err)
+				}
+
+				logger.LogicLogger.Info("[Plugin] Model loaded successfully for WebSocket service",
+					"model", sttParams.Model,
+					"provider", sp.ProviderName)
+			}
+		}
+
 		// Start plug-in processing coroutine
 		if isFirst {
 			go func() {
@@ -358,15 +397,42 @@ func (p *PluginInvoker) invokeWebSocket(
 		if inputMsgType == "text" {
 			fmt.Printf(string(content.Body))
 		}
+
+		// Prepare metadata for bidirectional message
+		metadata := make(map[string]string)
+		if sp.ServiceName == "speech-to-text-ws" {
+			// For speech-to-text-ws, include model and other parameters from session
+			sttParams := wsConn.GetSTTParams()
+			if sttParams.Model != "" {
+				metadata["model"] = sttParams.Model
+			}
+			if sttParams.Language != "" {
+				metadata["language"] = sttParams.Language
+			}
+			if sttParams.AudioFormat != "" {
+				metadata["format"] = sttParams.AudioFormat
+			}
+			if sttParams.SampleRate > 0 {
+				metadata["sample_rate"] = fmt.Sprintf("%d", sttParams.SampleRate)
+			}
+		}
+
 		wsConn.InputStream <- sdkclient.BidiMessage{
 			Data:        content.Body,
 			MessageType: inputMsgType,
+			Metadata:    metadata,
 		}
 
 		// plugin → WebSocket
 		if isFirst {
 			go func() {
+				logger.LogicLogger.Debug("[Plugin] Started listening for plugin responses",
+					"connID", wsConnID)
 				for msg := range wsConn.OutputStream {
+					logger.LogicLogger.Debug("[Plugin] Received message from plugin",
+						"connID", wsConnID,
+						"dataLen", len(msg.Data),
+						"hasError", msg.Error != nil)
 					if msg.Error != nil {
 						logger.LogicLogger.Error("[Plugin] Received error from plugin", "error", msg.Error)
 						// Send error message to client side
@@ -389,7 +455,12 @@ func (p *PluginInvoker) invokeWebSocket(
 						closeBridge("ws_write", err)
 						return
 					}
+					logger.LogicLogger.Debug("[Plugin] Successfully sent message to WebSocket client",
+						"connID", wsConnID,
+						"dataLen", len(msg.Data))
 				}
+				logger.LogicLogger.Debug("[Plugin] Output stream closed, listener exiting",
+					"connID", wsConnID)
 			}()
 		}
 
@@ -413,9 +484,13 @@ func (p *PluginInvoker) invokeWebSocket(
 }
 
 // getTimeout Get timeout
+// Returns 0 if no timeout should be set (serviceDef.Timeout < 0)
 func (p *PluginInvoker) getTimeout(serviceDef *sdktypes.ServiceDef, defaultTimeout time.Duration) time.Duration {
 	if serviceDef.Timeout > 0 {
 		return time.Duration(serviceDef.Timeout) * time.Second
+	}
+	if serviceDef.Timeout < 0 {
+		return 0 // Negative value means no timeout
 	}
 	return defaultTimeout
 }
@@ -463,8 +538,8 @@ func (p *PluginInvoker) getPluginServiceDef(sp *types.ServiceProvider) (*sdktype
 		return nil, fmt.Errorf("plugin registry not initialized")
 	}
 
-	manifest := pluginRegistry.GetManifest(sp.Flavor)
-	if manifest == nil {
+	manifest, err := pluginRegistry.GetPluginManifest(sp.Flavor)
+	if err != nil {
 		return nil, fmt.Errorf("plugin manifest not found for provider: %s", sp.Flavor)
 	}
 

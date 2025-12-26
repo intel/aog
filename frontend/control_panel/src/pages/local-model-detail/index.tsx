@@ -15,7 +15,7 @@
 //*****************************************************************************
 
 import CustomBreadcrumb from '@/components/custom-breadcrumb';
-import { Flex, Button, notification, FloatButton, Skeleton } from 'antd';
+import { Flex, Button, notification, FloatButton, Skeleton, Dropdown } from 'antd';
 import ModelCard from '@/components/model-card';
 import InfoIcon from '@/components/icons/Info.svg?react';
 import { useState, useEffect } from 'react';
@@ -68,6 +68,42 @@ const LocalModelDetail = () => {
   }, [run]);
   const close = () => {
     console.log('Notification was closed. Either the close button was clicked or duration time elapsed.');
+  };
+  const buildPluginProviderName = (providerName: string) => {
+    if (!providerName) return providerName;
+    const parts = providerName.split('_');
+    if (parts.length === 0) return providerName;
+    if (!parts[0].includes('-plugin')) {
+      parts[0] = `${parts[0]}-plugin`;
+    }
+    return parts.join('_');
+  };
+
+  const startDownload = (usePlugin: boolean) => {
+    if (!model) return;
+
+    if (!downloading) {
+      const baseParams: any = {
+        name: model.name,
+        service_name: model.service_name,
+        source: 'local',
+        service_provider_name: model.service_provider_name,
+        id: model.id,
+        avatar: model.avatar,
+        size: model.size,
+      };
+
+      const params = {
+        ...baseParams,
+        service_provider_name: usePlugin
+          ? buildPluginProviderName(baseParams.service_provider_name)
+          : baseParams.service_provider_name,
+      };
+
+      fetchDownloadStart(params as any);
+      setDownloading(true);
+    }
+    showModal();
   };
   const showModal = () => {
     setIsModalOpen(true);
@@ -181,27 +217,26 @@ const LocalModelDetail = () => {
                   align="center"
                 >
                   <span>size:{model.size}</span>
-                  <Button
+                  <Dropdown.Button
                     type="primary"
                     size="large"
-                    onClick={() => {
-                      if (!downloading) {
-                        fetchDownloadStart({
-                          name: model.name,
-                          service_name: model.service_name,
-                          source: 'local',
-                          service_provider_name: model.service_provider_name,
-                          id: model.id,
-                          avatar: model.avatar,
-                          size: model.size,
-                        } as any);
-                        setDownloading(true);
-                      }
-                      showModal();
+                    menu={{
+                      items: [
+                        { key: 'normal', label: 'Download' },
+                        { key: 'plugin', label: 'Download with plugin' },
+                      ],
+                      onClick: ({ key }) => {
+                        if (key === 'normal') {
+                          startDownload(false);
+                        } else if (key === 'plugin') {
+                          startDownload(true);
+                        }
+                      },
                     }}
+                    onClick={() => startDownload(false)}
                   >
                     {downloading ? 'Downloading' : 'Download'}
-                  </Button>
+                  </Dropdown.Button>
                 </Flex>
               )}
             </Flex>

@@ -26,6 +26,7 @@ import RemoteModels from '@/pages/remote-models';
 import LocalModelDetail from '@/pages/local-model-detail';
 import RemoteModelDetail from '@/pages/remote-model-detail';
 import HybridScheduling from '@/pages/hybrid-scheduling'; // 新增混合调度页面
+import Plugins from '@/pages/plugins';
 const router = createBrowserRouter([
   {
     path: '/',
@@ -43,6 +44,10 @@ const router = createBrowserRouter([
       {
         path: '/dashboard',
         element: <Dashboard />,
+      },
+      {
+        path: '/plugins',
+        element: <Plugins />,
       },
       {
         path: '/about-aog',

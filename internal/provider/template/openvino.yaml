@@ -73,9 +73,8 @@ services:
         endpoints: [""]
         extra_url: ""
         auth_type: ""
-        install_raw_routes: # also install routes without aog prefix in url path
         default_model: "NamoLi/whisper-large-v3-ov"
-        request_segments: 1 # request
+        request_segments: 1
         extra_headers: "{}"
         request_to_aog:
             conversion:
@@ -84,7 +83,7 @@ services:
                       {
                          "model": $model,
                          "audio": audio,
-                         "language":language
+                         "language": $exists(language) ? language : "zh"
                       }
 
                 - converter: header
@@ -98,7 +97,7 @@ services:
                       {
                          "model": $model,
                          "audio": audio,
-                         "language":language
+                         "language": language
                       }
                 - converter: header
                   config:
@@ -116,10 +115,8 @@ services:
                 - converter: jsonata
                   config: |
                       {
-                           "id": request_id,
-                           "data": {
-                              "url": output.results[0].url
-                                  }
+                          "text": text,
+                          "segments": segments
                       }
     speech-to-text-ws:
         task_type: "speech-to-text"
@@ -180,15 +177,15 @@ services:
 
     text-to-speech:
         task_type: "text-to-speech"
-        protocol: "GRPC"
+        protocol: "HTTP"
         expose_protocol: "HTTP"
-        url: "127.0.0.1:9000"
-        endpoints: [""]
+        url: "http://127.0.0.1:16666"
+        endpoints: ["POST /v3/audio/speech"]
         extra_url: ""
         auth_type: ""
-        install_raw_routes: # also install routes without aog prefix in url path
+        install_raw_routes: true
         default_model: "NamoLi/speecht5-tts"
-        request_segments: 1 # request
+        request_segments: 1
         extra_headers: "{}"
         request_to_aog:
             conversion:
@@ -196,8 +193,7 @@ services:
                   config: |
                       {
                          "model": $model,
-                         "text": text,
-                         "voice":$exists(voice) ? voice : "male"
+                         "input": $exists(text) ? text : input
                       }
 
                 - converter: header
@@ -210,21 +206,14 @@ services:
                   config: |
                       {
                          "model": $model,
-                         "text": text,
-                         "voice":$exists(voice) ? voice : "male"
+                         "input": $exists(text) ? text : input
                       }
 
                 - converter: header
                   config:
                       set:
                           Content-Type: application/json
-        response_to_aog:
-            conversion:
-                - converter: jsonata
-                  config: |
-                      {
-                          "url": url
-                      }
+        # No response conversion needed - binary WAV data is handled in invoke.go
 
     # ============ HTTP-based Services (OVMS RESTful API) ============
     chat:

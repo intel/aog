@@ -289,8 +289,8 @@ Ollama health check failed: request failed: connect: connection refused
 - [Ollama 官方文档](https://github.com/ollama/ollama)
 - [Ollama API 文档](https://github.com/ollama/ollama/blob/main/docs/api.md)
 - [AOG 插件开发指南](../../docs/zh-cn/source/aog插件开发指南.rst)
-- [Plugin SDK 文档](../../plugin-sdk/README.md)
-- [Plugin SDK 详细指南](../../plugin-sdk/ENGINE_PLUGIN_DEVELOPMENT_GUIDE.md)
+- [Plugin SDK 文档](../../tmp/README.md)
+- [Plugin SDK 详细指南](../../tmp/ENGINE_PLUGIN_DEVELOPMENT_GUIDE.md)
 
 ## 🤝 贡献
 

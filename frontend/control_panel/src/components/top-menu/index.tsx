@@ -25,6 +25,10 @@ const items = [
     label: <NavLink to="/dashboard">Dashboard</NavLink>,
   },
   {
+    key: 'plugins',
+    label: <NavLink to="/plugins">Plugins</NavLink>,
+  },
+  {
     key: 'about-aog',
     label: <NavLink to="/about-aog/choose-service">About AOG</NavLink>,
   },

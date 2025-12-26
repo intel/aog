@@ -34,6 +34,7 @@ type AOGCoreServer struct {
 	RagService      server.RagService
 	Version         server.Version
 	Health          server.Health
+	Plugin          server.Plugin
 }
 
 // NewAOGCoreServer is the constructor of the server structure
@@ -62,4 +63,5 @@ func (t *AOGCoreServer) Register() {
 	t.RagService = server.NewRagService()
 	t.Version = server.NewVersion()
 	t.Health = server.NewHealth()
+	t.Plugin = server.NewPlugin()
 }
