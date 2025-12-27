@@ -1,6 +1,6 @@
 module github.com/intel/aog/plugin-sdk
 
-go 1.23
+go 1.23.0
 
 require (
 	github.com/hashicorp/go-plugin v1.6.0
@@ -18,9 +18,9 @@ require (
 	github.com/mattn/go-isatty v0.0.10 // indirect
 	github.com/mitchellh/go-testing-interface v0.0.0-20171004221916-a61a99592b77 // indirect
 	github.com/oklog/run v1.0.0 // indirect
-	golang.org/x/net v0.22.0 // indirect
-	golang.org/x/sys v0.18.0 // indirect
-	golang.org/x/text v0.14.0 // indirect
+	golang.org/x/net v0.38.0 // indirect
+	golang.org/x/sys v0.31.0 // indirect
+	golang.org/x/text v0.23.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240318140521-94a12d6c2237 // indirect
 )
 
