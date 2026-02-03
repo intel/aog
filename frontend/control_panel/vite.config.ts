@@ -36,6 +36,20 @@ export default defineConfig({
     // host: '127.0.0.1', // 指定主机地址
     port: 16698, // 指定端口号
     strictPort: true, // 如果端口已被占用，则会直接退出而不是尝试下一个可用端口
+    
+    // 文件系统安全配置 - 防止路径遍历攻击 (CVE-2025-24968)
+    fs: {
+      strict: true, // 启用严格模式，限制文件访问
+      allow: ['..'], // 允许访问项目根目录及其父目录
+      deny: [
+        '.env',
+        '.env.*',
+        '*.{crt,pem,key}',
+        '.git/**',
+        '**/node_modules/**/.env',
+      ],
+    },
+    
     proxy: {
       [API_PREFIX]: {
         target: 'http://127.0.0.1:16688',
