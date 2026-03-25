@@ -31,7 +31,7 @@ A Go language implementation that provides MCP (Model Context Protocol) services
 
 ### Prerequisites
 
-1. **Go 1.23+**
+1. **Go 1.25+**
 2. **AOG Service Running** (default port 16688)
 
 ### Installation and Build

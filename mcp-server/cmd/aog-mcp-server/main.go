@@ -51,7 +51,7 @@ var versionCmd = &cobra.Command{
 	Short: "Show version information",
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Println("AOG MCP Server v1.0.0")
-		fmt.Println("Built with Go MCP SDK v0.2.0")
+		fmt.Println("Built with Go MCP SDK v1.4.1")
 		fmt.Println("Copyright (c) 2025 AOG Team")
 	},
 }
@@ -131,7 +131,7 @@ func runServer(cmd *cobra.Command, args []string) {
 	}()
 
 	// Create stdio transport
-	transport := mcp.NewStdioTransport()
+	transport := &mcp.StdioTransport{}
 
 	// Run server
 	if err := mcpServer.Run(ctx, transport); err != nil {

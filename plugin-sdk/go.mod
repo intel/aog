@@ -1,12 +1,12 @@
 module github.com/intel/aog/plugin-sdk
 
-go 1.24.0
+go 1.25.0
 
-toolchain go1.24.8
+toolchain go1.25.8
 
 require (
 	github.com/hashicorp/go-plugin v1.7.0
-	google.golang.org/grpc v1.78.0
+	google.golang.org/grpc v1.79.3
 	google.golang.org/protobuf v1.36.11
 	gopkg.in/yaml.v3 v3.0.1
 )

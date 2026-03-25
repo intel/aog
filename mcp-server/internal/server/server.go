@@ -3,6 +3,7 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 
@@ -75,10 +76,16 @@ func (s *AOGMCPServer) registerTools() {
 	s.server.AddTool(tools.GetVersionSchema, s.createToolHandler(s.toolHandlers.HandleGetVersion))
 }
 
-// createToolHandler creates adapter function to convert our handler to the format expected by MCP SDK
+// createToolHandler adapts the SDK's raw JSON arguments into the existing map-based handlers.
 func (s *AOGMCPServer) createToolHandler(handler func(context.Context, map[string]interface{}) (*mcp.CallToolResult, error)) mcp.ToolHandler {
-	return func(ctx context.Context, ss *mcp.ServerSession, params *mcp.CallToolParamsFor[map[string]interface{}]) (*mcp.CallToolResult, error) {
-		return handler(ctx, params.Arguments)
+	return func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		args := map[string]interface{}{}
+		if len(req.Params.Arguments) > 0 {
+			if err := json.Unmarshal(req.Params.Arguments, &args); err != nil {
+				return nil, fmt.Errorf("unmarshal tool arguments: %w", err)
+			}
+		}
+		return handler(ctx, args)
 	}
 }
 
@@ -114,7 +121,7 @@ func (s *AOGMCPServer) Connect(ctx context.Context, transport mcp.Transport) (*m
 	}
 
 	// Connect to client
-	session, err := s.server.Connect(ctx, transport)
+	session, err := s.server.Connect(ctx, transport, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to client: %w", err)
 	}
