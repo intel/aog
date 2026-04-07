@@ -55,6 +55,9 @@
   },
   "resolutions": {
     "@eslint/plugin-kit": "^0.3.4",
-    "form-data": "^4.0.4"
+    "form-data": "^4.0.4",
+    "flatted": "3.4.2",
+    "immutable": "5.1.5",
+    "rollup": "4.59.0"
   }
 }
