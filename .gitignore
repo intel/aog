@@ -94,3 +94,4 @@ htmlcov/
 *.swp
 *~
 .*.sw?
+.omx/

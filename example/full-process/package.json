@@ -22,17 +22,17 @@
   "dependencies": {
     "aog-checker": "file:aog-checker-1.2.0.tgz",
     "aog-lib": "file:aog-lib-1.3.0.tgz",
-    "axios": "^1.11.0",
-    "body-parser": "^1.20.2",
-    "cors": "^2.8.5",
-    "express": "^4.18.2",
+    "axios": "^1.15.0",
+    "body-parser": "^1.20.4",
+    "cors": "^2.8.6",
+    "express": "^4.22.1",
     "multer": "2.1.1",
     "recorder-core": "^1.3.25011100",
     "uuid": "^9.0.1",
-    "ws": "^8.18.3"
+    "ws": "^8.20.0"
   },
   "devDependencies": {
-    "nodemon": "^3.0.1"
+    "nodemon": "^3.1.14"
   },
   "engines": {
     "node": ">=18.0.0"
