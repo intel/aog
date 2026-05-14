@@ -1,0 +1,1003 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AOG 插件开发指南 &mdash; AOG (AIPC Open Gateway) v0.6.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=80d5e7a1" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
+      <link rel="stylesheet" type="text/css" href="_static/graphviz.css?v=4ae1632d" />
+      <link rel="stylesheet" type="text/css" href="_static/custom.css?v=4b4c264b" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=741c5cc6"></script>
+      <script src="_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            AOG (AIPC Open Gateway)
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">AOG Get Started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="aog%E7%94%A8%E6%B3%95.html">如何使用 AOG</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">AOG 目标:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="%E4%BB%8B%E7%BB%8D.html">AOG针对的问题陈述</a></li>
+<li class="toctree-l1"><a class="reference internal" href="aog%E5%9F%BA%E6%9C%AC%E6%A6%82%E5%BF%B5.html">AOG 关键概念</a></li>
+<li class="toctree-l1"><a class="reference internal" href="aog%E7%9A%84%E6%9C%BA%E5%88%B6.html">AOG 关键机制</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">AOG API 规范:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="aog%E8%A7%84%E8%8C%83.html">AOG 通用规范</a></li>
+<li class="toctree-l1"><a class="reference internal" href="service_specs/chat.html">AOG Chat 服务相关</a></li>
+<li class="toctree-l1"><a class="reference internal" href="service_specs/image.html">AOG Image相关服务</a></li>
+<li class="toctree-l1"><a class="reference internal" href="service_specs/speech.html">AOG Speech相关服务</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">AOG (AIPC Open Gateway)</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">AOG 插件开发指南</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/aog插件开发指南.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="aog">
+<h1>AOG 插件开发指南<a class="headerlink" href="#aog" title="Link to this heading"></a></h1>
+<section id="id1">
+<h2>概述<a class="headerlink" href="#id1" title="Link to this heading"></a></h2>
+<p>AOG (AIPC Open Gateway) 插件是模块化扩展，允许开发者将新的 AI 引擎或服务集成到 AOG 生态系统中。本指南提供了创建、构建和部署 AOG 插件的全面指导。</p>
+</section>
+<section id="id2">
+<h2>插件类型<a class="headerlink" href="#id2" title="Link to this heading"></a></h2>
+<p>AOG 支持两种类型的插件：</p>
+<ol class="arabic simple">
+<li><p><strong>本地插件</strong>: 管理本地 AI 引擎（例如 Ollama、OpenVINO）</p></li>
+<li><p><strong>远程插件</strong>: 连接到云 AI 服务（例如 OpenAI、DeepSeek、Aliyun、Tencent、Baidu）</p></li>
+</ol>
+</section>
+<section id="id3">
+<h2>前置要求<a class="headerlink" href="#id3" title="Link to this heading"></a></h2>
+<p>在开发 AOG 插件之前，请确保您已安装：</p>
+<ul class="simple">
+<li><p>Go 1.23 或更高版本</p></li>
+<li><p>AOG 插件 SDK</p></li>
+<li><p>对 gRPC 和 Protocol Buffers 的基本了解</p></li>
+</ul>
+</section>
+<section id="id4">
+<h2>快速开始<a class="headerlink" href="#id4" title="Link to this heading"></a></h2>
+<section id="id5">
+<h3>1. 项目设置<a class="headerlink" href="#id5" title="Link to this heading"></a></h3>
+<p>创建一个新的插件目录并初始化 Go 模块：</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>mkdir<span class="w"> </span>my-engine-plugin
+<span class="nb">cd</span><span class="w"> </span>my-engine-plugin
+go<span class="w"> </span>mod<span class="w"> </span>init<span class="w"> </span>github.com/yourusername/my-engine-plugin
+</pre></div>
+</div>
+<p>添加 AOG 插件 SDK 依赖：</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>go<span class="w"> </span>get<span class="w"> </span>github.com/intel/aog/plugin-sdk@latest
+</pre></div>
+</div>
+</section>
+<section id="id6">
+<h3>2. 插件结构<a class="headerlink" href="#id6" title="Link to this heading"></a></h3>
+<p>典型的 AOG 插件遵循以下结构：</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>my-engine-plugin/
+├── plugin.yaml          # 插件元数据
+├── main.go             # 插件入口点
+├── go.mod              # Go 模块定义
+├── go.sum              # 依赖项
+├── internal/           # 插件实现
+│   ├── provider.go     # Provider 实现
+│   ├── config.go       # 配置管理
+│   ├── client.go       # 引擎客户端
+│   └── services/       # 服务处理器
+│       ├── chat.go
+│       └── embed.go
+├── bin/                # 构建产物
+└── README.md           # 文档
+</pre></div>
+</div>
+</section>
+<section id="plugin-yaml">
+<h3>3. 插件元数据 (plugin.yaml)<a class="headerlink" href="#plugin-yaml" title="Link to this heading"></a></h3>
+<p>创建一个 [plugin.yaml] 文件来定义插件的元数据：</p>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">version</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;1.0&quot;</span>
+
+<span class="nt">provider</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-engine-plugin</span>
+<span class="w">  </span><span class="nt">display_name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">My Engine Plugin</span>
+<span class="w">  </span><span class="nt">version</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1.0.0</span>
+<span class="w">  </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">local</span><span class="w">  </span><span class="c1"># 或 remote</span>
+<span class="w">  </span><span class="nt">author</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Your Name</span>
+<span class="w">  </span><span class="nt">description</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">A custom AI engine plugin for AOG</span>
+<span class="w">  </span><span class="nt">homepage</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://github.com/yourusername/my-engine-plugin</span>
+<span class="w">  </span><span class="nt">engine_host</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;http://127.0.0.1:8080&quot;</span>
+
+<span class="nt">services</span><span class="p">:</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">service_name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">chat</span>
+<span class="w">    </span><span class="nt">task_type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">text-generation</span>
+<span class="w">    </span><span class="nt">protocol</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">HTTP</span>
+<span class="w">    </span><span class="nt">expose_protocol</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">HTTP</span>
+<span class="w">    </span><span class="nt">endpoint</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/api/chat</span>
+<span class="w">    </span><span class="nt">auth_type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">none</span>
+<span class="w">    </span><span class="nt">default_model</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-model</span>
+<span class="w">    </span><span class="nt">support_models</span><span class="p">:</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-model</span>
+<span class="w">    </span><span class="nt">capabilities</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">support_streaming</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">      </span><span class="nt">support_bidirectional</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
+
+<span class="nt">platforms</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">linux_amd64</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">executable</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">bin/linux-amd64/my-engine-plugin</span>
+<span class="w">  </span><span class="nt">darwin_arm64</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">executable</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">bin/darwin-arm64/my-engine-plugin</span>
+<span class="w">  </span><span class="nt">windows_amd64</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">executable</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">bin/windows-amd64/my-engine-plugin.exe</span>
+
+<span class="nt">resources</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">data_dir</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;${AOG_DATA_DIR}/engine/my-engine&quot;</span>
+<span class="w">  </span><span class="nt">my_engine</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">executable</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;${DATA_DIR}/bin/engine&quot;</span>
+<span class="w">    </span><span class="nt">models_dir</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;${DATA_DIR}/models&quot;</span>
+<span class="w">    </span><span class="nt">download_dir</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;${HOME}/Downloads&quot;</span>
+</pre></div>
+</div>
+</section>
+<section id="id7">
+<h3>插件元数据字段说明<a class="headerlink" href="#id7" title="Link to this heading"></a></h3>
+<p><strong>config_ref 字段 (重要)</strong></p>
+<p><code class="docutils literal notranslate"><span class="pre">config_ref</span></code> 用于复用 AOG 内置的 API 转换规则，避免重复实现 API 格式转换逻辑。</p>
+<p>格式：<code class="docutils literal notranslate"><span class="pre">&quot;flavor:service&quot;</span></code></p>
+<p>示例：</p>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">services</span><span class="p">:</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">service_name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">chat</span>
+<span class="w">    </span><span class="c1"># ... 其他配置 ...</span>
+<span class="w">    </span><span class="nt">config_ref</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ollama:chat</span><span class="w">  </span><span class="c1"># 复用内置 ollama 的 chat 转换规则</span>
+</pre></div>
+</div>
+<p>使用 <code class="docutils literal notranslate"><span class="pre">config_ref</span></code> 后，AOG 会自动处理 API 格式转换，插件只需处理原生的请求和响应。</p>
+<p>可用的内置转换规则：</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">ollama:chat</span></code> - Ollama Chat API</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">ollama:embed</span></code> - Ollama Embeddings API</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">ollama:generate</span></code> - Ollama Generate API</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">aliyun:chat</span></code> - 阿里云百炼 Chat API</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">aliyun:embed</span></code> - 阿里云百炼 Embeddings API</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">aliyun:text-to-image</span></code> - 阿里云文生图 API</p></li>
+<li><p>其他内置模板请参考 AOG 源码</p></li>
+</ul>
+<p><strong>环境变量支持</strong></p>
+<p><code class="docutils literal notranslate"><span class="pre">resources</span></code> 部分支持以下环境变量，用于动态路径配置：</p>
+<table class="docutils align-default">
+<colgroup>
+<col style="width: 20.0%" />
+<col style="width: 40.0%" />
+<col style="width: 40.0%" />
+</colgroup>
+<thead>
+<tr class="row-odd"><th class="head"><p>变量名</p></th>
+<th class="head"><p>说明</p></th>
+<th class="head"><p>默认值</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">${AOG_DATA_DIR}</span></code></p></td>
+<td><p>AOG 统一数据目录</p></td>
+<td><p>macOS: <code class="docutils literal notranslate"><span class="pre">~/Library/Application</span> <span class="pre">Support/AOG</span></code></p>
+<p>Linux: <code class="docutils literal notranslate"><span class="pre">/var/lib/aog</span></code></p>
+<p>Windows: <code class="docutils literal notranslate"><span class="pre">%LOCALAPPDATA%/AOG</span></code></p>
+</td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">${DATA_DIR}</span></code></p></td>
+<td><p>插件数据根目录</p></td>
+<td><p>由 <code class="docutils literal notranslate"><span class="pre">data_dir</span></code> 字段展开后的值</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">${PLUGIN_DIR}</span></code></p></td>
+<td><p>插件可执行文件所在目录</p></td>
+<td><p>插件二进制文件的父目录</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">${HOME}</span></code></p></td>
+<td><p>用户主目录</p></td>
+<td><p>系统 HOME 环境变量</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>认证字段说明</strong></p>
+<p><code class="docutils literal notranslate"><span class="pre">auth_fields</span></code> 字段用于声明服务需要哪些认证参数，这些参数由 AOG 统一管理，插件无需实现认证逻辑。</p>
+<p>常见的认证类型：</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">auth_type:</span> <span class="pre">none</span></code> - 无需认证</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">auth_type:</span> <span class="pre">apikey</span></code> - API Key 认证，需要 <code class="docutils literal notranslate"><span class="pre">auth_fields:</span> <span class="pre">[api_key]</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">auth_type:</span> <span class="pre">token</span></code> - Token 认证，需要指定具体的 token 字段</p></li>
+</ul>
+<p>AOG 会自动将配置的认证信息注入到插件的服务请求中。</p>
+<p><strong>超时配置 (timeout)</strong></p>
+<p><code class="docutils literal notranslate"><span class="pre">timeout</span></code> 字段用于控制 AOG 调用插件服务时的超时时间（单位：秒）。合理配置超时时间对于不同类型的服务至关重要。</p>
+<p><strong>配置规则：</strong></p>
+<ul class="simple">
+<li><p><strong>不设置 timeout</strong>：使用默认超时</p>
+<ul>
+<li><p>普通调用（Unary）：60 秒</p></li>
+<li><p>流式调用（Stream）：300 秒（5 分钟）</p></li>
+<li><p>双向流（Bidirectional）：无超时</p></li>
+</ul>
+</li>
+<li><p><strong>timeout: N</strong> (N &gt; 0)：自定义超时时间为 N 秒</p></li>
+<li><p><strong>timeout: -1</strong>：无超时限制（推荐用于耗时服务）</p></li>
+</ul>
+<p><strong>使用场景：</strong></p>
+<table class="docutils align-default">
+<colgroup>
+<col style="width: 25.0%" />
+<col style="width: 35.0%" />
+<col style="width: 40.0%" />
+</colgroup>
+<thead>
+<tr class="row-odd"><th class="head"><p>服务类型</p></th>
+<th class="head"><p>推荐配置</p></th>
+<th class="head"><p>说明</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><strong>快速推理服务</strong></p>
+<p>(chat, embed, rerank)</p>
+</td>
+<td><p>不设置或 <code class="docutils literal notranslate"><span class="pre">timeout:</span> <span class="pre">30</span></code></p></td>
+<td><p>使用默认超时或自定义较短超时</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>耗时推理服务</strong></p>
+<p>(text-to-image, video-generation)</p>
+</td>
+<td><p><code class="docutils literal notranslate"><span class="pre">timeout:</span> <span class="pre">-1</span></code></p></td>
+<td><p>图像/视频生成可能需要几分钟，建议无超时</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>模型下载服务</strong></p>
+<p>(PullModel)</p>
+</td>
+<td><p><code class="docutils literal notranslate"><span class="pre">timeout:</span> <span class="pre">-1</span></code></p></td>
+<td><p>大模型下载可能需要几十分钟，必须无超时</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>长时间流式服务</strong></p>
+<p>(长对话、实时语音)</p>
+</td>
+<td><p><code class="docutils literal notranslate"><span class="pre">timeout:</span> <span class="pre">-1</span></code></p></td>
+<td><p>长时间交互场景建议无超时</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>配置示例：</strong></p>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">services</span><span class="p">:</span>
+<span class="w">  </span><span class="c1"># 快速服务 - 使用默认超时</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">service_name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">chat</span>
+<span class="w">    </span><span class="nt">task_type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">text-generation</span>
+<span class="w">    </span><span class="c1"># timeout 未设置，使用默认 60 秒</span>
+
+<span class="w">  </span><span class="c1"># 快速服务 - 自定义超时</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">service_name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">embed</span>
+<span class="w">    </span><span class="nt">task_type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">embedding</span>
+<span class="w">    </span><span class="nt">timeout</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">30</span><span class="w">  </span><span class="c1"># 自定义 30 秒超时</span>
+
+<span class="w">  </span><span class="c1"># 耗时服务 - 无超时限制</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">service_name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">text-to-image</span>
+<span class="w">    </span><span class="nt">task_type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">text-to-image</span>
+<span class="w">    </span><span class="nt">timeout</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">-1</span><span class="w">  </span><span class="c1"># 无超时，适合图像生成</span>
+
+<span class="w">  </span><span class="c1"># 长时间流式服务 - 无超时限制</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">service_name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">speech-to-text-ws</span>
+<span class="w">    </span><span class="nt">task_type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">speech-to-text</span>
+<span class="w">    </span><span class="nt">timeout</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">-1</span><span class="w">  </span><span class="c1"># 无超时，适合实时语音识别</span>
+</pre></div>
+</div>
+<p><strong>其他重要字段说明</strong></p>
+<table class="docutils align-default">
+<colgroup>
+<col style="width: 20.0%" />
+<col style="width: 60.0%" />
+<col style="width: 20.0%" />
+</colgroup>
+<thead>
+<tr class="row-odd"><th class="head"><p>字段名</p></th>
+<th class="head"><p>说明</p></th>
+<th class="head"><p>是否必需</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">timeout</span></code></p></td>
+<td><p>服务调用超时时间（秒）。不设置使用默认值，<code class="docutils literal notranslate"><span class="pre">-1</span></code> 表示无超时</p></td>
+<td><p>否</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">special_url</span></code></p></td>
+<td><p>特殊 URL，用于某些服务的特定端点（如 WebSocket 连接）</p></td>
+<td><p>否</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">extra_url</span></code></p></td>
+<td><p>额外 URL，用于异步任务查询等辅助接口</p></td>
+<td><p>否</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">extra_header</span></code></p></td>
+<td><p>额外的 HTTP 头，JSON 格式字符串，如 <code class="docutils literal notranslate"><span class="pre">{&quot;X-Custom&quot;:</span> <span class="pre">&quot;value&quot;}</span></code></p></td>
+<td><p>否</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">expose_protocol</span></code></p></td>
+<td><p>服务暴露的协议类型：<code class="docutils literal notranslate"><span class="pre">HTTP</span></code> 或 <code class="docutils literal notranslate"><span class="pre">WEBSOCKET</span></code></p></td>
+<td><p>是</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">capabilities.support_streaming</span></code></p></td>
+<td><p>是否支持服务器端流式响应（SSE/NDJSON）</p></td>
+<td><p>是</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">capabilities.support_bidirectional</span></code></p></td>
+<td><p>是否支持双向流式通信（WebSocket）</p></td>
+<td><p>是</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="main-go">
+<h3>4. 插件入口点 (main.go)<a class="headerlink" href="#main-go" title="Link to this heading"></a></h3>
+<p>创建插件的主入口点：</p>
+<div class="highlight-go notranslate"><div class="highlight"><pre><span></span><span class="kn">package</span><span class="w"> </span><span class="nx">main</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="p">(</span>
+<span class="w">    </span><span class="s">&quot;fmt&quot;</span>
+<span class="w">    </span><span class="s">&quot;os&quot;</span>
+
+<span class="w">    </span><span class="s">&quot;github.com/hashicorp/go-plugin&quot;</span>
+<span class="w">    </span><span class="s">&quot;github.com/intel/aog/plugin-sdk/server&quot;</span>
+<span class="w">    </span><span class="s">&quot;github.com/yourusername/my-engine-plugin/internal&quot;</span>
+<span class="p">)</span>
+
+<span class="kd">func</span><span class="w"> </span><span class="nx">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="c1">// 加载配置</span>
+<span class="w">    </span><span class="nx">config</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">internal</span><span class="p">.</span><span class="nx">LoadConfig</span><span class="p">()</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="kc">nil</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="nx">fmt</span><span class="p">.</span><span class="nx">Fprintf</span><span class="p">(</span><span class="nx">os</span><span class="p">.</span><span class="nx">Stderr</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;Failed to load config: %v\n&quot;</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="p">)</span>
+<span class="w">        </span><span class="nx">os</span><span class="p">.</span><span class="nx">Exit</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+<span class="w">    </span><span class="p">}</span>
+
+<span class="w">    </span><span class="c1">// 创建 provider</span>
+<span class="w">    </span><span class="nx">provider</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">internal</span><span class="p">.</span><span class="nx">NewMyEngineProvider</span><span class="p">(</span><span class="nx">config</span><span class="p">)</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="kc">nil</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="nx">fmt</span><span class="p">.</span><span class="nx">Fprintf</span><span class="p">(</span><span class="nx">os</span><span class="p">.</span><span class="nx">Stderr</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;Failed to create provider: %v\n&quot;</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="p">)</span>
+<span class="w">        </span><span class="nx">os</span><span class="p">.</span><span class="nx">Exit</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+<span class="w">    </span><span class="p">}</span>
+
+<span class="w">    </span><span class="c1">// 启动插件服务</span>
+<span class="w">    </span><span class="nx">plugin</span><span class="p">.</span><span class="nx">Serve</span><span class="p">(</span><span class="o">&amp;</span><span class="nx">plugin</span><span class="p">.</span><span class="nx">ServeConfig</span><span class="p">{</span>
+<span class="w">        </span><span class="nx">HandshakeConfig</span><span class="p">:</span><span class="w"> </span><span class="nx">server</span><span class="p">.</span><span class="nx">PluginHandshake</span><span class="p">,</span>
+<span class="w">        </span><span class="nx">Plugins</span><span class="p">:</span><span class="w"> </span><span class="kd">map</span><span class="p">[</span><span class="kt">string</span><span class="p">]</span><span class="nx">plugin</span><span class="p">.</span><span class="nx">Plugin</span><span class="p">{</span>
+<span class="w">            </span><span class="nx">server</span><span class="p">.</span><span class="nx">PluginTypeProvider</span><span class="p">:</span><span class="w"> </span><span class="nx">server</span><span class="p">.</span><span class="nx">NewProviderPlugin</span><span class="p">(</span><span class="nx">provider</span><span class="p">),</span>
+<span class="w">        </span><span class="p">},</span>
+<span class="w">        </span><span class="nx">GRPCServer</span><span class="p">:</span><span class="w"> </span><span class="nx">plugin</span><span class="p">.</span><span class="nx">DefaultGRPCServer</span><span class="p">,</span>
+<span class="w">    </span><span class="p">})</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="id8">
+<h2>核心接口<a class="headerlink" href="#id8" title="Link to this heading"></a></h2>
+<section id="pluginprovider">
+<h3>PluginProvider (必需)<a class="headerlink" href="#pluginprovider" title="Link to this heading"></a></h3>
+<p>所有插件都必须实现此接口：</p>
+<div class="highlight-go notranslate"><div class="highlight"><pre><span></span><span class="kd">type</span><span class="w"> </span><span class="nx">PluginProvider</span><span class="w"> </span><span class="kd">interface</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nx">GetManifest</span><span class="p">()</span><span class="w"> </span><span class="o">*</span><span class="nx">types</span><span class="p">.</span><span class="nx">PluginManifest</span>
+<span class="w">    </span><span class="nx">GetOperateStatus</span><span class="p">()</span><span class="w"> </span><span class="kt">int</span>
+<span class="w">    </span><span class="nx">SetOperateStatus</span><span class="p">(</span><span class="nx">status</span><span class="w"> </span><span class="kt">int</span><span class="p">)</span>
+<span class="w">    </span><span class="nx">HealthCheck</span><span class="p">(</span><span class="nx">ctx</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">)</span><span class="w"> </span><span class="kt">error</span>
+<span class="w">    </span><span class="nx">InvokeService</span><span class="p">(</span><span class="nx">ctx</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">,</span><span class="w"> </span><span class="nx">serviceName</span><span class="w"> </span><span class="kt">string</span><span class="p">,</span><span class="w"> </span><span class="nx">request</span><span class="w"> </span><span class="p">[]</span><span class="kt">byte</span><span class="p">)</span><span class="w"> </span><span class="p">([]</span><span class="kt">byte</span><span class="p">,</span><span class="w"> </span><span class="kt">error</span><span class="p">)</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+<section id="localpluginprovider">
+<h3>LocalPluginProvider (用于本地插件)<a class="headerlink" href="#localpluginprovider" title="Link to this heading"></a></h3>
+<p>本地插件必须实现额外的方法来管理引擎：</p>
+<div class="highlight-go notranslate"><div class="highlight"><pre><span></span><span class="kd">type</span><span class="w"> </span><span class="nx">LocalPluginProvider</span><span class="w"> </span><span class="kd">interface</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nx">PluginProvider</span>
+
+<span class="w">    </span><span class="c1">// 引擎生命周期</span>
+<span class="w">    </span><span class="nx">StartEngine</span><span class="p">(</span><span class="nx">mode</span><span class="w"> </span><span class="kt">string</span><span class="p">)</span><span class="w"> </span><span class="kt">error</span>
+<span class="w">    </span><span class="nx">StopEngine</span><span class="p">()</span><span class="w"> </span><span class="kt">error</span>
+<span class="w">    </span><span class="nx">GetConfig</span><span class="p">(</span><span class="nx">ctx</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">)</span><span class="w"> </span><span class="p">(</span><span class="o">*</span><span class="nx">types</span><span class="p">.</span><span class="nx">EngineRecommendConfig</span><span class="p">,</span><span class="w"> </span><span class="kt">error</span><span class="p">)</span>
+
+<span class="w">    </span><span class="c1">// 引擎安装</span>
+<span class="w">    </span><span class="nx">CheckEngine</span><span class="p">()</span><span class="w"> </span><span class="p">(</span><span class="kt">bool</span><span class="p">,</span><span class="w"> </span><span class="kt">error</span><span class="p">)</span>
+<span class="w">    </span><span class="nx">InstallEngine</span><span class="p">(</span><span class="nx">ctx</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">)</span><span class="w"> </span><span class="kt">error</span>
+<span class="w">    </span><span class="nx">InitEnv</span><span class="p">()</span><span class="w"> </span><span class="kt">error</span>
+<span class="w">    </span><span class="nx">UpgradeEngine</span><span class="p">(</span><span class="nx">ctx</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">)</span><span class="w"> </span><span class="kt">error</span>
+
+<span class="w">    </span><span class="c1">// 模型管理</span>
+<span class="w">    </span><span class="nx">PullModel</span><span class="p">(</span><span class="nx">ctx</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">,</span><span class="w"> </span><span class="nx">req</span><span class="w"> </span><span class="o">*</span><span class="nx">types</span><span class="p">.</span><span class="nx">PullModelRequest</span><span class="p">,</span><span class="w"> </span><span class="nx">fn</span><span class="w"> </span><span class="nx">types</span><span class="p">.</span><span class="nx">PullProgressFunc</span><span class="p">)</span><span class="w"> </span><span class="p">(</span><span class="o">*</span><span class="nx">types</span><span class="p">.</span><span class="nx">ProgressResponse</span><span class="p">,</span><span class="w"> </span><span class="kt">error</span><span class="p">)</span>
+<span class="w">    </span><span class="nx">PullModelStream</span><span class="p">(</span><span class="nx">ctx</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">,</span><span class="w"> </span><span class="nx">req</span><span class="w"> </span><span class="o">*</span><span class="nx">types</span><span class="p">.</span><span class="nx">PullModelRequest</span><span class="p">)</span><span class="w"> </span><span class="p">(</span><span class="kd">chan</span><span class="w"> </span><span class="p">[]</span><span class="kt">byte</span><span class="p">,</span><span class="w"> </span><span class="kd">chan</span><span class="w"> </span><span class="kt">error</span><span class="p">)</span>
+<span class="w">    </span><span class="nx">DeleteModel</span><span class="p">(</span><span class="nx">ctx</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">,</span><span class="w"> </span><span class="nx">req</span><span class="w"> </span><span class="o">*</span><span class="nx">types</span><span class="p">.</span><span class="nx">DeleteRequest</span><span class="p">)</span><span class="w"> </span><span class="kt">error</span>
+<span class="w">    </span><span class="nx">ListModels</span><span class="p">(</span><span class="nx">ctx</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">)</span><span class="w"> </span><span class="p">(</span><span class="o">*</span><span class="nx">types</span><span class="p">.</span><span class="nx">ListResponse</span><span class="p">,</span><span class="w"> </span><span class="kt">error</span><span class="p">)</span>
+<span class="w">    </span><span class="nx">LoadModel</span><span class="p">(</span><span class="nx">ctx</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">,</span><span class="w"> </span><span class="nx">req</span><span class="w"> </span><span class="o">*</span><span class="nx">types</span><span class="p">.</span><span class="nx">LoadRequest</span><span class="p">)</span><span class="w"> </span><span class="kt">error</span>
+<span class="w">    </span><span class="nx">UnloadModel</span><span class="p">(</span><span class="nx">ctx</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">,</span><span class="w"> </span><span class="nx">req</span><span class="w"> </span><span class="o">*</span><span class="nx">types</span><span class="p">.</span><span class="nx">UnloadModelRequest</span><span class="p">)</span><span class="w"> </span><span class="kt">error</span>
+<span class="w">    </span><span class="nx">GetRunningModels</span><span class="p">(</span><span class="nx">ctx</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">)</span><span class="w"> </span><span class="p">(</span><span class="o">*</span><span class="nx">types</span><span class="p">.</span><span class="nx">ListResponse</span><span class="p">,</span><span class="w"> </span><span class="kt">error</span><span class="p">)</span>
+<span class="w">    </span><span class="nx">GetVersion</span><span class="p">(</span><span class="nx">ctx</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">,</span><span class="w"> </span><span class="nx">resp</span><span class="w"> </span><span class="o">*</span><span class="nx">types</span><span class="p">.</span><span class="nx">EngineVersionResponse</span><span class="p">)</span><span class="w"> </span><span class="p">(</span><span class="o">*</span><span class="nx">types</span><span class="p">.</span><span class="nx">EngineVersionResponse</span><span class="p">,</span><span class="w"> </span><span class="kt">error</span><span class="p">)</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+<section id="remotepluginprovider">
+<h3>RemotePluginProvider (用于远程插件)<a class="headerlink" href="#remotepluginprovider" title="Link to this heading"></a></h3>
+<p>远程插件需要实现额外的方法来应用 AOG 提供的认证信息：</p>
+<div class="highlight-go notranslate"><div class="highlight"><pre><span></span><span class="kd">type</span><span class="w"> </span><span class="nx">RemotePluginProvider</span><span class="w"> </span><span class="kd">interface</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nx">PluginProvider</span>
+
+<span class="w">    </span><span class="c1">// 应用认证信息（由 AOG 提供）</span>
+<span class="w">    </span><span class="nx">SetAuth</span><span class="p">(</span><span class="nx">req</span><span class="w"> </span><span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Request</span><span class="p">,</span><span class="w"> </span><span class="nx">authInfo</span><span class="w"> </span><span class="kt">string</span><span class="p">,</span><span class="w"> </span><span class="nx">credentials</span><span class="w"> </span><span class="kd">map</span><span class="p">[</span><span class="kt">string</span><span class="p">]</span><span class="kt">string</span><span class="p">)</span><span class="w"> </span><span class="kt">error</span>
+
+<span class="w">    </span><span class="c1">// 验证认证信息是否有效</span>
+<span class="w">    </span><span class="nx">ValidateAuth</span><span class="p">(</span><span class="nx">ctx</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">)</span><span class="w"> </span><span class="kt">error</span>
+
+<span class="w">    </span><span class="c1">// 刷新认证信息（用于 OAuth）</span>
+<span class="w">    </span><span class="nx">RefreshAuth</span><span class="p">(</span><span class="nx">ctx</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">)</span><span class="w"> </span><span class="kt">error</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p><strong>注意：</strong> 认证信息（API Key、Token 等）由 AOG 统一管理和配置，插件只需实现如何将这些信息应用到实际的 API 请求中。</p>
+</section>
+</section>
+<section id="id9">
+<h2>构建插件<a class="headerlink" href="#id9" title="Link to this heading"></a></h2>
+<section id="makefile">
+<h3>Makefile 方法<a class="headerlink" href="#makefile" title="Link to this heading"></a></h3>
+<p>创建一个 [Makefile] 用于跨平台构建：</p>
+<div class="highlight-makefile notranslate"><div class="highlight"><pre><span></span><span class="nv">VERSION</span><span class="w"> </span><span class="o">?=</span><span class="w"> </span><span class="m">1</span>.0.0
+<span class="nv">BINARY_NAME</span><span class="w"> </span><span class="o">=</span><span class="w"> </span>my-engine-plugin
+
+<span class="nv">PLATFORMS</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span>linux-amd64<span class="w"> </span>linux-arm64<span class="w"> </span>darwin-amd64<span class="w"> </span>darwin-arm64<span class="w"> </span>windows-amd64
+
+<span class="nf">.PHONY</span><span class="o">:</span><span class="w"> </span><span class="n">build</span>
+<span class="nf">build</span><span class="o">:</span>
+<span class="w">    </span>@echo<span class="w"> </span><span class="s2">&quot;Building for current platform...&quot;</span>
+<span class="w">    </span>@go<span class="w"> </span>build<span class="w"> </span>-ldflags<span class="o">=</span><span class="s2">&quot;-s -w -X main.version=</span><span class="k">$(</span>VERSION<span class="k">)</span><span class="s2">&quot;</span><span class="w"> </span>-o<span class="w"> </span><span class="k">$(</span>BINARY_NAME<span class="k">)</span><span class="w"> </span>.
+
+<span class="nf">.PHONY</span><span class="o">:</span><span class="w"> </span><span class="n">build</span>-<span class="n">all</span>
+<span class="nf">build-all</span><span class="o">:</span><span class="w"> </span><span class="k">$(</span><span class="nv">PLATFORMS</span><span class="k">)</span>
+
+<span class="nf">.PHONY</span><span class="o">:</span><span class="w"> </span><span class="n">linux</span>-<span class="n">amd</span>64
+<span class="nf">linux-amd64</span><span class="o">:</span>
+<span class="w">    </span>@GOOS<span class="o">=</span>linux<span class="w"> </span><span class="nv">GOARCH</span><span class="o">=</span>amd64<span class="w"> </span>go<span class="w"> </span>build<span class="w"> </span>-ldflags<span class="o">=</span><span class="s2">&quot;-s -w&quot;</span><span class="w"> </span>-o<span class="w"> </span>bin/linux-amd64/<span class="k">$(</span>BINARY_NAME<span class="k">)</span><span class="w"> </span>.
+
+<span class="nf">.PHONY</span><span class="o">:</span><span class="w"> </span><span class="n">linux</span>-<span class="n">arm</span>64
+<span class="nf">linux-arm64</span><span class="o">:</span>
+<span class="w">    </span>@GOOS<span class="o">=</span>linux<span class="w"> </span><span class="nv">GOARCH</span><span class="o">=</span>arm64<span class="w"> </span>go<span class="w"> </span>build<span class="w"> </span>-ldflags<span class="o">=</span><span class="s2">&quot;-s -w&quot;</span><span class="w"> </span>-o<span class="w"> </span>bin/linux-arm64/<span class="k">$(</span>BINARY_NAME<span class="k">)</span><span class="w"> </span>.
+
+<span class="nf">.PHONY</span><span class="o">:</span><span class="w"> </span><span class="n">darwin</span>-<span class="n">amd</span>64
+<span class="nf">darwin-amd64</span><span class="o">:</span>
+<span class="w">    </span>@GOOS<span class="o">=</span>darwin<span class="w"> </span><span class="nv">GOARCH</span><span class="o">=</span>amd64<span class="w"> </span>go<span class="w"> </span>build<span class="w"> </span>-ldflags<span class="o">=</span><span class="s2">&quot;-s -w&quot;</span><span class="w"> </span>-o<span class="w"> </span>bin/darwin-amd64/<span class="k">$(</span>BINARY_NAME<span class="k">)</span><span class="w"> </span>.
+
+<span class="nf">.PHONY</span><span class="o">:</span><span class="w"> </span><span class="n">darwin</span>-<span class="n">arm</span>64
+<span class="nf">darwin-arm64</span><span class="o">:</span>
+<span class="w">    </span>@GOOS<span class="o">=</span>darwin<span class="w"> </span><span class="nv">GOARCH</span><span class="o">=</span>arm64<span class="w"> </span>go<span class="w"> </span>build<span class="w"> </span>-ldflags<span class="o">=</span><span class="s2">&quot;-s -w&quot;</span><span class="w"> </span>-o<span class="w"> </span>bin/darwin-arm64/<span class="k">$(</span>BINARY_NAME<span class="k">)</span><span class="w"> </span>.
+
+<span class="nf">.PHONY</span><span class="o">:</span><span class="w"> </span><span class="n">windows</span>-<span class="n">amd</span>64
+<span class="nf">windows-amd64</span><span class="o">:</span>
+<span class="w">    </span>@GOOS<span class="o">=</span>windows<span class="w"> </span><span class="nv">GOARCH</span><span class="o">=</span>amd64<span class="w"> </span>go<span class="w"> </span>build<span class="w"> </span>-ldflags<span class="o">=</span><span class="s2">&quot;-s -w&quot;</span><span class="w"> </span>-o<span class="w"> </span>bin/windows-amd64/<span class="k">$(</span>BINARY_NAME<span class="k">)</span>.exe<span class="w"> </span>.
+
+<span class="nf">.PHONY</span><span class="o">:</span><span class="w"> </span><span class="n">clean</span>
+<span class="nf">clean</span><span class="o">:</span>
+<span class="w">    </span>@rm<span class="w"> </span>-rf<span class="w"> </span>bin/
+</pre></div>
+</div>
+</section>
+<section id="id10">
+<h3>构建命令<a class="headerlink" href="#id10" title="Link to this heading"></a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># 为当前平台构建</span>
+make<span class="w"> </span>build
+
+<span class="c1"># 为所有平台构建</span>
+make<span class="w"> </span>build-all
+
+<span class="c1"># 清理构建产物</span>
+make<span class="w"> </span>clean
+</pre></div>
+</div>
+</section>
+</section>
+<section id="id11">
+<h2>部署<a class="headerlink" href="#id11" title="Link to this heading"></a></h2>
+<section id="id12">
+<h3>插件目录<a class="headerlink" href="#id12" title="Link to this heading"></a></h3>
+<p>AOG 会根据不同操作系统在以下位置搜索插件：</p>
+<table class="docutils align-default">
+<colgroup>
+<col style="width: 20.0%" />
+<col style="width: 60.0%" />
+<col style="width: 20.0%" />
+</colgroup>
+<thead>
+<tr class="row-odd"><th class="head"><p>操作系统</p></th>
+<th class="head"><p>插件目录路径</p></th>
+<th class="head"><p>优先级</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><strong>Linux</strong></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">/var/lib/aog/plugins</span></code></p></td>
+<td><p>系统级</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>macOS</strong></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">~/Library/Application</span> <span class="pre">Support/AOG/plugins</span></code></p></td>
+<td><p>用户级</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>Windows</strong></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">%APPDATA%\AOG\plugins</span></code></p>
+<p>(通常为 <code class="docutils literal notranslate"><span class="pre">C:\Users\&lt;用户名&gt;\AppData\Roaming\AOG\plugins</span></code>)</p>
+</td>
+<td><p>用户级</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>自定义插件目录</strong></p>
+<p>您可以通过设置环境变量 <code class="docutils literal notranslate"><span class="pre">AOG_PLUGIN_DIR</span></code> 来自定义插件目录：</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Linux/macOS</span>
+<span class="nb">export</span><span class="w"> </span><span class="nv">AOG_PLUGIN_DIR</span><span class="o">=</span>/path/to/custom/plugins
+
+<span class="c1"># Windows (PowerShell)</span>
+<span class="nv">$env</span>:AOG_PLUGIN_DIR<span class="o">=</span><span class="s2">&quot;C:\path\to\custom\plugins&quot;</span>
+
+<span class="c1"># Windows (CMD)</span>
+<span class="nb">set</span><span class="w"> </span><span class="nv">AOG_PLUGIN_DIR</span><span class="o">=</span>C:<span class="se">\p</span>ath<span class="se">\t</span>o<span class="se">\c</span>ustom<span class="se">\p</span>lugins
+</pre></div>
+</div>
+<p><strong>开发模式</strong></p>
+<p>在开发过程中，如果当前工作目录包含 <code class="docutils literal notranslate"><span class="pre">plugins/</span></code> 子目录，AOG 会优先使用该目录：</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># 当前目录结构</span>
+my-project/
+├──<span class="w"> </span>plugins/<span class="w">              </span><span class="c1"># ← 开发时 AOG 会优先使用此目录</span>
+│<span class="w">   </span>├──<span class="w"> </span>my-engine-plugin/
+│<span class="w">   </span>└──<span class="w"> </span>another-plugin/
+└──<span class="w"> </span>...
+</pre></div>
+</div>
+<p>这使得开发和测试更加便捷，无需手动配置环境变量。</p>
+</section>
+<section id="id13">
+<h3>本地开发<a class="headerlink" href="#id13" title="Link to this heading"></a></h3>
+<p>对于开发，您可以创建一个符号链接到您的插件：</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Linux/macOS - 创建符号链接到用户插件目录</span>
+ln<span class="w"> </span>-s<span class="w"> </span><span class="k">$(</span><span class="nb">pwd</span><span class="k">)</span><span class="w"> </span>~/Library/Application<span class="se">\ </span>Support/AOG/plugins/my-engine-plugin<span class="w">  </span><span class="c1"># macOS</span>
+ln<span class="w"> </span>-s<span class="w"> </span><span class="k">$(</span><span class="nb">pwd</span><span class="k">)</span><span class="w"> </span>/var/lib/aog/plugins/my-engine-plugin<span class="w">                         </span><span class="c1"># Linux</span>
+
+<span class="c1"># Windows (需要管理员权限)</span>
+mklink<span class="w"> </span>/D<span class="w"> </span><span class="s2">&quot;%APPDATA%\AOG\plugins\my-engine-plugin&quot;</span><span class="w"> </span><span class="s2">&quot;%CD%&quot;</span>
+</pre></div>
+</div>
+</section>
+<section id="id14">
+<h3>安装<a class="headerlink" href="#id14" title="Link to this heading"></a></h3>
+<p>使用 AOG CLI 安装插件：</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># 从当前目录安装插件</span>
+aog<span class="w"> </span>plugin<span class="w"> </span>install<span class="w"> </span>.
+
+<span class="c1"># 启用插件</span>
+aog<span class="w"> </span>plugin<span class="w"> </span><span class="nb">enable</span><span class="w"> </span>my-engine-plugin
+</pre></div>
+</div>
+</section>
+</section>
+<section id="id15">
+<h2>测试<a class="headerlink" href="#id15" title="Link to this heading"></a></h2>
+<section id="id16">
+<h3>手动测试<a class="headerlink" href="#id16" title="Link to this heading"></a></h3>
+<p>测试您的插件服务：</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># 测试聊天服务</span>
+curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>http://localhost:16688/aog/v0.2/services/chat<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;Content-Type: application/json&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-d<span class="w"> </span><span class="s1">&#39;{&quot;messages&quot;: [{&quot;role&quot;: &quot;user&quot;, &quot;content&quot;: &quot;Hello!&quot;}]}&#39;</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="id17">
+<h2>示例插件<a class="headerlink" href="#id17" title="Link to this heading"></a></h2>
+<p>参考 AOG 仓库中的现有插件：</p>
+<ul class="simple">
+<li><p>[plugin-example/ollama-plugin/]: 本地插件示例</p></li>
+<li><p>[plugin-example/aliyun-plugin/]: 远程插件示例</p></li>
+</ul>
+<section id="aliyun-plugin">
+<h3>远程插件示例 (Aliyun Plugin)<a class="headerlink" href="#aliyun-plugin" title="Link to this heading"></a></h3>
+<p>阿里云插件是一个典型的远程插件，支持多种AI服务：</p>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">version</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;1.0&quot;</span>
+
+<span class="nt">provider</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">aliyun-plugin</span>
+<span class="w">  </span><span class="nt">display_name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Aliyun Plugin (External)</span>
+<span class="w">  </span><span class="nt">version</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1.0.0</span>
+<span class="w">  </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">remote</span>
+<span class="w">  </span><span class="nt">author</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">AOG Team</span>
+<span class="w">  </span><span class="nt">description</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">External Aliyun plugin for local LLM inference</span>
+<span class="w">  </span><span class="nt">homepage</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://github.com/intel/aog</span>
+<span class="w">  </span><span class="nt">engine_host</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://dashscope.aliyuncs.com</span>
+
+<span class="nt">services</span><span class="p">:</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">service_name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">chat</span>
+<span class="w">    </span><span class="nt">task_type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">text-generation</span>
+<span class="w">    </span><span class="nt">protocol</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">HTTP</span>
+<span class="w">    </span><span class="nt">expose_protocol</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">HTTP</span>
+<span class="w">    </span><span class="nt">endpoint</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/compatible-mode/v1/chat/completions</span>
+<span class="w">    </span><span class="nt">auth_type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">apikey</span>
+<span class="w">    </span><span class="nt">auth_fields</span><span class="p">:</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">api_key</span>
+<span class="w">    </span><span class="nt">default_model</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">qwen-max</span>
+<span class="w">    </span><span class="nt">support_models</span><span class="p">:</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">qwen-max</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">qwen-plus</span>
+<span class="w">    </span><span class="nt">config_ref</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">aliyun:chat</span>
+<span class="w">    </span><span class="nt">capabilities</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">support_streaming</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">      </span><span class="nt">support_bidirectional</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
+
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">service_name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">embed</span>
+<span class="w">    </span><span class="nt">task_type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">embedding</span>
+<span class="w">    </span><span class="nt">protocol</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">HTTP</span>
+<span class="w">    </span><span class="nt">expose_protocol</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">HTTP</span>
+<span class="w">    </span><span class="nt">endpoint</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/compatible-mode/v1/embeddings</span>
+<span class="w">    </span><span class="nt">auth_type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">apikey</span>
+<span class="w">    </span><span class="nt">auth_fields</span><span class="p">:</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">api_key</span>
+<span class="w">    </span><span class="nt">default_model</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">text-embedding-v1</span>
+<span class="w">    </span><span class="nt">support_models</span><span class="p">:</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">text-embedding-v1</span>
+<span class="w">    </span><span class="nt">config_ref</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">aliyun:embed</span>
+<span class="w">    </span><span class="nt">capabilities</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">support_streaming</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
+<span class="w">      </span><span class="nt">support_bidirectional</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
+
+<span class="nt">platforms</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">linux_amd64</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">executable</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">bin/linux-amd64/aliyun-plugin</span>
+<span class="w">  </span><span class="nt">darwin_arm64</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">executable</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">bin/darwin-arm64/aliyun-plugin</span>
+<span class="w">  </span><span class="nt">windows_amd64</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">executable</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">bin/windows-amd64/aliyun-plugin.exe</span>
+</pre></div>
+</div>
+</section>
+<section id="ollama-plugin">
+<h3>本地插件示例 (Ollama Plugin)<a class="headerlink" href="#ollama-plugin" title="Link to this heading"></a></h3>
+<p>Ollama插件是一个典型的本地插件，管理本地AI引擎：</p>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">version</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;1.0&quot;</span>
+
+<span class="nt">provider</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ollama-plugin</span>
+<span class="w">  </span><span class="nt">display_name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Ollama Plugin (External)</span>
+<span class="w">  </span><span class="nt">version</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1.0.0</span>
+<span class="w">  </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">local</span>
+<span class="w">  </span><span class="nt">author</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">AOG Team</span>
+<span class="w">  </span><span class="nt">description</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">External Ollama plugin for local LLM inference</span>
+<span class="w">  </span><span class="nt">homepage</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://github.com/intel/aog</span>
+<span class="w">  </span><span class="nt">engine_host</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;http://127.0.0.1:16677&quot;</span>
+
+<span class="nt">services</span><span class="p">:</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">service_name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">chat</span>
+<span class="w">    </span><span class="nt">task_type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">text-generation</span>
+<span class="w">    </span><span class="nt">protocol</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">HTTP</span>
+<span class="w">    </span><span class="nt">expose_protocol</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">HTTP</span>
+<span class="w">    </span><span class="nt">endpoint</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/api/chat</span>
+<span class="w">    </span><span class="nt">auth_type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">none</span>
+<span class="w">    </span><span class="nt">default_model</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">qwen3:0.6b</span>
+<span class="w">    </span><span class="nt">support_models</span><span class="p">:</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">qwen3:0.6b</span>
+<span class="w">    </span><span class="nt">config_ref</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ollama:chat</span>
+<span class="w">    </span><span class="nt">capabilities</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">support_streaming</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">      </span><span class="nt">support_bidirectional</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
+
+<span class="nt">platforms</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">linux_amd64</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">executable</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">bin/linux-amd64/ollama-plugin</span>
+<span class="w">  </span><span class="nt">darwin_arm64</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">executable</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">bin/darwin-arm64/ollama-plugin</span>
+<span class="w">  </span><span class="nt">windows_amd64</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">executable</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">bin/windows-amd64/ollama-plugin.exe</span>
+
+<span class="nt">resources</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">data_dir</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;${AOG_DATA_DIR}/engine/ollama&quot;</span>
+<span class="w">  </span><span class="nt">ollama</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">executable</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;${DATA_DIR}/bin/ollama&quot;</span>
+<span class="w">    </span><span class="nt">models_dir</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;${DATA_DIR}/models&quot;</span>
+<span class="w">    </span><span class="nt">download_dir</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;${HOME}/Downloads&quot;</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="demo-plugin">
+<h2>Demo Plugin<a class="headerlink" href="#demo-plugin" title="Link to this heading"></a></h2>
+<p>创建一个简单的Demo插件来演示插件开发流程：</p>
+<ol class="arabic simple">
+<li><p>创建插件目录结构：</p></li>
+</ol>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>mkdir<span class="w"> </span>demo-plugin
+<span class="nb">cd</span><span class="w"> </span>demo-plugin
+go<span class="w"> </span>mod<span class="w"> </span>init<span class="w"> </span>github.com/yourusername/demo-plugin
+go<span class="w"> </span>get<span class="w"> </span>github.com/intel/aog/plugin-sdk@latest
+</pre></div>
+</div>
+<ol class="arabic simple" start="2">
+<li><p>创建 plugin.yaml：</p></li>
+</ol>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">version</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;1.0&quot;</span>
+
+<span class="nt">provider</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">demo-plugin</span>
+<span class="w">  </span><span class="nt">display_name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Demo Plugin</span>
+<span class="w">  </span><span class="nt">version</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1.0.0</span>
+<span class="w">  </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">local</span>
+<span class="w">  </span><span class="nt">author</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">AOG Developer</span>
+<span class="w">  </span><span class="nt">description</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">A demo plugin for learning AOG plugin development</span>
+<span class="w">  </span><span class="nt">homepage</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://github.com/yourusername/demo-plugin</span>
+<span class="w">  </span><span class="nt">engine_host</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;http://127.0.0.1:8080&quot;</span>
+
+<span class="nt">services</span><span class="p">:</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">service_name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">chat</span>
+<span class="w">    </span><span class="nt">task_type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">text-generation</span>
+<span class="w">    </span><span class="nt">protocol</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">HTTP</span>
+<span class="w">    </span><span class="nt">expose_protocol</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">HTTP</span>
+<span class="w">    </span><span class="nt">endpoint</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/api/chat</span>
+<span class="w">    </span><span class="nt">auth_type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">none</span>
+<span class="w">    </span><span class="nt">default_model</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">demo-model</span>
+<span class="w">    </span><span class="nt">support_models</span><span class="p">:</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">demo-model</span>
+<span class="w">    </span><span class="nt">capabilities</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">support_streaming</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
+<span class="w">      </span><span class="nt">support_bidirectional</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
+
+<span class="nt">platforms</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">linux_amd64</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">executable</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">bin/linux-amd64/demo-plugin</span>
+<span class="w">  </span><span class="nt">darwin_arm64</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">executable</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">bin/darwin-arm64/demo-plugin</span>
+<span class="w">  </span><span class="nt">windows_amd64</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">executable</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">bin/windows-amd64/demo-plugin.exe</span>
+</pre></div>
+</div>
+<ol class="arabic simple" start="3">
+<li><p>创建 main.go：</p></li>
+</ol>
+<div class="highlight-go notranslate"><div class="highlight"><pre><span></span><span class="kn">package</span><span class="w"> </span><span class="nx">main</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="p">(</span>
+<span class="w">    </span><span class="s">&quot;context&quot;</span>
+<span class="w">    </span><span class="s">&quot;fmt&quot;</span>
+<span class="w">    </span><span class="s">&quot;os&quot;</span>
+
+<span class="w">    </span><span class="s">&quot;github.com/hashicorp/go-plugin&quot;</span>
+<span class="w">    </span><span class="s">&quot;github.com/intel/aog/plugin-sdk/adapter&quot;</span>
+<span class="w">    </span><span class="s">&quot;github.com/intel/aog/plugin-sdk/server&quot;</span>
+<span class="w">    </span><span class="s">&quot;github.com/intel/aog/plugin-sdk/types&quot;</span>
+<span class="p">)</span>
+
+<span class="kd">type</span><span class="w"> </span><span class="nx">DemoProvider</span><span class="w"> </span><span class="kd">struct</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="o">*</span><span class="nx">adapter</span><span class="p">.</span><span class="nx">LocalPluginAdapter</span>
+<span class="p">}</span>
+
+<span class="kd">func</span><span class="w"> </span><span class="nx">NewDemoProvider</span><span class="p">()</span><span class="w"> </span><span class="p">(</span><span class="o">*</span><span class="nx">DemoProvider</span><span class="p">,</span><span class="w"> </span><span class="kt">error</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nx">manifest</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">types</span><span class="p">.</span><span class="nx">LoadManifest</span><span class="p">(</span><span class="s">&quot;.&quot;</span><span class="p">)</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="kc">nil</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="kc">nil</span><span class="p">,</span><span class="w"> </span><span class="nx">fmt</span><span class="p">.</span><span class="nx">Errorf</span><span class="p">(</span><span class="s">&quot;failed to load manifest: %w&quot;</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="p">)</span>
+<span class="w">    </span><span class="p">}</span>
+
+<span class="w">    </span><span class="nx">localAdapter</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">adapter</span><span class="p">.</span><span class="nx">NewLocalPluginAdapter</span><span class="p">(</span><span class="nx">manifest</span><span class="p">)</span>
+<span class="w">    </span><span class="nx">provider</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="o">&amp;</span><span class="nx">DemoProvider</span><span class="p">{</span>
+<span class="w">        </span><span class="nx">LocalPluginAdapter</span><span class="p">:</span><span class="w"> </span><span class="nx">localAdapter</span><span class="p">,</span>
+<span class="w">    </span><span class="p">}</span>
+
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="nx">provider</span><span class="p">,</span><span class="w"> </span><span class="kc">nil</span>
+<span class="p">}</span>
+
+<span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">p</span><span class="w"> </span><span class="o">*</span><span class="nx">DemoProvider</span><span class="p">)</span><span class="w"> </span><span class="nx">InvokeService</span><span class="p">(</span><span class="nx">ctx</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">,</span><span class="w"> </span><span class="nx">serviceName</span><span class="w"> </span><span class="kt">string</span><span class="p">,</span><span class="w"> </span><span class="nx">authInfo</span><span class="w"> </span><span class="kt">string</span><span class="p">,</span><span class="w"> </span><span class="nx">request</span><span class="w"> </span><span class="p">[]</span><span class="kt">byte</span><span class="p">)</span><span class="w"> </span><span class="p">([]</span><span class="kt">byte</span><span class="p">,</span><span class="w"> </span><span class="kt">error</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nx">p</span><span class="p">.</span><span class="nx">LogInfo</span><span class="p">(</span><span class="nx">fmt</span><span class="p">.</span><span class="nx">Sprintf</span><span class="p">(</span><span class="s">&quot;Demo plugin received request for service: %s&quot;</span><span class="p">,</span><span class="w"> </span><span class="nx">serviceName</span><span class="p">))</span>
+
+<span class="w">    </span><span class="k">switch</span><span class="w"> </span><span class="nx">serviceName</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">case</span><span class="w"> </span><span class="s">&quot;chat&quot;</span><span class="p">:</span>
+<span class="w">        </span><span class="c1">// 实际项目中，应该解析请求、调用后端 API、处理响应</span>
+<span class="w">        </span><span class="c1">// 这里展示一个简化的示例</span>
+
+<span class="w">        </span><span class="c1">// 1. 解析请求（示例：假设请求包含 messages 字段）</span>
+<span class="w">        </span><span class="c1">// var req ChatRequest</span>
+<span class="w">        </span><span class="c1">// if err := json.Unmarshal(request, &amp;req); err != nil {</span>
+<span class="w">        </span><span class="c1">//     return nil, fmt.Errorf(&quot;failed to parse request: %w&quot;, err)</span>
+<span class="w">        </span><span class="c1">// }</span>
+
+<span class="w">        </span><span class="c1">// 2. 调用实际的 AI 服务（示例：HTTP 调用）</span>
+<span class="w">        </span><span class="c1">// resp, err := http.Post(&quot;http://your-ai-service/chat&quot;, &quot;application/json&quot;, bytes.NewReader(request))</span>
+<span class="w">        </span><span class="c1">// if err != nil {</span>
+<span class="w">        </span><span class="c1">//     return nil, fmt.Errorf(&quot;failed to call AI service: %w&quot;, err)</span>
+<span class="w">        </span><span class="c1">// }</span>
+
+<span class="w">        </span><span class="c1">// 3. 处理响应并返回</span>
+<span class="w">        </span><span class="nx">response</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="s">`{&quot;message&quot;: {&quot;role&quot;: &quot;assistant&quot;, &quot;content&quot;: &quot;Hello from demo plugin!&quot;}}`</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="p">[]</span><span class="nb">byte</span><span class="p">(</span><span class="nx">response</span><span class="p">),</span><span class="w"> </span><span class="kc">nil</span>
+<span class="w">    </span><span class="k">default</span><span class="p">:</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="kc">nil</span><span class="p">,</span><span class="w"> </span><span class="nx">fmt</span><span class="p">.</span><span class="nx">Errorf</span><span class="p">(</span><span class="s">&quot;unsupported service: %s&quot;</span><span class="p">,</span><span class="w"> </span><span class="nx">serviceName</span><span class="p">)</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
+
+<span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">p</span><span class="w"> </span><span class="o">*</span><span class="nx">DemoProvider</span><span class="p">)</span><span class="w"> </span><span class="nx">StartEngine</span><span class="p">(</span><span class="nx">mode</span><span class="w"> </span><span class="kt">string</span><span class="p">)</span><span class="w"> </span><span class="kt">error</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nx">p</span><span class="p">.</span><span class="nx">LogInfo</span><span class="p">(</span><span class="s">&quot;Demo plugin engine started&quot;</span><span class="p">)</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="kc">nil</span>
+<span class="p">}</span>
+
+<span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">p</span><span class="w"> </span><span class="o">*</span><span class="nx">DemoProvider</span><span class="p">)</span><span class="w"> </span><span class="nx">StopEngine</span><span class="p">()</span><span class="w"> </span><span class="kt">error</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nx">p</span><span class="p">.</span><span class="nx">LogInfo</span><span class="p">(</span><span class="s">&quot;Demo plugin engine stopped&quot;</span><span class="p">)</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="kc">nil</span>
+<span class="p">}</span>
+
+<span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">p</span><span class="w"> </span><span class="o">*</span><span class="nx">DemoProvider</span><span class="p">)</span><span class="w"> </span><span class="nx">HealthCheck</span><span class="p">(</span><span class="nx">ctx</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">)</span><span class="w"> </span><span class="kt">error</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nx">p</span><span class="p">.</span><span class="nx">LogInfo</span><span class="p">(</span><span class="s">&quot;Demo plugin health check passed&quot;</span><span class="p">)</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="kc">nil</span>
+<span class="p">}</span>
+
+<span class="kd">func</span><span class="w"> </span><span class="nx">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nx">provider</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">NewDemoProvider</span><span class="p">()</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="kc">nil</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="nx">fmt</span><span class="p">.</span><span class="nx">Fprintf</span><span class="p">(</span><span class="nx">os</span><span class="p">.</span><span class="nx">Stderr</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;Failed to create provider: %v\n&quot;</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="p">)</span>
+<span class="w">        </span><span class="nx">os</span><span class="p">.</span><span class="nx">Exit</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+<span class="w">    </span><span class="p">}</span>
+
+<span class="w">    </span><span class="nx">plugin</span><span class="p">.</span><span class="nx">Serve</span><span class="p">(</span><span class="o">&amp;</span><span class="nx">plugin</span><span class="p">.</span><span class="nx">ServeConfig</span><span class="p">{</span>
+<span class="w">        </span><span class="nx">HandshakeConfig</span><span class="p">:</span><span class="w"> </span><span class="nx">server</span><span class="p">.</span><span class="nx">PluginHandshake</span><span class="p">,</span>
+<span class="w">        </span><span class="nx">Plugins</span><span class="p">:</span><span class="w"> </span><span class="kd">map</span><span class="p">[</span><span class="kt">string</span><span class="p">]</span><span class="nx">plugin</span><span class="p">.</span><span class="nx">Plugin</span><span class="p">{</span>
+<span class="w">            </span><span class="nx">server</span><span class="p">.</span><span class="nx">PluginTypeProvider</span><span class="p">:</span><span class="w"> </span><span class="nx">server</span><span class="p">.</span><span class="nx">NewProviderPlugin</span><span class="p">(</span><span class="nx">provider</span><span class="p">),</span>
+<span class="w">        </span><span class="p">},</span>
+<span class="w">        </span><span class="nx">GRPCServer</span><span class="p">:</span><span class="w"> </span><span class="nx">plugin</span><span class="p">.</span><span class="nx">DefaultGRPCServer</span><span class="p">,</span>
+<span class="w">    </span><span class="p">})</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<section id="id18">
+<h3>4. 构建和部署插件<a class="headerlink" href="#id18" title="Link to this heading"></a></h3>
+<p>### 4.1 构建插件</p>
+<p>使用以下命令构建当前平台的插件：</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># 构建当前平台的插件</span>
+go<span class="w"> </span>build<span class="w"> </span>-o<span class="w"> </span>bin/aliyun-plugin<span class="w"> </span>.
+</pre></div>
+</div>
+<p>或者使用构建脚本构建所有支持平台的插件：</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># 构建所有平台插件</span>
+./build-all.sh
+</pre></div>
+</div>
+<p>### 4.2 插件目录结构要求</p>
+<p>构建完成后，请按照以下标准目录结构组织插件文件，然后将其放入 AOG 的 <cite>plugins</cite> 目录中：</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>aliyun-plugin/                # 插件根目录（目录名即插件ID）
+├── plugin.yaml              # 插件元数据（必需）
+└── bin/                     # 可执行文件目录（必需）
+    ├── linux-amd64/         # Linux x86_64 平台
+    │   └── aliyun-plugin    # 可执行文件（与plugin.yaml中配置一致）
+    ├── linux-arm64/         # Linux ARM64 平台
+    │   └── aliyun-plugin
+    ├── darwin-amd64/        # macOS Intel 平台
+    │   └── aliyun-plugin
+    ├── darwin-arm64/        # macOS Apple Silicon 平台
+    │   └── aliyun-plugin
+    └── windows-amd64/       # Windows x86_64 平台
+        └── aliyun-plugin.exe
+</pre></div>
+</div>
+<p>### 4.3 测试插件</p>
+<p>插件部署完成后，可以使用以下命令测试插件是否正常工作：</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># 测试对话服务</span>
+curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>http://localhost:16688/v0.2/services/chat<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;Content-Type: application/json&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-d<span class="w"> </span><span class="s1">&#39;{</span>
+<span class="s1">    &quot;provider&quot;: &quot;aliyun-plugin&quot;,</span>
+<span class="s1">    &quot;service&quot;: &quot;chat&quot;,</span>
+<span class="s1">    &quot;data&quot;: {</span>
+<span class="s1">      &quot;model&quot;: &quot;qwen-max&quot;,</span>
+<span class="s1">      &quot;messages&quot;: [</span>
+<span class="s1">        {&quot;role&quot;: &quot;system&quot;, &quot;content&quot;: &quot;你是一个AI助手&quot;},</span>
+<span class="s1">        {&quot;role&quot;: &quot;user&quot;, &quot;content&quot;: &quot;你好，请介绍一下你自己&quot;}</span>
+<span class="s1">      ]</span>
+<span class="s1">    }</span>
+<span class="s1">  }&#39;</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="id19">
+<h2>故障排除<a class="headerlink" href="#id19" title="Link to this heading"></a></h2>
+<section id="id20">
+<h3>常见问题<a class="headerlink" href="#id20" title="Link to this heading"></a></h3>
+<ol class="arabic simple">
+<li><p><strong>插件无法加载</strong>: 检查 plugin.yaml 语法和文件路径</p></li>
+<li><p><strong>引擎无法启动</strong>: 验证引擎安装和权限</p></li>
+<li><p><strong>服务调用失败</strong>: 检查网络连接和 API 端点</p></li>
+<li><p><strong>认证失败</strong>: 检查远程插件的认证配置</p></li>
+</ol>
+</section>
+<section id="id21">
+<h3>调试<a class="headerlink" href="#id21" title="Link to this heading"></a></h3>
+<p>启用详细日志：</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># 以详细日志模式启动 AOG</span>
+aog<span class="w"> </span>server<span class="w"> </span>start<span class="w"> </span>-v
+</pre></div>
+</div>
+</section>
+</section>
+<section id="id22">
+<h2>结论<a class="headerlink" href="#id22" title="Link to this heading"></a></h2>
+<p>AOG 插件提供了一种强大的方式来扩展平台，集成新的 AI 引擎和服务。通过遵循本指南并利用插件 SDK，您可以创建健壮的跨平台插件，无缝集成到 AOG 生态系统中。</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2025.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>
