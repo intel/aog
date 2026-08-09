@@ -1,0 +1,546 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AOG Image相关服务 &mdash; AOG (AIPC Open Gateway) v0.6.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=80d5e7a1" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+      <link rel="stylesheet" type="text/css" href="../_static/graphviz.css?v=4ae1632d" />
+      <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=4b4c264b" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=741c5cc6"></script>
+      <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="AOG Speech相关服务" href="speech.html" />
+    <link rel="prev" title="AOG Chat 服务相关" href="chat.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            AOG (AIPC Open Gateway)
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">AOG Get Started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../aog%E7%94%A8%E6%B3%95.html">如何使用 AOG</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">AOG 目标:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../%E4%BB%8B%E7%BB%8D.html">AOG针对的问题陈述</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../aog%E5%9F%BA%E6%9C%AC%E6%A6%82%E5%BF%B5.html">AOG 关键概念</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../aog%E7%9A%84%E6%9C%BA%E5%88%B6.html">AOG 关键机制</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">AOG API 规范:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../aog%E8%A7%84%E8%8C%83.html">AOG 通用规范</a></li>
+<li class="toctree-l1"><a class="reference internal" href="chat.html">AOG Chat 服务相关</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">AOG Image相关服务</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#text-to-image">Text-to-image 服务</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#custom-properties-of-its-service-providers">Custom Properties of its Service Providers</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#id1">请求格式</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#header-text-to-image">请求头</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#request-text-to-image">请求</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#response-text-to-image">响应格式</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#id5">示例</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#image-to-image">Image-to-image 服务</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#custom-properties-image-to-image">Custom Properties of its Service Providers</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#id7">请求格式</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#header-image-to-image">请求头</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#id9">请求</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#id10">示例</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#image-to-video">Image-to-video 服务</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#custom-properties-image-to-video">Custom Properties of its Service Providers</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#id12">请求格式</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#header-image-to-video">请求头</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#request-image-to-video">请求</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#id15">响应格式</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#id16">示例</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="speech.html">AOG Speech相关服务</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">AOG (AIPC Open Gateway)</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">AOG Image相关服务</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/service_specs/image.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="aog-image">
+<h1>AOG Image相关服务<a class="headerlink" href="#aog-image" title="Link to this heading"></a></h1>
+<section id="text-to-image">
+<h2>Text-to-image 服务<a class="headerlink" href="#text-to-image" title="Link to this heading"></a></h2>
+<section id="custom-properties-of-its-service-providers">
+<span id="custom-properties-text-to-image"></span><h3>Custom Properties of its Service Providers<a class="headerlink" href="#custom-properties-of-its-service-providers" title="Link to this heading"></a></h3>
+<p>除了在 <a class="reference internal" href="../aog%E8%A7%84%E8%8C%83.html#metadata-of-aog-service-provider"><span class="std std-ref">AOG 服务提供商元数据</span></a> 中定义的常见属性外, 文生图服务提供商还可以将以下属性放入服务提供商元数据的 <code class="docutils literal notranslate"><span class="pre">custom_properties</span></code> 字段中。</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>自定义属性</p></th>
+<th class="head"><p>值</p></th>
+<th class="head"><p>描述</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>prompt</p></td>
+<td><p>string</p></td>
+<td><p>用来描述生成图像中期望包含的元素和视觉特点</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="id1">
+<h3>请求格式<a class="headerlink" href="#id1" title="Link to this heading"></a></h3>
+<section id="header-text-to-image">
+<span id="id2"></span><h4>请求头<a class="headerlink" href="#header-text-to-image" title="Link to this heading"></a></h4>
+<p>参见 <a class="reference internal" href="../aog%E8%A7%84%E8%8C%83.html#common-fields-in-header-of-request"><span class="std std-ref">请求头中的常见字段</span></a></p>
+</section>
+<section id="request-text-to-image">
+<span id="id3"></span><h4>请求<a class="headerlink" href="#request-text-to-image" title="Link to this heading"></a></h4>
+<p>除了在 <a class="reference internal" href="../aog%E8%A7%84%E8%8C%83.html#common-fields-in-request-body"><span class="std std-ref">请求体中的常见字段</span></a> 中定义的字段外，服务在其请求 JSON 体中也可能包含以下字段：</p>
+<table class="docutils align-default">
+<colgroup>
+<col style="width: 10.0%" />
+<col style="width: 35.0%" />
+<col style="width: 10.0%" />
+<col style="width: 45.0%" />
+</colgroup>
+<thead>
+<tr class="row-odd"><th class="head"><p>附加 JSON 字段</p></th>
+<th class="head"><p>值</p></th>
+<th class="head"><p>是否必需</p></th>
+<th class="head"><p>描述</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>seed</p></td>
+<td><p>integer</p></td>
+<td><p>可选</p></td>
+<td><p>有助于返回确定性结果</p></td>
+</tr>
+<tr class="row-odd"><td><p>n</p></td>
+<td><p>integer</p></td>
+<td><p>可选</p></td>
+<td><p>单次prompt生成的图片数量，默认值为1，最大值为4</p></td>
+</tr>
+<tr class="row-even"><td><p>size</p></td>
+<td><p>string</p></td>
+<td><p>可选</p></td>
+<td><p>生成图片的尺寸(长*宽)，示例：
+- 512*512 （默认）
+- 1024*1024
+- 2048*2048</p></td>
+</tr>
+<tr class="row-odd"><td><p>附加 JSON 字段</p></td>
+<td><p>值</p></td>
+<td><p>是否必需</p></td>
+<td><p>描述</p></td>
+</tr>
+<tr class="row-even"><td><p>image</p></td>
+<td><p>string</p></td>
+<td><p>可选</p></td>
+<td><p>参考图片的地址/路径/base64</p></td>
+</tr>
+<tr class="row-odd"><td><p>image_type</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">path</span></code>, <code class="docutils literal notranslate"><span class="pre">url</span></code> or <code class="docutils literal notranslate"><span class="pre">base64</span></code></p></td>
+<td><p>可选</p></td>
+<td><p>image 字段是什么类型</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+</section>
+<section id="response-text-to-image">
+<span id="id4"></span><h3>响应格式<a class="headerlink" href="#response-text-to-image" title="Link to this heading"></a></h3>
+<p>除了在 <a class="reference internal" href="../aog%E8%A7%84%E8%8C%83.html#common-fields-in-response-body"><span class="std std-ref">响应体中的常见字段</span></a> 中定义的字段外，该服务在其响应 JSON 体中可能还有以下字段：</p>
+<table class="docutils align-default">
+<colgroup>
+<col style="width: 10.0%" />
+<col style="width: 35.0%" />
+<col style="width: 10.0%" />
+<col style="width: 45.0%" />
+</colgroup>
+<thead>
+<tr class="row-odd"><th class="head"><p>附加 JSON 字段</p></th>
+<th class="head"><p>值</p></th>
+<th class="head"><p>是否必需</p></th>
+<th class="head"><p>描述</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>url</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">local_path</span></code> or <code class="docutils literal notranslate"><span class="pre">url</span></code></p></td>
+<td><p>可选</p></td>
+<td><p>生成的图片的本地路径或URL，基于云端服务会输出 <code class="docutils literal notranslate"><span class="pre">Url</span></code>，本地服务实际输出为本机图片路径</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="id5">
+<h3>示例<a class="headerlink" href="#id5" title="Link to this heading"></a></h3>
+<p>发送请求一</p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>curl<span class="w"> </span>https://localhost:16688/aog/v0.2/services/text-to-image<span class="se">\</span>
+-H<span class="w"> </span><span class="s2">&quot;Content-Type: application/json&quot;</span><span class="w"> </span><span class="se">\</span>
+-d<span class="w"> </span><span class="s1">&#39;{</span>
+<span class="s1">        &quot;model&quot;: &quot;wanx2.1-t2i-turbo&quot;,</span>
+<span class="s1">        &quot;prompt&quot;: &quot;一间有着精致窗户的花店，漂亮的木质门，摆放着花朵&quot;,</span>
+<span class="s1">        &quot;n&quot;: 1,</span>
+<span class="s1">        &quot;size&quot;: &quot;1024*1024&quot;,</span>
+<span class="s1">    }&#39;</span>
+</pre></div>
+</div>
+<p>发送请求二</p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>curl<span class="w"> </span>https://localhost:16688/aog/v0.2/services/text-to-image<span class="se">\</span>
+-H<span class="w"> </span><span class="s2">&quot;Content-Type: application/json&quot;</span><span class="w"> </span><span class="se">\</span>
+-d<span class="w"> </span><span class="s1">&#39;{</span>
+<span class="s1">        &quot;model&quot;: &quot;wanx2.1-t2i-turbo&quot;,</span>
+<span class="s1">        &quot;prompt&quot;: &quot;增加更多花朵&quot;,</span>
+<span class="s1">        &quot;n&quot;: 2,</span>
+<span class="s1">        &quot;size&quot;: &quot;1024*1024&quot;,</span>
+<span class="s1">        &quot;image&quot;: &quot;path/to/image&quot;,</span>
+<span class="s1">        &quot;image_type&quot;: &quot;path&quot;</span>
+<span class="s1">    }&#39;</span>
+</pre></div>
+</div>
+<p>返回响应一</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;business_code&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">200</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;message&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;success&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;data&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="nt">&quot;id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;xxxxx&quot;</span><span class="p">,</span>
+<span class="w">        </span><span class="nt">&quot;url&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<span class="w">            </span><span class="s2">&quot;https://dashscope-result-bj.oss-cn-beijing.aliyuncs.com/1d/22/xxxx/xxxxx/xxxxxx-xxxxxx-xxxx-xxxx-1-1.png?Expires=xxxx27&amp;OSSAccessKeyId=xxxx&amp;Signature=xxxx%2BecZxxxx70%3D&quot;</span>
+<span class="w">        </span><span class="p">]</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>返回响应二</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;business_code&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">200</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;message&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;success&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;data&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="nt">&quot;id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;xxxxx&quot;</span><span class="p">,</span>
+<span class="w">        </span><span class="nt">&quot;url&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<span class="w">            </span><span class="s2">&quot;/Users/xxxx/Downloads/2025051516065812420.png&quot;</span><span class="p">,</span>
+<span class="w">            </span><span class="s2">&quot;/Users/xxxx/Downloads/2025051516065846881.png&quot;</span>
+<span class="w">        </span><span class="p">]</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="image-to-image">
+<h2>Image-to-image 服务<a class="headerlink" href="#image-to-image" title="Link to this heading"></a></h2>
+<section id="custom-properties-image-to-image">
+<span id="id6"></span><h3>Custom Properties of its Service Providers<a class="headerlink" href="#custom-properties-image-to-image" title="Link to this heading"></a></h3>
+<p>除了在 <a class="reference internal" href="../aog%E8%A7%84%E8%8C%83.html#metadata-of-aog-service-provider"><span class="std std-ref">AOG 服务提供商元数据</span></a> 中定义的常见属性外, 图生图服务提供商还可以将以下属性放入服务提供商元数据的 <code class="docutils literal notranslate"><span class="pre">custom_properties</span></code> 字段中。</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>自定义属性</p></th>
+<th class="head"><p>值</p></th>
+<th class="head"><p>描述</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>prompt</p></td>
+<td><p>string</p></td>
+<td><p>用来描述生成图像的风格或变化</p></td>
+</tr>
+<tr class="row-odd"><td><p>image</p></td>
+<td><p>string</p></td>
+<td><p>输入的原始图片（路径、url或base64）</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="id7">
+<h3>请求格式<a class="headerlink" href="#id7" title="Link to this heading"></a></h3>
+<section id="header-image-to-image">
+<span id="id8"></span><h4>请求头<a class="headerlink" href="#header-image-to-image" title="Link to this heading"></a></h4>
+<p>参见 <a class="reference internal" href="../aog%E8%A7%84%E8%8C%83.html#common-fields-in-header-of-request"><span class="std std-ref">请求头中的常见字段</span></a></p>
+<p id="request-image-to-image">目前只支持了远程的图生图服务。</p>
+</section>
+<section id="id9">
+<h4>请求<a class="headerlink" href="#id9" title="Link to this heading"></a></h4>
+<p>除了在 <a class="reference internal" href="../aog%E8%A7%84%E8%8C%83.html#common-fields-in-request-body"><span class="std std-ref">请求体中的常见字段</span></a> 中定义的字段外，服务在其请求 JSON 体中也可能包含以下字段：</p>
+<table class="docutils align-default">
+<colgroup>
+<col style="width: 10.0%" />
+<col style="width: 35.0%" />
+<col style="width: 10.0%" />
+<col style="width: 45.0%" />
+</colgroup>
+<thead>
+<tr class="row-odd"><th class="head"><p>附加 JSON 字段</p></th>
+<th class="head"><p>值</p></th>
+<th class="head"><p>是否必需</p></th>
+<th class="head"><p>描述</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>images</p></td>
+<td><p>string</p></td>
+<td><p>必需</p></td>
+<td><p>输入的原始图片</p></td>
+</tr>
+<tr class="row-odd"><td><p>prompt</p></td>
+<td><p>string</p></td>
+<td><p>可选</p></td>
+<td><p>用于指导生成图片的文本</p></td>
+</tr>
+<tr class="row-even"><td><p>image</p></td>
+<td><p>string</p></td>
+<td><p>必需</p></td>
+<td><p>生成图片的地址/路径/base64</p></td>
+</tr>
+<tr class="row-odd"><td><p>image_type</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">path</span></code>, <code class="docutils literal notranslate"><span class="pre">url</span></code> or <code class="docutils literal notranslate"><span class="pre">base64</span></code></p></td>
+<td><p>必需</p></td>
+<td><p>image 字段是什么类型</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+</section>
+<section id="id10">
+<h3>示例<a class="headerlink" href="#id10" title="Link to this heading"></a></h3>
+<p>发送请求</p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>curl<span class="w"> </span>https://localhost:16688/aog/v0.2/services/image-to-image<span class="se">\</span>
+-H<span class="w"> </span><span class="s2">&quot;Content-Type: application/json&quot;</span><span class="w"> </span><span class="se">\</span>
+-d<span class="w"> </span><span class="s1">&#39;{</span>
+<span class="s1">        &quot;model&quot;: &quot;wanx2.1-i2i-turbo&quot;,</span>
+<span class="s1">        &quot;image&quot;: ,</span>
+<span class="s1">        &quot;prompt&quot;: &quot;改为油画风格&quot;,</span>
+<span class="s1">        &quot;n&quot;: 1</span>
+<span class="s1">    }&#39;</span>
+</pre></div>
+</div>
+<p>返回响应</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;business_code&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">200</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;message&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;success&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;data&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;ec9b1fb2-b6ff-9f71-bf27-f250a7bcbe66&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;url&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<span class="w">      </span><span class="s2">&quot;https://dashscope-result-bj.oss-cn-beijing.aliyuncs.com/1d/22/xxxx/xxxxx/xxxxxx-xxxxxx-xxxx-xxxx-1-1.png?Expires=xxxx27&amp;OSSAccessKeyId=xxxx&amp;Signature=xxxx%2BecZxxxx70%3D&quot;</span>
+<span class="w">    </span><span class="p">]</span>
+<span class="w">  </span><span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="image-to-video">
+<h2>Image-to-video 服务<a class="headerlink" href="#image-to-video" title="Link to this heading"></a></h2>
+<section id="custom-properties-image-to-video">
+<span id="id11"></span><h3>Custom Properties of its Service Providers<a class="headerlink" href="#custom-properties-image-to-video" title="Link to this heading"></a></h3>
+<p>除了在 <a class="reference internal" href="../aog%E8%A7%84%E8%8C%83.html#metadata-of-aog-service-provider"><span class="std std-ref">AOG 服务提供商元数据</span></a> 中定义的常见属性外, 图生视频服务提供商还可以将以下属性放入服务提供商元数据的 <code class="docutils literal notranslate"><span class="pre">custom_properties</span></code> 字段中。</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>自定义属性</p></th>
+<th class="head"><p>值</p></th>
+<th class="head"><p>描述</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>image</p></td>
+<td><p>string</p></td>
+<td><p>输入的原始图片（路径、url或base64）</p></td>
+</tr>
+<tr class="row-odd"><td><p>prompt</p></td>
+<td><p>string</p></td>
+<td><p>可选，生成视频的风格或描述</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="id12">
+<h3>请求格式<a class="headerlink" href="#id12" title="Link to this heading"></a></h3>
+<section id="header-image-to-video">
+<span id="id13"></span><h4>请求头<a class="headerlink" href="#header-image-to-video" title="Link to this heading"></a></h4>
+<p>参见 <a class="reference internal" href="../aog%E8%A7%84%E8%8C%83.html#common-fields-in-header-of-request"><span class="std std-ref">请求头中的常见字段</span></a></p>
+</section>
+<section id="request-image-to-video">
+<span id="id14"></span><h4>请求<a class="headerlink" href="#request-image-to-video" title="Link to this heading"></a></h4>
+<p>除了在 <a class="reference internal" href="../aog%E8%A7%84%E8%8C%83.html#common-fields-in-request-body"><span class="std std-ref">请求体中的常见字段</span></a> 中定义的字段外，服务在其请求 JSON 体中也可能包含以下字段：</p>
+<table class="docutils align-default">
+<colgroup>
+<col style="width: 10.0%" />
+<col style="width: 35.0%" />
+<col style="width: 10.0%" />
+<col style="width: 45.0%" />
+</colgroup>
+<thead>
+<tr class="row-odd"><th class="head"><p>附加 JSON 字段</p></th>
+<th class="head"><p>值</p></th>
+<th class="head"><p>是否必需</p></th>
+<th class="head"><p>描述</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>model</p></td>
+<td><p>string</p></td>
+<td><p>必需</p></td>
+<td><p>使用的模型名称</p></td>
+</tr>
+<tr class="row-odd"><td><p>prompt</p></td>
+<td><p>string</p></td>
+<td><p>可选</p></td>
+<td><p>用于指导生成图片的文本</p></td>
+</tr>
+<tr class="row-even"><td><p>image</p></td>
+<td><p>string</p></td>
+<td><p>必需</p></td>
+<td><p>生成图片的地址/路径/base64</p></td>
+</tr>
+<tr class="row-odd"><td><p>image_type</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">path</span></code>, <code class="docutils literal notranslate"><span class="pre">url</span></code> or <code class="docutils literal notranslate"><span class="pre">base64</span></code></p></td>
+<td><p>必需</p></td>
+<td><p>image 字段是什么类型</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+</section>
+<section id="id15">
+<h3>响应格式<a class="headerlink" href="#id15" title="Link to this heading"></a></h3>
+<p>除了在 <a class="reference internal" href="../aog%E8%A7%84%E8%8C%83.html#common-fields-in-response-body"><span class="std std-ref">响应体中的常见字段</span></a> 中定义的字段外，该服务在其响应 JSON 体中可能还有以下字段：</p>
+<table class="docutils align-default">
+<colgroup>
+<col style="width: 10.0%" />
+<col style="width: 35.0%" />
+<col style="width: 10.0%" />
+<col style="width: 45.0%" />
+</colgroup>
+<thead>
+<tr class="row-odd"><th class="head"><p>附加 JSON 字段</p></th>
+<th class="head"><p>值</p></th>
+<th class="head"><p>是否必需</p></th>
+<th class="head"><p>描述</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>id</p></td>
+<td><p>string</p></td>
+<td><p>必需</p></td>
+<td><p>请求ID</p></td>
+</tr>
+<tr class="row-odd"><td><p>data</p></td>
+<td><p>string</p></td>
+<td><p>必需</p></td>
+<td><p>生成视频的URL</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="id16">
+<h3>示例<a class="headerlink" href="#id16" title="Link to this heading"></a></h3>
+<p>发送请求</p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>curl<span class="w"> </span>https://localhost:16688/aog/v0.2/services/image-to-video<span class="se">\</span>
+-H<span class="w"> </span><span class="s2">&quot;Content-Type: application/json&quot;</span><span class="w"> </span><span class="se">\</span>
+-d<span class="w"> </span><span class="s1">&#39;{</span>
+<span class="s1">        &quot;model&quot;: &quot;wan2.2-i2v-plus&quot;,</span>
+<span class="s1">        &quot;image&quot;: &quot;https://example.com/input.png&quot;,</span>
+<span class="s1">        &quot;image_type&quot;: &quot;url&quot;</span>
+<span class="s1">        &quot;prompt&quot;: &quot;让猫在草地上奔跑&quot;,</span>
+<span class="s1">    }&#39;</span>
+</pre></div>
+</div>
+<p>返回响应</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;ec9b1fb2-b6ff-9f71-bf27-f250a7bcbe66&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;data&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;https://dashscope-result-bj.oss-cn-beijing.aliyuncs.com/xxx/xxx/xxx.mp4&quot;</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="chat.html" class="btn btn-neutral float-left" title="AOG Chat 服务相关" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="speech.html" class="btn btn-neutral float-right" title="AOG Speech相关服务" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2025.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>
