@@ -64,7 +64,8 @@ func InjectRouter(e *AOGCoreServer) {
 	r.Handle(http.MethodGet, "/control_panel/modellist", e.GetSupportModelListCombine)
 	r.Handle(http.MethodPost, "/control_panel/set_default", e.SetDefaultModelHandler)
 	r.Handle(http.MethodGet, "/control_panel/about", e.GetProductInfoHandler)
-	r.Handle(http.MethodPost, "/control_panel/modelkey", e.GetModelkeyHandler)
+	// /control_panel/modelkey removed: it returned the stored provider
+	// credential in plaintext to unauthenticated callers.
 
 	// rag service
 	r.Handle(http.MethodGet, "/rag/file/detail", e.RagGetFile)

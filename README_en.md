@@ -1,13 +1,21 @@
 # AOG (AIPC Open Gateway) Preview
 
+**Discontinuation of Intel Safe String Library**
+
+Notice of discontinuation of project This project will no longer be maintained by Intel. Intel has
+ceased development and contributions including, but not limited to, maintenance, bug fixes, new
+releases, or updates, to this project.
+
+This project will be archived by 2026/08/23.
+
 [中文](README.md) | English
 
 This is the preview version v0.6.0 of AOG. More features and stability are continuously being
 improved. Please submit Issues for any defects found.
 
-The current version supports chat, embed and text-to-image services, with ollama and OpenVINO model server supported at the lower level. More
-services such as  audio-related, and other AI engines are under development in
-subsequent versions, so stay tuned.
+The current version supports chat, embed and text-to-image services, with ollama and OpenVINO model
+server supported at the lower level. More services such as audio-related, and other AI engines are
+under development in subsequent versions, so stay tuned.
 
 ## Features of AOG
 
@@ -61,7 +69,6 @@ competition for memory consumption during execution.
 AOG provides the following basic features:
 
 - One-stop AI service installation
-
   - During development, developers can install local AI services in their development environments
     through simple commands such as `aog install chat` or
     `aog pull-model deepseek-r1:1.5b for chat`. AOG will automatically download and install the most
@@ -71,7 +78,6 @@ AOG provides the following basic features:
     deployed PC when needed.
 
 - Decoupling applications and AI service providers through shared services and standard APIs
-
   - The AOG API layer provides standardized APIs for typical AI services such as chat and embedding.
     Developers focus on the business logic of their applications without paying too much attention
     to the underlying AI service stack.
@@ -94,8 +100,8 @@ As a developer, to build AOG, you need to install [golang](https://go.dev/) on y
 If your development environment is Windows, you may need to install [MSYS2](https://www.msys2.org)
 to get commands like Make.
 
-Since AOG needs to enable the CGO dependency, you may need to install [MinGW-W64](https://github.com/niXman/mingw-builds-binaries/releases) 
-to enable CGO support.
+Since AOG needs to enable the CGO dependency, you may need to install
+[MinGW-W64](https://github.com/niXman/mingw-builds-binaries/releases) to enable CGO support.
 
 Next, download or clone this project to a directory such as `/path_to_aog`.
 
@@ -107,7 +113,7 @@ cd /path_to_aog
 # Set GOPROXY as appropriate
 go env -w GOPROXY=https://goproxy.cn,direct
 
-# win 
+# win
 set CGO_ENABLED=1 && go build -o aog.exe -ldflags="-s -w"  cmd/cli/main.go
 ```
 
@@ -159,7 +165,7 @@ aog pull <model_name> -for <service_name> --provider <provider_name>
 aog get services <service_name>
 
 # Modify service configuration
-# hybrid_policy   specifies the scheduling policy of the specific service, 
+# hybrid_policy   specifies the scheduling policy of the specific service,
 # 			      the optional values are always_local, always_remote, default
 aog edit service <service_name> --hybrid_policy always_remote
 
@@ -188,7 +194,7 @@ aog install service_provider -f xx/xxx.json
   ]
 }
 
-# Modify service provider configuration, here you can only modify the service provider configuration information, 
+# Modify service provider configuration, here you can only modify the service provider configuration information,
 # model changes need to be done by pulling models and deleting models
 aog edit service_provider <provider_name> -f xxx/xxx.json
 # Example:
@@ -222,8 +228,8 @@ version will provide more services related to text-to-image and voice.
 For example, you can use `curl` to test the chat service on Windows.
 
 ```sh
-curl -X POST http://localhost:16688/aog/v0.2/services/chat -X POST 
-  -H "Content-Type: application/json" 
+curl -X POST http://localhost:16688/aog/v0.2/services/chat -X POST
+  -H "Content-Type: application/json"
   -d "{\"model\":\"deepseek-r1:7b\",\"messages\":[{\"role\":\"user\",\"content\":\"why is the sky blue?\"}],\"stream\":false}"
 ```
 

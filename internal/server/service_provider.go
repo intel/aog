@@ -523,7 +523,8 @@ func (s *ServiceProviderImpl) GetServiceProviders(ctx context.Context, request *
 			ServiceSource: dsProvider.ServiceSource,
 			Desc:          dsProvider.Desc,
 			AuthType:      dsProvider.AuthType,
-			AuthKey:       dsProvider.AuthKey,
+			// AuthKey is intentionally not returned: it is a secret credential
+			// and must never be serialized into API responses.
 			Flavor:        dsProvider.Flavor,
 			Properties:    dsProvider.Properties,
 			Status:        serviceProviderStatus,

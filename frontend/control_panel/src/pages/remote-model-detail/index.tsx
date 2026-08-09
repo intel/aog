@@ -40,27 +40,12 @@ const RemoteModelDetail = () => {
       }),
     {
       manual: true,
-      onSuccess: (res) => {
-        if (res.data[0].can_select) {
-          getKey({
-            model_name: res.data[0].name,
-            provider_name: res.data[0].service_provider_name,
-          });
-        }
-      },
     },
   );
   const { run: setDefaultModel, loading: setting } = useRequest((data) => httpRequest.post('/control_panel/set_default', data), {
     manual: true,
     onSuccess: (res) => {
       run();
-    },
-  });
-  const { run: getKey } = useRequest((data) => httpRequest.post('/control_panel/modelkey', data), {
-    manual: true,
-    onSuccess: (res) => {
-      const model_key = JSON.parse(res.model_key);
-      form.setFieldsValue(model_key);
     },
   });
   const { loading: saving, run: save } = useRequest(

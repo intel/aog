@@ -218,13 +218,10 @@ func (c *ControlPanelImpl) GetSupportModelListCombine(ctx context.Context, reque
 			providerServiceDefaultInfo := schedule.GetProviderServiceDefaultInfo(smInfo.Flavor, smInfo.ServiceName)
 			authFields := []string{""}
 
-			sp := &types.ServiceProvider{
-				ProviderName: providerName,
-			}
-			err = c.Ds.Get(context.Background(), sp)
-			if err == nil && sp.AuthKey != "" {
-				authFields = []string{sp.AuthKey}
-			}
+			// AuthFields only describes which credential field names the UI
+			// should render (e.g. "api_key", "secret_id"); it is returned to
+			// clients. The provider's stored AuthKey secret must never be placed
+			// here.
 			if providerServiceDefaultInfo.AuthType == types.AuthTypeToken {
 				authFields = []string{"secret_id", "secret_key"}
 			} else if providerServiceDefaultInfo.AuthType == types.AuthTypeApiKey {
@@ -438,22 +435,12 @@ func (c *ControlPanelImpl) GetProductInfo(ctx context.Context) (*dto.GetProductI
 	}, nil
 }
 
-// Deprecated: GetModelkey is deprecated and may be removed in future versions.
+// Deprecated: GetModelkey previously returned the stored upstream provider
+// credential in plaintext, which disclosed the secret to any caller. It has
+// been disabled and no longer returns the credential; its route has also been
+// removed. The method is retained only to satisfy the interface.
 func (c *ControlPanelImpl) GetModelkey(ctx context.Context, req *dto.GetModelkeyRequest) (*dto.GetModelkeyResponse, error) {
-	// 构造查询条件
-	sp := &types.ServiceProvider{
-		ProviderName: req.ProviderName,
-	}
-	err := c.Ds.Get(ctx, sp)
-	if err != nil {
-		return nil, err
-	}
-	if sp.AuthKey == "" {
-		return &dto.GetModelkeyResponse{
-			ModelKey: "",
-		}, nil
-	}
 	return &dto.GetModelkeyResponse{
-		ModelKey: sp.AuthKey,
+		ModelKey: "",
 	}, nil
 }

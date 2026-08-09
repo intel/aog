@@ -844,7 +844,9 @@ func getAllServices(service *types.Service, provider *types.ServiceProvider, mod
 	for _, v := range providerList {
 		tmp := v.(*types.ServiceProvider)
 		tmpProvider := dbServices.ServiceProviders[tmp.ProviderName]
-		tmpProvider.AuthKey = tmp.AuthKey
+		// AuthKey is intentionally not exported. Exported configuration is
+		// returned to callers, so including the secret credential here would
+		// disclose it. On import, users re-enter the credential.
 		tmpProvider.AuthType = tmp.AuthType
 		tmpProvider.Desc = tmp.Desc
 		tmpProvider.APIFlavor = tmp.Flavor

@@ -41,7 +41,11 @@ const (
 // Network related
 const (
 	DefaultHTTPPort   = "16688"
-	DefaultHost       = "0.0.0.0"
+	// DefaultHost binds to loopback only by default so the gateway (and its
+	// management APIs, which handle provider credentials) is not reachable from
+	// the network. Users who explicitly need remote access can override via the
+	// AOG_HOST environment variable or the -app-host flag.
+	DefaultHost       = "127.0.0.1"
 	DefaultHTTPSPort  = "443"
 	DefaultHTTPPort80 = "80"
 )

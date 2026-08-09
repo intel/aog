@@ -436,7 +436,8 @@ type ServiceProvider struct {
 	ServiceSource string          `json:"service_source"`
 	Desc          string          `json:"desc"`
 	AuthType      string          `json:"auth_type"`
-	AuthKey       string          `json:"auth_key"`
+	// AuthKey is deliberately omitted from this response DTO. It holds an
+	// upstream provider secret and must never be serialized to clients.
 	Flavor        string          `json:"flavor"`
 	Properties    string          `json:"properties"`
 	Models        []string        `json:"models"`
