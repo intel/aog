@@ -10,7 +10,7 @@ This project will be archived by 2026/08/23.
 
 [中文](README.md) | English
 
-This is the preview version v0.6.0 of AOG. More features and stability are continuously being
+This is the preview version v0.7.8 of AOG. More features and stability are continuously being
 improved. Please submit Issues for any defects found.
 
 The current version supports chat, embed and text-to-image services, with ollama and OpenVINO model

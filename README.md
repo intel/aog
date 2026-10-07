@@ -20,7 +20,7 @@ This project will be archived by 2026/08/23.
 
 中文 | [English](README_en.md)
 
-当前为 AOG 预览版 v0.7.0，更多功能和稳定性正在不断完善过程中。欢迎就发现的缺陷提交 Issues。
+当前为 AOG 预览版 v0.7.8，更多功能和稳定性正在不断完善过程中。欢迎就发现的缺陷提交 Issues。
 
 当前版本支持 chat、embed、text-to-image、generate、rerank、text-to-speech、speech-to-text、image-to-image、image-to-video、speech-to-text-ws 等服务，下层支持 ollama 和 openvino
 model
